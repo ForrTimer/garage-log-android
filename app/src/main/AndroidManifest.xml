@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name=".GarageLogApplication"
@@ -10,10 +14,25 @@
         android:theme="@style/Theme.GarageLog"
         android:supportsRtl="true">
 
+        <!-- Disable WorkManager's default auto-init so it picks up the custom
+             WorkerFactory from GarageLogApplication.getWorkManagerConfiguration()
+             instead — SyncWorker needs the app's ServiceLocator, which the
+             no-arg default factory has no way to provide. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.GarageLog">
+            android:theme="@style/Theme.GarageLog.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

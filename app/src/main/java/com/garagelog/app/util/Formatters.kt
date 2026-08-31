@@ -54,3 +54,11 @@ fun isIsoDateOnOrBeforeToday(iso: String): Boolean = iso <= todayIso()
 fun isoToUtcMillis(iso: String): Long? = if (iso.isBlank()) null else try { isoFormat.parse(iso)?.time } catch (e: Exception) { null }
 
 fun utcMillisToIso(millis: Long): String = isoFormat.format(Date(millis))
+
+private val timeFormat = SimpleDateFormat("MMM d, h:mm a", Locale.US)
+
+/** Human-readable local timestamp, for "last synced at" display. */
+fun formatDateTime(millis: Long?): String {
+    if (millis == null) return "never"
+    return timeFormat.format(Date(millis))
+}

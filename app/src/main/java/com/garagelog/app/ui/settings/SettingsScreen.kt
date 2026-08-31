@@ -29,9 +29,7 @@ import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.StatGrid
-import com.garagelog.app.ui.theme.Border
-import com.garagelog.app.ui.theme.Danger
-import com.garagelog.app.ui.theme.TextDim
+import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.todayIso
 import com.garagelog.app.data.entity.VehicleEntity
 
@@ -60,11 +58,15 @@ fun SettingsScreen(
 
     LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 24.dp)) {
         item {
+            AccountSection(viewModel = viewModel, modifier = Modifier.padding(bottom = 12.dp))
+        }
+
+        item {
             GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
                 Text("About this data", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Everything is stored only on this device — nothing syncs anywhere automatically. Back up regularly, especially before switching phones.",
-                    color = TextDim,
+                    "Stored on this device, and synced to Drive automatically once you're signed in above. The JSON export below is still worth keeping as a manual backup either way.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 StatGrid(
@@ -97,11 +99,11 @@ fun SettingsScreen(
                         Text(v.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                         Text(
                             listOfNotNull(v.year?.toString(), v.make.ifBlank { null }, v.model.ifBlank { null }).joinToString(" "),
-                            color = TextDim,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    if (index != uiState.vehicles.lastIndex) HorizontalDivider(color = Border)
+                    if (index != uiState.vehicles.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
                 OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     Text("+ Add vehicle")
@@ -114,7 +116,7 @@ fun SettingsScreen(
                 Text("Backup & restore", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Export a JSON backup you can keep in a cloud drive, and re-import it any time (including on a new phone).",
-                    color = TextDim,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
@@ -135,13 +137,13 @@ fun SettingsScreen(
                 Text("Reset", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Wipes all data on this device and reloads the original starting seed.",
-                    color = TextDim,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedButton(
                     onClick = { showResetConfirm = true },
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                ) { Text("Reset to seed data", color = Danger) }
+                ) { Text("Reset to seed data", color = garageColors.alarmText) }
             }
         }
     }

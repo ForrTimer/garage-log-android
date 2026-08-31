@@ -19,4 +19,6 @@ data class VehicleEntity(
     val role: String,
     val notes: String,
     val sortOrder: Int = 0,
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false,
 )

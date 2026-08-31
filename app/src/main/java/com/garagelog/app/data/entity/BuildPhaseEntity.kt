@@ -26,4 +26,6 @@ data class BuildPhaseEntity(
     val status: String,
     val order: Int,
     val notes: String,
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false,
 )

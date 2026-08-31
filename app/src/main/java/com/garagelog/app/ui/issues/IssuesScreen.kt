@@ -23,8 +23,6 @@ import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
-import com.garagelog.app.ui.theme.Border
-import com.garagelog.app.ui.theme.TextDim
 import com.garagelog.app.util.formatDate
 
 private fun statusTone(status: String): PillTone = when (status) {
@@ -52,7 +50,7 @@ fun IssuesScreen(uiState: GarageLogUiState, onItemClick: (IssueEntity) -> Unit) 
                 } else {
                     issues.forEachIndexed { index, issue ->
                         IssueRow(issue, uiState, onClick = { onItemClick(issue) })
-                        if (index != issues.lastIndex) HorizontalDivider(color = Border)
+                        if (index != issues.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
             }
@@ -73,7 +71,7 @@ private fun IssueRow(issue: IssueEntity, uiState: GarageLogUiState, onClick: () 
                 if (issue.priority == IssuePriority.SafetyCritical.label) add("⚠ Safety-critical")
                 add("opened ${formatDate(issue.dateOpened)}")
             }
-            Text(subtitleParts.joinToString(" · "), color = TextDim, style = MaterialTheme.typography.bodySmall)
+            Text(subtitleParts.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

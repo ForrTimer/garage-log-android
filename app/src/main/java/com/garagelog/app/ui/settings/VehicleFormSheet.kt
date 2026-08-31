@@ -24,7 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.components.LabeledTextField
-import com.garagelog.app.ui.theme.Danger
+import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.todayIso
 import java.util.UUID
 
@@ -88,7 +88,7 @@ fun VehicleFormSheet(
             Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 24.dp)) {
                 if (vehicle != null) {
                     OutlinedButton(onClick = { onDelete(vehicle.id) }, modifier = Modifier.weight(1f)) {
-                        Text("Delete", color = Danger)
+                        Text("Delete", color = garageColors.alarmText)
                     }
                     Spacer(Modifier.width(10.dp))
                 }

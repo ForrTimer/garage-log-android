@@ -59,11 +59,14 @@ class BackupManager(
 
     suspend fun resetToSeed() {
         wipeAllData()
-        SeedData.vehicles().forEach { vehicleRepository.upsert(it) }
-        SeedData.logEntries().forEach { logRepository.upsert(it) }
-        SeedData.issues().forEach { issueRepository.upsert(it) }
-        SeedData.buildPhases().forEach { buildPhaseRepository.upsert(it) }
-        SeedData.maintenanceSchedules().forEach { scheduleRepository.upsert(it) }
+        // Stamped "now" (not the entities' default 0L) so a reset genuinely wins on sync,
+        // rather than silently losing to whatever's already sitting in Drive.
+        val now = System.currentTimeMillis()
+        SeedData.vehicles().forEach { vehicleRepository.upsert(it.copy(updatedAt = now)) }
+        SeedData.logEntries().forEach { logRepository.upsert(it.copy(updatedAt = now)) }
+        SeedData.issues().forEach { issueRepository.upsert(it.copy(updatedAt = now)) }
+        SeedData.buildPhases().forEach { buildPhaseRepository.upsert(it.copy(updatedAt = now)) }
+        SeedData.maintenanceSchedules().forEach { scheduleRepository.upsert(it.copy(updatedAt = now)) }
     }
 
     private suspend fun wipeAllData() {
@@ -87,7 +90,7 @@ private fun BackupVehicle.toEntity(sortOrder: Int) = VehicleEntity(
     id = id, name = name.ifBlank { "Unnamed vehicle" }, year = year?.trim()?.toDoubleOrNull()?.toInt(),
     make = make, model = model, engine = engine, drivetrain = drivetrain, vin = vin, color = color,
     miles = miles?.trim()?.toDoubleOrNull()?.toInt(), milesDate = milesDate, role = role, notes = notes,
-    sortOrder = sortOrder,
+    sortOrder = sortOrder, updatedAt = System.currentTimeMillis(),
 )
 
 private fun LogEntryEntity.toBackup() = BackupLog(
@@ -99,6 +102,7 @@ private fun BackupLog.toEntity() = LogEntryEntity(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage?.trim()?.toDoubleOrNull()?.toInt(),
     category = category, task = task.ifBlank { "Untitled entry" },
     cost = cost?.trim()?.toDoubleOrNull(), parts = parts, notes = notes,
+    updatedAt = System.currentTimeMillis(),
 )
 
 private fun IssueEntity.toBackup() = BackupIssue(
@@ -109,6 +113,7 @@ private fun IssueEntity.toBackup() = BackupIssue(
 private fun BackupIssue.toEntity() = IssueEntity(
     id = id, vehicleId = vehicleId, title = title.ifBlank { "Untitled issue" }, status = status,
     priority = priority, dateOpened = dateOpened, dateResolved = dateResolved, description = description,
+    updatedAt = System.currentTimeMillis(),
 )
 
 private fun BuildPhaseEntity.toBackup() = BackupPhase(
@@ -118,6 +123,7 @@ private fun BuildPhaseEntity.toBackup() = BackupPhase(
 private fun BackupPhase.toEntity() = BuildPhaseEntity(
     id = id, vehicleId = vehicleId, phase = phase.ifBlank { "Untitled phase" }, status = status,
     order = order?.trim()?.toDoubleOrNull()?.toInt() ?: 0, notes = notes,
+    updatedAt = System.currentTimeMillis(),
 )
 
 private fun MaintenanceScheduleEntity.toBackup() = BackupSchedule(
@@ -132,4 +138,5 @@ private fun BackupSchedule.toEntity() = MaintenanceScheduleEntity(
     intervalMonths = intervalMonths?.trim()?.toDoubleOrNull()?.toInt(),
     lastDoneMileage = lastDoneMileage?.trim()?.toDoubleOrNull()?.toInt(),
     lastDoneDate = lastDoneDate,
+    updatedAt = System.currentTimeMillis(),
 )

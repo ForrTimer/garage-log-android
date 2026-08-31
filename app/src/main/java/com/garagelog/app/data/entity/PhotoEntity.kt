@@ -12,4 +12,7 @@ data class PhotoEntity(
     val ownerId: String,
     val filePath: String,
     val addedDate: String,
+    val driveFileId: String? = null,
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false,
 )

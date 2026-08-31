@@ -30,7 +30,7 @@ import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.PhotoGridSection
 import com.garagelog.app.ui.components.SegmentedControl
 import com.garagelog.app.ui.components.VehicleDropdown
-import com.garagelog.app.ui.theme.Danger
+import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.todayIso
 import java.util.UUID
 
@@ -99,7 +99,7 @@ fun LogFormSheet(
             Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 24.dp)) {
                 if (entry != null) {
                     OutlinedButton(onClick = { onDelete(entry.id) }, modifier = Modifier.weight(1f)) {
-                        Text("Delete", color = Danger)
+                        Text("Delete", color = garageColors.alarmText)
                     }
                     androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
                 }

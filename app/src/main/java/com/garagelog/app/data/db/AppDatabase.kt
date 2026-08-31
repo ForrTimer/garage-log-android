@@ -24,7 +24,7 @@ import com.garagelog.app.data.entity.VehicleEntity
         MaintenanceScheduleEntity::class,
         PhotoEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

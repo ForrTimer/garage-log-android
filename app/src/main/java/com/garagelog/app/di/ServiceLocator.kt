@@ -2,8 +2,10 @@ package com.garagelog.app.di
 
 import android.content.Context
 import androidx.room.Room
+import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.backup.BackupManager
 import com.garagelog.app.data.db.AppDatabase
+import com.garagelog.app.data.db.MIGRATION_1_2
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.BuildPhaseRepository
 import com.garagelog.app.data.repository.IssueRepository
@@ -18,6 +20,10 @@ import com.garagelog.app.data.repository.RoomVehicleRepository
 import com.garagelog.app.data.repository.ScheduleRepository
 import com.garagelog.app.data.repository.VehicleRepository
 import com.garagelog.app.data.seed.SeedData
+import com.garagelog.app.data.sync.DriveApiClient
+import com.garagelog.app.data.sync.SyncRepository
+import com.garagelog.app.data.sync.SyncStatusHolder
+import com.garagelog.app.data.sync.SyncWorker
 
 /**
  * Hand-rolled composition root — no DI framework needed for a single-user local app.
@@ -31,7 +37,7 @@ class ServiceLocator(context: Context) {
         appContext,
         AppDatabase::class.java,
         AppDatabase.DATABASE_NAME,
-    ).build()
+    ).addMigrations(MIGRATION_1_2).build()
 
     val vehicleRepository: VehicleRepository = RoomVehicleRepository(database.vehicleDao())
     val logRepository: LogRepository = RoomLogRepository(database.logEntryDao())
@@ -51,6 +57,28 @@ class ServiceLocator(context: Context) {
         photoRepository = photoRepository,
         photoStore = photoStore,
     )
+
+    val authManager = AuthManager(appContext)
+    private val driveApiClient = DriveApiClient()
+    val syncStatusHolder = SyncStatusHolder()
+
+    val syncRepository = SyncRepository(
+        authManager = authManager,
+        driveApi = driveApiClient,
+        vehicleRepository = vehicleRepository,
+        logRepository = logRepository,
+        issueRepository = issueRepository,
+        buildPhaseRepository = buildPhaseRepository,
+        scheduleRepository = scheduleRepository,
+        photoRepository = photoRepository,
+        photoStore = photoStore,
+        statusHolder = syncStatusHolder,
+    )
+
+    /** Fire-and-forget debounced sync request — safe to call after every mutation, signed in or not. */
+    fun requestSync() {
+        SyncWorker.enqueueOneOff(appContext)
+    }
 
     suspend fun seedIfEmpty() {
         if (vehicleRepository.count() > 0) return

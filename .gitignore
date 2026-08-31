@@ -4,12 +4,11 @@
 /local.properties
 /.idea/
 .DS_Store
-/build
+/build/
+/app/build/
 /captures
 .externalNativeBuild
 .cxx
-local.properties
-**/build/
 *.apk
 *.ap_
 *.dex

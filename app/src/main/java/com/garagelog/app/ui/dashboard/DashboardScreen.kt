@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.VehicleEntity
@@ -30,8 +31,7 @@ import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
 import com.garagelog.app.ui.components.StatGrid
-import com.garagelog.app.ui.theme.Accent
-import com.garagelog.app.ui.theme.TextDim
+import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DueStatus
 import com.garagelog.app.util.computeDueInfo
 import com.garagelog.app.util.formatDate
@@ -85,14 +85,15 @@ private fun VehicleDashboardCard(uiState: GarageLogUiState, v: VehicleEntity, on
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             Text(
                 "Edit",
-                color = Accent,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelMedium,
+                textDecoration = TextDecoration.Underline,
                 modifier = Modifier.clickable { onEditVehicle(v) },
             )
         }
         val subtitle = listOfNotNull(v.engine.ifBlank { null }, v.drivetrain.ifBlank { null }).joinToString(" · ")
-        if (subtitle.isNotBlank()) Text(subtitle, color = TextDim, style = MaterialTheme.typography.bodyMedium)
-        if (v.role.isNotBlank()) Text(v.role, color = TextDim, style = MaterialTheme.typography.bodyMedium)
+        if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        if (v.role.isNotBlank()) Text(v.role, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
 
         StatGrid(
             listOf(
@@ -111,7 +112,7 @@ private fun VehicleDashboardCard(uiState: GarageLogUiState, v: VehicleEntity, on
                             tone = if (info.status == DueStatus.OVERDUE) PillTone.Open else PillTone.Progress,
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("${sched.taskName} — ${info.label}", style = MaterialTheme.typography.bodySmall, color = TextDim)
+                        Text("${sched.taskName} — ${info.label}", style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
                     }
                 }
             }
@@ -119,7 +120,7 @@ private fun VehicleDashboardCard(uiState: GarageLogUiState, v: VehicleEntity, on
 
         Text(
             text = lastLog?.let { "Last logged: ${formatDate(it.date)} — ${it.task}" } ?: "No log entries yet.",
-            color = TextDim,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 10.dp),
         )
@@ -127,12 +128,18 @@ private fun VehicleDashboardCard(uiState: GarageLogUiState, v: VehicleEntity, on
             var showDetails by remember(v.id) { mutableStateOf(false) }
             Text(
                 text = if (showDetails) "Hide details" else "Show details",
-                color = Accent,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelMedium,
+                textDecoration = TextDecoration.Underline,
                 modifier = Modifier.padding(top = 10.dp).clickable { showDetails = !showDetails },
             )
             if (showDetails) {
-                Text(v.notes, color = TextDim, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
+                Text(
+                    v.notes,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
         }
     }

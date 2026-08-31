@@ -30,10 +30,6 @@ import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.SectionTitle
-import com.garagelog.app.ui.theme.Accent
-import com.garagelog.app.ui.theme.Accent2
-import com.garagelog.app.ui.theme.Surface2
-import com.garagelog.app.ui.theme.TextDim
 import com.garagelog.app.util.formatMoney
 import java.util.Locale
 
@@ -56,7 +52,7 @@ fun CostTrendScreen(uiState: GarageLogUiState, onBack: () -> Unit) {
                 item { SectionTitle(v.name) }
                 item {
                     GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
-                        Text("Monthly spend", style = MaterialTheme.typography.labelMedium, color = TextDim)
+                        Text("Monthly spend", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (logs.isEmpty()) {
                             EmptyState("No costed log entries yet.")
                         } else {
@@ -66,7 +62,7 @@ fun CostTrendScreen(uiState: GarageLogUiState, onBack: () -> Unit) {
                 }
                 item {
                     GarageCard {
-                        Text("By category", style = MaterialTheme.typography.labelMedium, color = TextDim)
+                        Text("By category", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (logs.isEmpty()) {
                             EmptyState("No costed log entries yet.")
                         } else {
@@ -110,17 +106,21 @@ private fun MonthlySpendChart(logs: List<LogEntryEntity>) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
-                Text(formatMoney(total).removeSuffix(".00"), style = MaterialTheme.typography.bodySmall, color = TextDim)
+                Text(
+                    formatMoney(total).removeSuffix(".00"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
                     val fraction = (total / maxValue).toFloat().coerceIn(0.03f, 1f)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(0.55f)
                             .fillMaxHeight(fraction)
-                            .background(Accent, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)),
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)),
                     )
                 }
-                Text(monthLabel(month), style = MaterialTheme.typography.bodySmall, color = TextDim)
+                Text(monthLabel(month), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -138,18 +138,21 @@ private fun CategoryBreakdown(logs: List<LogEntryEntity>) {
         byCategory.forEach { (category, total) ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Text(category, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(90.dp))
-                Box(modifier = Modifier.weight(1f).height(10.dp).background(Surface2, RoundedCornerShape(4.dp))) {
+                Box(
+                    modifier = Modifier.weight(1f).height(10.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)),
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth((total / maxValue).toFloat().coerceIn(0.03f, 1f))
                             .height(10.dp)
-                            .background(Accent2, RoundedCornerShape(4.dp)),
+                            .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(4.dp)),
                     )
                 }
                 Text(
                     formatMoney(total),
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextDim,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp),
                     textAlign = TextAlign.End,
                 )

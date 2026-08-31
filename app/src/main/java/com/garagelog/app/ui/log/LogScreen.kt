@@ -21,8 +21,6 @@ import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
-import com.garagelog.app.ui.theme.Border
-import com.garagelog.app.ui.theme.TextDim
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
@@ -46,7 +44,7 @@ fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit) 
                 } else {
                     logs.forEachIndexed { index, entry ->
                         LogRow(entry, uiState, onClick = { onItemClick(entry) })
-                        if (index != logs.lastIndex) HorizontalDivider(color = Border)
+                        if (index != logs.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
             }
@@ -70,7 +68,7 @@ private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: ()
                 add(formatMiles(entry.mileage))
                 if (entry.cost != null) add(formatMoney(entry.cost))
             }
-            Text(subtitleParts.joinToString(" · "), color = TextDim, style = MaterialTheme.typography.bodySmall)
+            Text(subtitleParts.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,11 +35,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.R
+import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.data.entity.BuildPhaseEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogEntryEntity
@@ -83,18 +86,26 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     val showingSubScreen = uiState.showScheduleScreen || uiState.showCostTrendScreen
     val showFab = !showingSubScreen && uiState.currentTab != AppTab.Settings
 
+    val itemColors = NavigationBarItemDefaults.colors(
+        selectedIconColor = garageColors.alarm,
+        selectedTextColor = garageColors.alarm,
+        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        indicatorColor = Color.Transparent,
+    )
+
     Scaffold(
         topBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                // Solid black status-bar strip — deliberately not the header's surface color,
-                // so the system clock/icons never sit on top of a color seam.
+                // Status strip and header share the chrome tone (lighter than content ground) —
+                // one flat field, not two competing surfaces.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .windowInsetsTopHeight(WindowInsets.statusBars)
-                        .background(Color.Black),
+                        .background(garageColors.chrome),
                 )
-                Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+                Surface(color = garageColors.chrome, modifier = Modifier.fillMaxWidth()) {
                     Column {
                         Text(
                             text = "🔧 " + stringResource(R.string.app_name),
@@ -110,56 +121,70 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         Spacer(Modifier.height(10.dp))
                     }
                 }
+                Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(garageColors.chromeEdge))
             }
         },
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = uiState.currentTab == AppTab.Dashboard && !showingSubScreen,
-                    onClick = { viewModel.selectTab(AppTab.Dashboard) },
-                    icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                    label = { Text("Home") },
-                )
-                NavigationBarItem(
-                    selected = uiState.currentTab == AppTab.Log && !showingSubScreen,
-                    onClick = { viewModel.selectTab(AppTab.Log) },
-                    icon = { Icon(Icons.Filled.MenuBook, contentDescription = null) },
-                    label = { Text("Log") },
-                )
-                NavigationBarItem(
-                    selected = uiState.currentTab == AppTab.Issues && !showingSubScreen,
-                    onClick = { viewModel.selectTab(AppTab.Issues) },
-                    icon = { Icon(Icons.Filled.Warning, contentDescription = null) },
-                    label = { Text("Issues") },
-                )
-                NavigationBarItem(
-                    selected = uiState.currentTab == AppTab.Build && !showingSubScreen,
-                    onClick = { viewModel.selectTab(AppTab.Build) },
-                    icon = { Icon(Icons.Filled.Build, contentDescription = null) },
-                    label = { Text("Build") },
-                )
-                NavigationBarItem(
-                    selected = uiState.currentTab == AppTab.Settings && !showingSubScreen,
-                    onClick = { viewModel.selectTab(AppTab.Settings) },
-                    icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
-                    label = { Text("More") },
-                )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(garageColors.chromeEdge))
+                NavigationBar(containerColor = garageColors.chrome) {
+                    NavigationBarItem(
+                        selected = uiState.currentTab == AppTab.Dashboard && !showingSubScreen,
+                        onClick = { viewModel.selectTab(AppTab.Dashboard) },
+                        icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                        label = { Text("Home") },
+                        colors = itemColors,
+                    )
+                    NavigationBarItem(
+                        selected = uiState.currentTab == AppTab.Log && !showingSubScreen,
+                        onClick = { viewModel.selectTab(AppTab.Log) },
+                        icon = { Icon(Icons.Filled.MenuBook, contentDescription = null) },
+                        label = { Text("Log") },
+                        colors = itemColors,
+                    )
+                    NavigationBarItem(
+                        selected = uiState.currentTab == AppTab.Issues && !showingSubScreen,
+                        onClick = { viewModel.selectTab(AppTab.Issues) },
+                        icon = { Icon(Icons.Filled.Warning, contentDescription = null) },
+                        label = { Text("Issues") },
+                        colors = itemColors,
+                    )
+                    NavigationBarItem(
+                        selected = uiState.currentTab == AppTab.Build && !showingSubScreen,
+                        onClick = { viewModel.selectTab(AppTab.Build) },
+                        icon = { Icon(Icons.Filled.Build, contentDescription = null) },
+                        label = { Text("Build") },
+                        colors = itemColors,
+                    )
+                    NavigationBarItem(
+                        selected = uiState.currentTab == AppTab.Settings && !showingSubScreen,
+                        onClick = { viewModel.selectTab(AppTab.Settings) },
+                        icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
+                        label = { Text("More") },
+                        colors = itemColors,
+                    )
+                }
             }
         },
         floatingActionButton = {
             if (showFab) {
-                FloatingActionButton(onClick = {
-                    activeSheet = if (uiState.vehicles.isEmpty()) {
-                        Sheet.VehicleForm(null)
-                    } else {
-                        when (uiState.currentTab) {
-                            AppTab.Log -> Sheet.LogForm(null)
-                            AppTab.Issues -> Sheet.IssueForm(null)
-                            AppTab.Build -> Sheet.PhaseForm(null)
-                            else -> Sheet.LogForm(null)
+                FloatingActionButton(
+                    shape = RectangleShape,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    onClick = {
+                        activeSheet = if (uiState.vehicles.isEmpty()) {
+                            Sheet.VehicleForm(null)
+                        } else {
+                            when (uiState.currentTab) {
+                                AppTab.Log -> Sheet.LogForm(null)
+                                AppTab.Issues -> Sheet.IssueForm(null)
+                                AppTab.Build -> Sheet.PhaseForm(null)
+                                else -> Sheet.LogForm(null)
+                            }
                         }
-                    }
-                }) {
+                    },
+                ) {
                     Icon(Icons.Filled.Add, contentDescription = "Add")
                 }
             }

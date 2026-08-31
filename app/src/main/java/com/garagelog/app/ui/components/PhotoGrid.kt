@@ -34,8 +34,7 @@ import coil3.compose.AsyncImage
 import com.garagelog.app.data.entity.PhotoEntity
 import com.garagelog.app.data.entity.PhotoOwnerType
 import com.garagelog.app.ui.GarageLogViewModel
-import com.garagelog.app.ui.theme.Surface2
-import com.garagelog.app.ui.theme.TextDim
+import com.garagelog.app.ui.theme.garageColors
 import java.io.File
 
 @Composable
@@ -51,7 +50,7 @@ fun PhotoGridSection(
         if (uri != null) viewModel.addPhoto(ownerType, ownerId, uri)
     }
 
-    Text("Photos", style = MaterialTheme.typography.labelMedium, color = TextDim, modifier = Modifier.padding(top = 12.dp))
+    Text("Photos", style = MaterialTheme.typography.labelMedium, color = garageColors.textMuted, modifier = Modifier.padding(top = 12.dp))
 
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
         items(photos, key = { it.id }) { photo ->
@@ -74,11 +73,11 @@ fun PhotoGridSection(
                 modifier = Modifier
                     .size(76.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Surface2)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.AddAPhoto, contentDescription = "Add photo", tint = TextDim)
+                Icon(Icons.Filled.AddAPhoto, contentDescription = "Add photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

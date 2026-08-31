@@ -1,7 +1,6 @@
 package com.garagelog.app.data.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Query
 import androidx.room.Upsert
 import com.garagelog.app.data.entity.BuildPhaseEntity
@@ -9,26 +8,26 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BuildPhaseDao {
-    @Query("SELECT * FROM build_phases ORDER BY `order` ASC")
+    @Query("SELECT * FROM build_phases WHERE deleted = 0 ORDER BY `order` ASC")
     fun observeAll(): Flow<List<BuildPhaseEntity>>
 
-    @Query("SELECT * FROM build_phases ORDER BY `order` ASC")
+    @Query("SELECT * FROM build_phases WHERE deleted = 0 ORDER BY `order` ASC")
     suspend fun getAll(): List<BuildPhaseEntity>
 
-    @Query("SELECT COUNT(*) FROM build_phases")
+    @Query("SELECT * FROM build_phases")
+    suspend fun getAllForSync(): List<BuildPhaseEntity>
+
+    @Query("SELECT COUNT(*) FROM build_phases WHERE deleted = 0")
     suspend fun count(): Int
 
     @Upsert
     suspend fun upsert(phase: BuildPhaseEntity)
 
-    @Delete
-    suspend fun delete(phase: BuildPhaseEntity)
+    @Query("UPDATE build_phases SET deleted = 1, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun softDeleteById(id: String, updatedAt: Long)
 
-    @Query("DELETE FROM build_phases WHERE id = :id")
-    suspend fun deleteById(id: String)
-
-    @Query("DELETE FROM build_phases WHERE vehicleId = :vehicleId")
-    suspend fun deleteForVehicle(vehicleId: String)
+    @Query("UPDATE build_phases SET deleted = 1, updatedAt = :updatedAt WHERE vehicleId = :vehicleId")
+    suspend fun softDeleteForVehicle(vehicleId: String, updatedAt: Long)
 
     @Query("DELETE FROM build_phases")
     suspend fun deleteAll()

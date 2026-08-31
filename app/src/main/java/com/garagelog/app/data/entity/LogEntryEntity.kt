@@ -16,4 +16,6 @@ data class LogEntryEntity(
     val cost: Double?,
     val parts: String,
     val notes: String,
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false,
 )

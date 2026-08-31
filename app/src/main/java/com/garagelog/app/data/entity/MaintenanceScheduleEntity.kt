@@ -12,4 +12,6 @@ data class MaintenanceScheduleEntity(
     val intervalMonths: Int?,
     val lastDoneMileage: Int?,
     val lastDoneDate: String?,
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false,
 )
