@@ -68,3 +68,25 @@ fun formatDateTime(millis: Long?): String {
     if (millis == null) return "never"
     return timeFormat.format(Date(millis))
 }
+
+/** "9:00 AM" style formatting for an hour/minute pair (24h clock in, 12h clock out). */
+fun formatTimeOfDay(hour: Int, minute: Int): String {
+    val cal = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, hour)
+        set(java.util.Calendar.MINUTE, minute)
+    }
+    return SimpleDateFormat("h:mm a", Locale.US).format(cal.time)
+}
+
+private val monthNames = listOf(
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)
+
+/** [month] uses Calendar constants (JANUARY=0..DECEMBER=11). */
+fun monthName(month: Int): String = monthNames.getOrElse(month) { "January" }
+
+private val dayOfWeekNames = listOf("", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+
+/** [dayOfWeek] uses Calendar constants (SUNDAY=1..SATURDAY=7). */
+fun dayOfWeekName(dayOfWeek: Int): String = dayOfWeekNames.getOrElse(dayOfWeek) { "Monday" }
