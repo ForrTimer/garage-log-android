@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -19,12 +22,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.theme.garageColors
+import com.garagelog.app.util.CommonMaintenanceServices
 import com.garagelog.app.util.todayIso
 import java.util.UUID
 
@@ -40,6 +46,14 @@ private data class VehicleFormState(
     val miles: String,
     val role: String,
     val notes: String,
+    val severeDustyAreas: Boolean,
+    val severeTowing: Boolean,
+    val severeExtendedIdling: Boolean,
+    val severeLowSpeedColdWeather: Boolean,
+    val severeHeavyCityTrafficHot: Boolean,
+    val severeMountainousHot: Boolean,
+    val severeFrequentTowing: Boolean,
+    val severeDeepWater: Boolean,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,7 +61,7 @@ private data class VehicleFormState(
 fun VehicleFormSheet(
     vehicle: VehicleEntity?,
     onDismiss: () -> Unit,
-    onSave: (VehicleEntity) -> Unit,
+    onSave: (VehicleEntity, List<String>) -> Unit,
     onDelete: (String) -> Unit,
 ) {
     var form by remember(vehicle?.id) {
@@ -64,13 +78,27 @@ fun VehicleFormSheet(
                 miles = vehicle?.miles?.toString() ?: "",
                 role = vehicle?.role ?: "",
                 notes = vehicle?.notes ?: "",
+                severeDustyAreas = vehicle?.severeDustyAreas ?: false,
+                severeTowing = vehicle?.severeTowing ?: false,
+                severeExtendedIdling = vehicle?.severeExtendedIdling ?: false,
+                severeLowSpeedColdWeather = vehicle?.severeLowSpeedColdWeather ?: false,
+                severeHeavyCityTrafficHot = vehicle?.severeHeavyCityTrafficHot ?: false,
+                severeMountainousHot = vehicle?.severeMountainousHot ?: false,
+                severeFrequentTowing = vehicle?.severeFrequentTowing ?: false,
+                severeDeepWater = vehicle?.severeDeepWater ?: false,
             ),
         )
     }
+    var selectedServices by remember(vehicle?.id) {
+        mutableStateOf(if (vehicle == null) setOf("Oil change", "Tire rotation") else emptySet())
+    }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).navigationBarsPadding()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding(),
+        ) {
             Text(if (vehicle == null) "Add vehicle" else "Edit vehicle", style = MaterialTheme.typography.titleLarge)
 
             LabeledTextField("Name / nickname", form.name, { form = form.copy(name = it) })
@@ -85,9 +113,38 @@ fun VehicleFormSheet(
             LabeledTextField("Role / notes", form.role, { form = form.copy(role = it) }, singleLine = false, minLines = 2)
             LabeledTextField("Free-form notes", form.notes, { form = form.copy(notes = it) }, singleLine = false, minLines = 2)
 
+            Text("Severe-duty conditions", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
+            Text(
+                "Any of these checked halves computed maintenance intervals, per typical OEM severe-duty schedules.",
+                style = MaterialTheme.typography.bodySmall,
+                color = garageColors.textMuted,
+            )
+            CheckboxRow("Driving in dusty areas", form.severeDustyAreas) { form = form.copy(severeDustyAreas = it) }
+            CheckboxRow("Towing a trailer", form.severeTowing) { form = form.copy(severeTowing = it) }
+            CheckboxRow("Idling for extended periods", form.severeExtendedIdling) { form = form.copy(severeExtendedIdling = it) }
+            CheckboxRow("Low speed / short trips in below-freezing temps", form.severeLowSpeedColdWeather) { form = form.copy(severeLowSpeedColdWeather = it) }
+            CheckboxRow("Heavy city traffic above 90°F", form.severeHeavyCityTrafficHot) { form = form.copy(severeHeavyCityTrafficHot = it) }
+            CheckboxRow("Hilly/mountainous terrain above 90°F", form.severeMountainousHot) { form = form.copy(severeMountainousHot = it) }
+            CheckboxRow("Frequent trailer towing", form.severeFrequentTowing) { form = form.copy(severeFrequentTowing = it) }
+            CheckboxRow("Driven through deep water", form.severeDeepWater) { form = form.copy(severeDeepWater = it) }
+
+            if (vehicle == null) {
+                Text("Starter maintenance schedule", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
+                Text(
+                    "Check the services you want tracked — default intervals get added, which you can edit any time.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = garageColors.textMuted,
+                )
+                CommonMaintenanceServices.all.forEach { template ->
+                    CheckboxRow(template.name, template.name in selectedServices) { checked ->
+                        selectedServices = if (checked) selectedServices + template.name else selectedServices - template.name
+                    }
+                }
+            }
+
             Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 24.dp)) {
                 if (vehicle != null) {
-                    OutlinedButton(onClick = { onDelete(vehicle.id) }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f)) {
                         Text("Delete", color = garageColors.alarmText)
                     }
                     Spacer(Modifier.width(10.dp))
@@ -110,12 +167,38 @@ fun VehicleFormSheet(
                                 role = form.role.trim(),
                                 notes = form.notes.trim(),
                                 sortOrder = vehicle?.sortOrder ?: 0,
+                                severeDustyAreas = form.severeDustyAreas,
+                                severeTowing = form.severeTowing,
+                                severeExtendedIdling = form.severeExtendedIdling,
+                                severeLowSpeedColdWeather = form.severeLowSpeedColdWeather,
+                                severeHeavyCityTrafficHot = form.severeHeavyCityTrafficHot,
+                                severeMountainousHot = form.severeMountainousHot,
+                                severeFrequentTowing = form.severeFrequentTowing,
+                                severeDeepWater = form.severeDeepWater,
                             ),
+                            selectedServices.toList(),
                         )
                     },
                     modifier = Modifier.weight(1f),
                 ) { Text("Save") }
             }
         }
+    }
+
+    if (showDeleteConfirm && vehicle != null) {
+        ConfirmDialog(
+            title = "Delete vehicle?",
+            message = "This will also delete all of its logs, issues, build phases, and maintenance schedules. This can't be undone.",
+            onConfirm = { onDelete(vehicle.id) },
+            onDismiss = { showDeleteConfirm = false },
+        )
+    }
+}
+
+@Composable
+private fun CheckboxRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
     }
 }
