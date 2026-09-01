@@ -18,6 +18,7 @@ data class BackupData(
     val logs: List<BackupLog> = emptyList(),
     val issues: List<BackupIssue> = emptyList(),
     val buildPhases: List<BackupPhase> = emptyList(),
+    val buildSteps: List<BackupStep> = emptyList(),
     val maintenanceSchedules: List<BackupSchedule> = emptyList(),
 )
 
@@ -36,6 +37,14 @@ data class BackupVehicle(
     val milesDate: String = "",
     val role: String = "",
     val notes: String = "",
+    val severeDustyAreas: Boolean = false,
+    val severeTowing: Boolean = false,
+    val severeExtendedIdling: Boolean = false,
+    val severeLowSpeedColdWeather: Boolean = false,
+    val severeHeavyCityTrafficHot: Boolean = false,
+    val severeMountainousHot: Boolean = false,
+    val severeFrequentTowing: Boolean = false,
+    val severeDeepWater: Boolean = false,
 )
 
 @Serializable
@@ -71,6 +80,23 @@ data class BackupPhase(
     val status: String = "Not started",
     val order: String? = "0",
     val notes: String = "",
+    val priorityFilter: String? = null,
+    val budgetCap: String? = null,
+)
+
+@Serializable
+data class BackupStep(
+    val id: String,
+    val vehicleId: String,
+    val phaseId: String? = null,
+    val title: String = "",
+    val notes: String = "",
+    val priority: String = "Medium",
+    val status: String = "Not started",
+    val estimatedCost: String? = null,
+    val actualCost: String? = null,
+    val order: String? = "0",
+    val manualPhaseOverride: Boolean = false,
 )
 
 @Serializable

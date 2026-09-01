@@ -35,7 +35,8 @@ interface PhotoDao {
     @Query(
         "UPDATE photos SET deleted = 1, updatedAt = :updatedAt WHERE " +
             "ownerId IN (SELECT id FROM log_entries WHERE vehicleId = :vehicleId) " +
-            "OR ownerId IN (SELECT id FROM issues WHERE vehicleId = :vehicleId)",
+            "OR ownerId IN (SELECT id FROM issues WHERE vehicleId = :vehicleId) " +
+            "OR ownerId IN (SELECT id FROM build_steps WHERE vehicleId = :vehicleId)",
     )
     suspend fun softDeleteForVehicle(vehicleId: String, updatedAt: Long)
 

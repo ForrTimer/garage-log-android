@@ -3,7 +3,7 @@ package com.garagelog.app.data.entity
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-enum class PhotoOwnerType { LOG, ISSUE }
+enum class PhotoOwnerType { LOG, ISSUE, BUILD_STEP }
 
 @Entity(tableName = "photos")
 data class PhotoEntity(

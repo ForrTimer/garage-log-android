@@ -1,12 +1,14 @@
 package com.garagelog.app.data.backup
 
 import com.garagelog.app.data.entity.BuildPhaseEntity
+import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.BuildPhaseRepository
+import com.garagelog.app.data.repository.BuildStepRepository
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.PhotoRepository
@@ -22,6 +24,7 @@ class BackupManager(
     private val logRepository: LogRepository,
     private val issueRepository: IssueRepository,
     private val buildPhaseRepository: BuildPhaseRepository,
+    private val buildStepRepository: BuildStepRepository,
     private val scheduleRepository: ScheduleRepository,
     private val photoRepository: PhotoRepository,
     private val photoStore: PhotoStore,
@@ -39,6 +42,7 @@ class BackupManager(
             logs = logRepository.getAll().map { it.toBackup() },
             issues = issueRepository.getAll().map { it.toBackup() },
             buildPhases = buildPhaseRepository.getAll().map { it.toBackup() },
+            buildSteps = buildStepRepository.getAll().map { it.toBackup() },
             maintenanceSchedules = scheduleRepository.getAll().map { it.toBackup() },
         )
         val text = json.encodeToString(BackupData.serializer(), data)
@@ -54,6 +58,7 @@ class BackupManager(
         data.logs.forEach { logRepository.upsert(it.toEntity()) }
         data.issues.forEach { issueRepository.upsert(it.toEntity()) }
         data.buildPhases.forEach { buildPhaseRepository.upsert(it.toEntity()) }
+        data.buildSteps.forEach { buildStepRepository.upsert(it.toEntity()) }
         data.maintenanceSchedules.forEach { scheduleRepository.upsert(it.toEntity()) }
     }
 
@@ -76,6 +81,7 @@ class BackupManager(
         logRepository.deleteAll()
         issueRepository.deleteAll()
         buildPhaseRepository.deleteAll()
+        buildStepRepository.deleteAll()
         scheduleRepository.deleteAll()
     }
 }
@@ -84,6 +90,9 @@ private fun VehicleEntity.toBackup() = BackupVehicle(
     id = id, name = name, year = year?.toString(), make = make, model = model, engine = engine,
     drivetrain = drivetrain, vin = vin, color = color, miles = miles?.toString(), milesDate = milesDate,
     role = role, notes = notes,
+    severeDustyAreas = severeDustyAreas, severeTowing = severeTowing, severeExtendedIdling = severeExtendedIdling,
+    severeLowSpeedColdWeather = severeLowSpeedColdWeather, severeHeavyCityTrafficHot = severeHeavyCityTrafficHot,
+    severeMountainousHot = severeMountainousHot, severeFrequentTowing = severeFrequentTowing, severeDeepWater = severeDeepWater,
 )
 
 private fun BackupVehicle.toEntity(sortOrder: Int) = VehicleEntity(
@@ -91,6 +100,9 @@ private fun BackupVehicle.toEntity(sortOrder: Int) = VehicleEntity(
     make = make, model = model, engine = engine, drivetrain = drivetrain, vin = vin, color = color,
     miles = miles?.trim()?.toDoubleOrNull()?.toInt(), milesDate = milesDate, role = role, notes = notes,
     sortOrder = sortOrder, updatedAt = System.currentTimeMillis(),
+    severeDustyAreas = severeDustyAreas, severeTowing = severeTowing, severeExtendedIdling = severeExtendedIdling,
+    severeLowSpeedColdWeather = severeLowSpeedColdWeather, severeHeavyCityTrafficHot = severeHeavyCityTrafficHot,
+    severeMountainousHot = severeMountainousHot, severeFrequentTowing = severeFrequentTowing, severeDeepWater = severeDeepWater,
 )
 
 private fun LogEntryEntity.toBackup() = BackupLog(
@@ -118,12 +130,27 @@ private fun BackupIssue.toEntity() = IssueEntity(
 
 private fun BuildPhaseEntity.toBackup() = BackupPhase(
     id = id, vehicleId = vehicleId, phase = phase, status = status, order = order.toString(), notes = notes,
+    priorityFilter = priorityFilter, budgetCap = budgetCap?.toString(),
 )
 
 private fun BackupPhase.toEntity() = BuildPhaseEntity(
     id = id, vehicleId = vehicleId, phase = phase.ifBlank { "Untitled phase" }, status = status,
     order = order?.trim()?.toDoubleOrNull()?.toInt() ?: 0, notes = notes,
+    priorityFilter = priorityFilter, budgetCap = budgetCap?.trim()?.toDoubleOrNull(),
     updatedAt = System.currentTimeMillis(),
+)
+
+private fun BuildStepEntity.toBackup() = BackupStep(
+    id = id, vehicleId = vehicleId, phaseId = phaseId, title = title, notes = notes, priority = priority,
+    status = status, estimatedCost = estimatedCost?.toString(), actualCost = actualCost?.toString(),
+    order = order.toString(), manualPhaseOverride = manualPhaseOverride,
+)
+
+private fun BackupStep.toEntity() = BuildStepEntity(
+    id = id, vehicleId = vehicleId, phaseId = phaseId, title = title.ifBlank { "Untitled step" }, notes = notes,
+    priority = priority, status = status, estimatedCost = estimatedCost?.trim()?.toDoubleOrNull(),
+    actualCost = actualCost?.trim()?.toDoubleOrNull(), order = order?.trim()?.toDoubleOrNull()?.toInt() ?: 0,
+    manualPhaseOverride = manualPhaseOverride, updatedAt = System.currentTimeMillis(),
 )
 
 private fun MaintenanceScheduleEntity.toBackup() = BackupSchedule(
