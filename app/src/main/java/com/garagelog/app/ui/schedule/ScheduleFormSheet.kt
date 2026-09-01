@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +26,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.VehicleDropdown
@@ -62,9 +65,12 @@ fun ScheduleFormSheet(
         )
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).navigationBarsPadding()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding(),
+        ) {
             Text(if (schedule == null) "New maintenance interval" else "Edit maintenance interval", style = MaterialTheme.typography.titleLarge)
 
             VehicleDropdown("Vehicle", vehicles, form.vehicleId) { form = form.copy(vehicleId = it) }
@@ -76,7 +82,7 @@ fun ScheduleFormSheet(
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 24.dp)) {
                 if (schedule != null) {
-                    OutlinedButton(onClick = { onDelete(schedule.id) }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f)) {
                         Text("Delete", color = garageColors.alarmText)
                     }
                     Spacer(Modifier.width(10.dp))
@@ -99,5 +105,14 @@ fun ScheduleFormSheet(
                 ) { Text("Save") }
             }
         }
+    }
+
+    if (showDeleteConfirm && schedule != null) {
+        ConfirmDialog(
+            title = "Delete maintenance interval?",
+            message = "This can't be undone.",
+            onConfirm = { onDelete(schedule.id) },
+            onDismiss = { showDeleteConfirm = false },
+        )
     }
 }

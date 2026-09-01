@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +29,7 @@ import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.PhotoOwnerType
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.PhotoGridSection
@@ -71,9 +74,12 @@ fun IssueFormSheet(
         )
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).navigationBarsPadding()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding(),
+        ) {
             Text(if (issue == null) "New issue" else "Edit issue", style = MaterialTheme.typography.titleLarge)
 
             VehicleDropdown("Vehicle", vehicles, form.vehicleId) { form = form.copy(vehicleId = it) }
@@ -107,7 +113,7 @@ fun IssueFormSheet(
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 24.dp)) {
                 if (issue != null) {
-                    OutlinedButton(onClick = { onDelete(issue.id) }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f)) {
                         Text("Delete", color = garageColors.alarmText)
                     }
                     Spacer(Modifier.width(10.dp))
@@ -131,5 +137,14 @@ fun IssueFormSheet(
                 ) { Text("Save") }
             }
         }
+    }
+
+    if (showDeleteConfirm && issue != null) {
+        ConfirmDialog(
+            title = "Delete issue?",
+            message = "This can't be undone.",
+            onConfirm = { onDelete(issue.id) },
+            onDismiss = { showDeleteConfirm = false },
+        )
     }
 }

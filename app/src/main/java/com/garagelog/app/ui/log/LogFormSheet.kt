@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -25,6 +27,7 @@ import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.PhotoOwnerType
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.PhotoGridSection
@@ -71,9 +74,12 @@ fun LogFormSheet(
         )
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).navigationBarsPadding()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding(),
+        ) {
             Text(if (entry == null) "New log entry" else "Edit log entry", style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
 
             VehicleDropdown("Vehicle", vehicles, form.vehicleId) { form = form.copy(vehicleId = it) }
@@ -98,7 +104,7 @@ fun LogFormSheet(
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 24.dp)) {
                 if (entry != null) {
-                    OutlinedButton(onClick = { onDelete(entry.id) }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f)) {
                         Text("Delete", color = garageColors.alarmText)
                     }
                     androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
@@ -123,5 +129,14 @@ fun LogFormSheet(
                 ) { Text("Save") }
             }
         }
+    }
+
+    if (showDeleteConfirm && entry != null) {
+        ConfirmDialog(
+            title = "Delete log entry?",
+            message = "This can't be undone.",
+            onConfirm = { onDelete(entry.id) },
+            onDismiss = { showDeleteConfirm = false },
+        )
     }
 }
