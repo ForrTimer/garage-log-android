@@ -9,7 +9,13 @@ import java.util.TimeZone
 private val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
     timeZone = TimeZone.getTimeZone("UTC")
 }
-private val prettyFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
+// All our ISO date strings are calendar dates with no real time-of-day meaning, parsed/formatted
+// as UTC midnight throughout (matching Material3's DatePicker convention) — prettyFormat has to
+// share that timezone too, or a date parsed as UTC and then displayed in the local zone can drift
+// onto the adjacent day depending on the device's offset.
+private val prettyFormat = SimpleDateFormat("MMM d, yyyy", Locale.US).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
 
 fun todayIso(): String = isoFormat.format(Date())
 
