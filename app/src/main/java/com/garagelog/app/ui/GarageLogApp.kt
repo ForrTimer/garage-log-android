@@ -43,12 +43,14 @@ import androidx.compose.ui.unit.dp
 import com.garagelog.app.R
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.data.entity.BuildPhaseEntity
+import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.build.BuildScreen
 import com.garagelog.app.ui.build.PhaseFormSheet
+import com.garagelog.app.ui.build.StepFormSheet
 import com.garagelog.app.ui.components.VehiclePickerRow
 import com.garagelog.app.ui.costtrend.CostTrendScreen
 import com.garagelog.app.ui.dashboard.DashboardScreen
@@ -67,7 +69,8 @@ private sealed class Sheet {
     data class VehicleForm(val vehicle: VehicleEntity?) : Sheet()
     data class LogForm(val entry: LogEntryEntity?) : Sheet()
     data class IssueForm(val issue: IssueEntity?) : Sheet()
-    data class PhaseForm(val phase: BuildPhaseEntity?) : Sheet()
+    data class PhaseForm(val phase: BuildPhaseEntity?, val vehicleId: String? = null) : Sheet()
+    data class StepForm(val step: BuildStepEntity?, val vehicleId: String? = null) : Sheet()
     data class ScheduleForm(val schedule: MaintenanceScheduleEntity?) : Sheet()
 }
 
@@ -179,7 +182,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             when (uiState.currentTab) {
                                 AppTab.Log -> Sheet.LogForm(null)
                                 AppTab.Issues -> Sheet.IssueForm(null)
-                                AppTab.Build -> Sheet.PhaseForm(null)
+                                AppTab.Build -> Sheet.StepForm(null)
                                 else -> Sheet.LogForm(null)
                             }
                         }
@@ -208,6 +211,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                     onOpenSchedule = viewModel::openSchedule,
                     onOpenCostTrend = viewModel::openCostTrend,
+                    onUpdateMileage = viewModel::updateMileage,
                 )
                 uiState.currentTab == AppTab.Log -> LogScreen(
                     uiState = uiState,
@@ -219,7 +223,9 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 )
                 uiState.currentTab == AppTab.Build -> BuildScreen(
                     uiState = uiState,
-                    onItemClick = { activeSheet = Sheet.PhaseForm(it) },
+                    onPhaseClick = { activeSheet = Sheet.PhaseForm(it) },
+                    onStepClick = { activeSheet = Sheet.StepForm(it) },
+                    onAddPhase = { vehicleId -> activeSheet = Sheet.PhaseForm(null, vehicleId) },
                 )
                 uiState.currentTab == AppTab.Settings -> SettingsScreen(
                     uiState = uiState,
@@ -238,7 +244,11 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         is Sheet.VehicleForm -> VehicleFormSheet(
             vehicle = sheet.vehicle,
             onDismiss = { activeSheet = Sheet.None },
-            onSave = { viewModel.saveVehicle(it); activeSheet = Sheet.None },
+            onSave = { v, starterServices ->
+                viewModel.saveVehicle(v)
+                if (starterServices.isNotEmpty()) viewModel.addStarterSchedules(v.id, starterServices)
+                activeSheet = Sheet.None
+            },
             onDelete = { viewModel.deleteVehicle(it); activeSheet = Sheet.None },
         )
         is Sheet.LogForm -> LogFormSheet(
@@ -262,12 +272,27 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         is Sheet.PhaseForm -> PhaseFormSheet(
             phase = sheet.phase,
             vehicles = uiState.vehicles,
-            defaultVehicleId = uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id,
+            defaultVehicleId = sheet.phase?.vehicleId ?: sheet.vehicleId ?: uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id,
             nextOrder = uiState.buildPhases.size + 1,
             onDismiss = { activeSheet = Sheet.None },
             onSave = { viewModel.saveBuildPhase(it); activeSheet = Sheet.None },
             onDelete = { viewModel.deleteBuildPhase(it); activeSheet = Sheet.None },
         )
+        is Sheet.StepForm -> {
+            val vehicleId = sheet.step?.vehicleId ?: sheet.vehicleId ?: uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id
+            if (vehicleId != null) {
+                StepFormSheet(
+                    step = sheet.step,
+                    vehicleId = vehicleId,
+                    phases = uiState.buildPhases.filter { it.vehicleId == vehicleId },
+                    nextOrder = uiState.buildSteps.count { it.vehicleId == vehicleId } + 1,
+                    viewModel = viewModel,
+                    onDismiss = { activeSheet = Sheet.None },
+                    onSave = { viewModel.saveBuildStep(it); activeSheet = Sheet.None },
+                    onDelete = { viewModel.deleteBuildStep(it); activeSheet = Sheet.None },
+                )
+            }
+        }
         is Sheet.ScheduleForm -> ScheduleFormSheet(
             schedule = sheet.schedule,
             vehicles = uiState.vehicles,

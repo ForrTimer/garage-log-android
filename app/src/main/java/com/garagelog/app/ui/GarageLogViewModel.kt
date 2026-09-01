@@ -1,6 +1,7 @@
 package com.garagelog.app.ui
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
 import android.net.Uri
@@ -8,15 +9,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.garagelog.app.data.entity.BuildPhaseEntity
+import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
+import com.garagelog.app.data.entity.NotificationPrefsEntity
 import com.garagelog.app.data.entity.PhotoEntity
 import com.garagelog.app.data.entity.PhotoOwnerType
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.data.auth.SignInStep
 import com.garagelog.app.di.ServiceLocator
+import com.garagelog.app.notifications.MileageReminderScheduler
+import com.garagelog.app.util.CommonMaintenanceServices
+import com.garagelog.app.util.assignBuildBuckets
 import com.garagelog.app.util.todayIso
 import java.io.InputStream
 import java.io.OutputStream
@@ -38,7 +44,9 @@ data class GarageLogUiState(
     val logs: List<LogEntryEntity> = emptyList(),
     val issues: List<IssueEntity> = emptyList(),
     val buildPhases: List<BuildPhaseEntity> = emptyList(),
+    val buildSteps: List<BuildStepEntity> = emptyList(),
     val schedules: List<MaintenanceScheduleEntity> = emptyList(),
+    val notificationPrefs: NotificationPrefsEntity = NotificationPrefsEntity(),
     val activeVehicleId: String? = null,
     val currentTab: AppTab = AppTab.Dashboard,
     val showScheduleScreen: Boolean = false,
@@ -50,6 +58,7 @@ data class GarageLogUiState(
     fun issuesFor(vehicleId: String?): List<IssueEntity> = vehicleId?.let { id -> issues.filter { it.vehicleId == id } } ?: issues
     fun schedulesFor(vehicleId: String?): List<MaintenanceScheduleEntity> =
         vehicleId?.let { id -> schedules.filter { it.vehicleId == id } } ?: schedules
+    fun stepsFor(vehicleId: String?): List<BuildStepEntity> = vehicleId?.let { id -> buildSteps.filter { it.vehicleId == id } } ?: buildSteps
 }
 
 private data class RepoBundle(
@@ -58,6 +67,11 @@ private data class RepoBundle(
     val issues: List<IssueEntity>,
     val buildPhases: List<BuildPhaseEntity>,
     val schedules: List<MaintenanceScheduleEntity>,
+)
+
+private data class ExtraBundle(
+    val buildSteps: List<BuildStepEntity>,
+    val notificationPrefs: NotificationPrefsEntity,
 )
 
 class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
@@ -86,6 +100,11 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         RepoBundle(vehicles, logs, issues, phases, schedules)
     }
 
+    private val extraBundle = combine(
+        locator.buildStepRepository.observeAll(),
+        locator.notificationPrefsRepository.observe(),
+    ) { steps, prefs -> ExtraBundle(steps, prefs) }
+
     private val uiFlags = combine(activeVehicleId, currentTab, showScheduleScreen, showCostTrendScreen) { a, b, c, d ->
         UiFlags(a, b, c, d)
     }
@@ -97,13 +116,15 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         val showCostTrendScreen: Boolean,
     )
 
-    val uiState: StateFlow<GarageLogUiState> = combine(repoBundle, uiFlags) { bundle, flags ->
+    val uiState: StateFlow<GarageLogUiState> = combine(repoBundle, extraBundle, uiFlags) { bundle, extra, flags ->
         GarageLogUiState(
             vehicles = bundle.vehicles,
             logs = bundle.logs,
             issues = bundle.issues,
             buildPhases = bundle.buildPhases,
+            buildSteps = extra.buildSteps,
             schedules = bundle.schedules,
+            notificationPrefs = extra.notificationPrefs,
             activeVehicleId = flags.activeVehicleId,
             currentTab = flags.currentTab,
             showScheduleScreen = flags.showScheduleScreen,
@@ -133,9 +154,36 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         locator.logRepository.softDeleteForVehicle(id)
         locator.issueRepository.softDeleteForVehicle(id)
         locator.buildPhaseRepository.softDeleteForVehicle(id)
+        locator.buildStepRepository.softDeleteForVehicle(id)
         locator.scheduleRepository.softDeleteForVehicle(id)
         locator.vehicleRepository.softDelete(id)
         if (activeVehicleId.value == id) activeVehicleId.value = null
+        requestSync()
+    }
+
+    fun updateMileage(vehicle: VehicleEntity, mileage: Int) = viewModelScope.launch {
+        locator.vehicleRepository.bumpMileageIfHigher(vehicle.id, mileage, todayIso())
+        requestSync()
+    }
+
+    /** Adds a batch of starter maintenance schedules (see VehicleFormSheet's common-services checklist). */
+    fun addStarterSchedules(vehicleId: String, taskNames: List<String>) = viewModelScope.launch {
+        val now = System.currentTimeMillis()
+        taskNames.forEach { name ->
+            val template = CommonMaintenanceServices.byName[name] ?: return@forEach
+            locator.scheduleRepository.upsert(
+                MaintenanceScheduleEntity(
+                    id = UUID.randomUUID().toString(),
+                    vehicleId = vehicleId,
+                    taskName = name,
+                    intervalMiles = template.intervalMiles,
+                    intervalMonths = template.intervalMonths,
+                    lastDoneMileage = null,
+                    lastDoneDate = null,
+                    updatedAt = now,
+                ),
+            )
+        }
         requestSync()
     }
 
@@ -169,12 +217,52 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
 
     fun saveBuildPhase(phase: BuildPhaseEntity) = viewModelScope.launch {
         locator.buildPhaseRepository.upsert(phase.copy(updatedAt = System.currentTimeMillis()))
+        rebucketForVehicle(phase.vehicleId)
         requestSync()
     }
 
     fun deleteBuildPhase(id: String) = viewModelScope.launch {
+        val phase = locator.buildPhaseRepository.getAll().find { it.id == id }
         locator.buildPhaseRepository.softDelete(id)
+        phase?.let { rebucketForVehicle(it.vehicleId) }
         requestSync()
+    }
+
+    fun saveBuildStep(step: BuildStepEntity) = viewModelScope.launch {
+        locator.buildStepRepository.upsert(step.copy(updatedAt = System.currentTimeMillis()))
+        rebucketForVehicle(step.vehicleId)
+        requestSync()
+    }
+
+    fun deleteBuildStep(id: String) = viewModelScope.launch {
+        val step = locator.buildStepRepository.getAll().find { it.id == id }
+        locator.photoRepository.getForOwner(PhotoOwnerType.BUILD_STEP.name, id).forEach { locator.photoStore.delete(it.filePath) }
+        locator.photoRepository.softDeleteForOwner(PhotoOwnerType.BUILD_STEP.name, id)
+        locator.buildStepRepository.softDelete(id)
+        step?.let { rebucketForVehicle(it.vehicleId) }
+        requestSync()
+    }
+
+    /**
+     * Re-runs [assignBuildBuckets] for one vehicle's steps/phases and persists any change.
+     * A step moving from one non-null phase to a different non-null phase is a genuine
+     * promotion (budget freed up, priority reshuffled) worth telling the owner about;
+     * first-time assignment (null -> phase) and unbucketing (phase -> null) stay silent.
+     */
+    private suspend fun rebucketForVehicle(vehicleId: String) {
+        val steps = locator.buildStepRepository.getAll().filter { it.vehicleId == vehicleId }
+        val phases = locator.buildPhaseRepository.getAll().filter { it.vehicleId == vehicleId }
+        val assignments = assignBuildBuckets(steps, phases)
+        val now = System.currentTimeMillis()
+        assignments.forEach { (stepId, newPhaseId) ->
+            val step = steps.find { it.id == stepId } ?: return@forEach
+            if (step.phaseId == newPhaseId) return@forEach
+            locator.buildStepRepository.upsert(step.copy(phaseId = newPhaseId, updatedAt = now))
+            if (step.phaseId != null && newPhaseId != null) {
+                val phaseName = phases.find { it.id == newPhaseId }?.phase ?: "another phase"
+                _messages.emit("\"${step.title}\" moved to $phaseName.")
+            }
+        }
     }
 
     fun saveSchedule(schedule: MaintenanceScheduleEntity) = viewModelScope.launch {
@@ -276,6 +364,11 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun syncNow() = requestSync()
+
+    fun saveNotificationPrefs(context: Context, prefs: NotificationPrefsEntity) = viewModelScope.launch {
+        locator.notificationPrefsRepository.upsert(prefs)
+        MileageReminderScheduler.reschedule(context.applicationContext, prefs)
+    }
 }
 
 class GarageLogViewModelFactory(private val locator: ServiceLocator) : ViewModelProvider.Factory {

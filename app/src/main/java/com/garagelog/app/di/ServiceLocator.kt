@@ -6,14 +6,19 @@ import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.backup.BackupManager
 import com.garagelog.app.data.db.AppDatabase
 import com.garagelog.app.data.db.MIGRATION_1_2
+import com.garagelog.app.data.db.MIGRATION_2_3
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.BuildPhaseRepository
+import com.garagelog.app.data.repository.BuildStepRepository
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
+import com.garagelog.app.data.repository.NotificationPrefsRepository
 import com.garagelog.app.data.repository.PhotoRepository
 import com.garagelog.app.data.repository.RoomBuildPhaseRepository
+import com.garagelog.app.data.repository.RoomBuildStepRepository
 import com.garagelog.app.data.repository.RoomIssueRepository
 import com.garagelog.app.data.repository.RoomLogRepository
+import com.garagelog.app.data.repository.RoomNotificationPrefsRepository
 import com.garagelog.app.data.repository.RoomPhotoRepository
 import com.garagelog.app.data.repository.RoomScheduleRepository
 import com.garagelog.app.data.repository.RoomVehicleRepository
@@ -37,14 +42,16 @@ class ServiceLocator(context: Context) {
         appContext,
         AppDatabase::class.java,
         AppDatabase.DATABASE_NAME,
-    ).addMigrations(MIGRATION_1_2).build()
+    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
 
     val vehicleRepository: VehicleRepository = RoomVehicleRepository(database.vehicleDao())
     val logRepository: LogRepository = RoomLogRepository(database.logEntryDao())
     val issueRepository: IssueRepository = RoomIssueRepository(database.issueDao())
     val buildPhaseRepository: BuildPhaseRepository = RoomBuildPhaseRepository(database.buildPhaseDao())
+    val buildStepRepository: BuildStepRepository = RoomBuildStepRepository(database.buildStepDao())
     val scheduleRepository: ScheduleRepository = RoomScheduleRepository(database.maintenanceScheduleDao())
     val photoRepository: PhotoRepository = RoomPhotoRepository(database.photoDao())
+    val notificationPrefsRepository: NotificationPrefsRepository = RoomNotificationPrefsRepository(database.notificationPrefsDao())
 
     val photoStore = PhotoStore(appContext)
 
@@ -53,6 +60,7 @@ class ServiceLocator(context: Context) {
         logRepository = logRepository,
         issueRepository = issueRepository,
         buildPhaseRepository = buildPhaseRepository,
+        buildStepRepository = buildStepRepository,
         scheduleRepository = scheduleRepository,
         photoRepository = photoRepository,
         photoStore = photoStore,
