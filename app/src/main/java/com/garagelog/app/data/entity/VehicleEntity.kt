@@ -19,6 +19,20 @@ data class VehicleEntity(
     val role: String,
     val notes: String,
     val sortOrder: Int = 0,
+    // Severe-duty conditions from typical OEM maintenance manuals — any of these set halves
+    // computed maintenance intervals (see util.ScheduleStatus.computeDueInfo).
+    val severeDustyAreas: Boolean = false,
+    val severeTowing: Boolean = false,
+    val severeExtendedIdling: Boolean = false,
+    val severeLowSpeedColdWeather: Boolean = false,
+    val severeHeavyCityTrafficHot: Boolean = false,
+    val severeMountainousHot: Boolean = false,
+    val severeFrequentTowing: Boolean = false,
+    val severeDeepWater: Boolean = false,
     val updatedAt: Long = 0L,
     val deleted: Boolean = false,
-)
+) {
+    val isSevereDuty: Boolean
+        get() = severeDustyAreas || severeTowing || severeExtendedIdling || severeLowSpeedColdWeather ||
+            severeHeavyCityTrafficHot || severeMountainousHot || severeFrequentTowing || severeDeepWater
+}

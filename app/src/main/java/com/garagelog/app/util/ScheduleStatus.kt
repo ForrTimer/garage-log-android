@@ -8,15 +8,22 @@ data class ScheduleDueInfo(val status: DueStatus, val label: String)
 
 private const val DUE_SOON_MILES_WINDOW = 500
 
-/** Pure due/overdue computation shared by the Dashboard badges and the Schedule screen. */
-fun computeDueInfo(schedule: MaintenanceScheduleEntity, currentMiles: Int?): ScheduleDueInfo {
+/**
+ * Pure due/overdue computation shared by the Dashboard badges and the Schedule screen.
+ * [severeDuty] halves both intervals, matching the "perform at half the indicated interval"
+ * caveat most OEM manuals attach to dusty/towing/extended-idling/extreme-temperature use.
+ */
+fun computeDueInfo(schedule: MaintenanceScheduleEntity, currentMiles: Int?, severeDuty: Boolean = false): ScheduleDueInfo {
+    val effectiveIntervalMiles = schedule.intervalMiles?.let { if (severeDuty) it / 2 else it }
+    val effectiveIntervalMonths = schedule.intervalMonths?.let { if (severeDuty) maxOf(1, it / 2) else it }
+
     val mileageRemaining: Int? =
-        if (schedule.intervalMiles != null && schedule.lastDoneMileage != null && currentMiles != null) {
-            (schedule.lastDoneMileage + schedule.intervalMiles) - currentMiles
+        if (effectiveIntervalMiles != null && schedule.lastDoneMileage != null && currentMiles != null) {
+            (schedule.lastDoneMileage + effectiveIntervalMiles) - currentMiles
         } else null
 
-    val dueDate: String? = if (schedule.intervalMonths != null && schedule.lastDoneDate != null) {
-        addMonthsToIso(schedule.lastDoneDate, schedule.intervalMonths)
+    val dueDate: String? = if (effectiveIntervalMonths != null && schedule.lastDoneDate != null) {
+        addMonthsToIso(schedule.lastDoneDate, effectiveIntervalMonths)
     } else null
 
     val dateOverdue = dueDate != null && isIsoDateOnOrBeforeToday(dueDate)

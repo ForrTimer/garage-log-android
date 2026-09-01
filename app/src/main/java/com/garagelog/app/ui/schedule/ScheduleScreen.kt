@@ -61,7 +61,7 @@ fun ScheduleScreen(
                     item {
                         GarageCard {
                             schedules.forEachIndexed { index, sched ->
-                                ScheduleRow(sched, v.miles, onEdit = { onEdit(sched) }, onMarkDone = { onMarkDone(sched) })
+                                ScheduleRow(sched, v.miles, v.isSevereDuty, onEdit = { onEdit(sched) }, onMarkDone = { onMarkDone(sched) })
                                 if (index != schedules.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             }
                         }
@@ -73,8 +73,8 @@ fun ScheduleScreen(
 }
 
 @Composable
-private fun ScheduleRow(schedule: MaintenanceScheduleEntity, currentMiles: Int?, onEdit: () -> Unit, onMarkDone: () -> Unit) {
-    val info = computeDueInfo(schedule, currentMiles)
+private fun ScheduleRow(schedule: MaintenanceScheduleEntity, currentMiles: Int?, severeDuty: Boolean, onEdit: () -> Unit, onMarkDone: () -> Unit) {
+    val info = computeDueInfo(schedule, currentMiles, severeDuty)
     val tone = when (info.status) {
         DueStatus.OVERDUE -> PillTone.Open
         DueStatus.DUE_SOON -> PillTone.Progress
