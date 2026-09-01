@@ -26,6 +26,10 @@ data class BuildPhaseEntity(
     val status: String,
     val order: Int,
     val notes: String,
+    // Bucket criteria for auto-assigning steps (see util.assignBuildBuckets). Null priorityFilter
+    // accepts any priority; null budgetCap accepts unlimited cost.
+    val priorityFilter: String? = null,
+    val budgetCap: Double? = null,
     val updatedAt: Long = 0L,
     val deleted: Boolean = false,
 )

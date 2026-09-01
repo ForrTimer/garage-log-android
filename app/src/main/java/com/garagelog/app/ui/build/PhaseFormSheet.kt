@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -24,12 +26,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.BuildPhaseEntity
 import com.garagelog.app.data.entity.PhaseStatus
+import com.garagelog.app.data.entity.StepPriority
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.SegmentedControl
 import com.garagelog.app.ui.components.VehicleDropdown
 import com.garagelog.app.ui.theme.garageColors
 import java.util.UUID
+
+private const val ANY_PRIORITY = "Any"
 
 private data class PhaseFormState(
     val vehicleId: String,
@@ -37,6 +43,8 @@ private data class PhaseFormState(
     val status: String,
     val order: String,
     val notes: String,
+    val priorityFilter: String,
+    val budgetCap: String,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,13 +66,18 @@ fun PhaseFormSheet(
                 status = phase?.status ?: PhaseStatus.NotStarted.label,
                 order = (phase?.order ?: nextOrder).toString(),
                 notes = phase?.notes ?: "",
+                priorityFilter = phase?.priorityFilter ?: ANY_PRIORITY,
+                budgetCap = phase?.budgetCap?.toString() ?: "",
             ),
         )
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).navigationBarsPadding()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding(),
+        ) {
             Text(if (phase == null) "New build phase" else "Edit build phase", style = MaterialTheme.typography.titleLarge)
 
             VehicleDropdown("Vehicle", vehicles, form.vehicleId) { form = form.copy(vehicleId = it) }
@@ -80,9 +93,24 @@ fun PhaseFormSheet(
             LabeledTextField("Order (lower = earlier)", form.order, { form = form.copy(order = it) }, keyboardType = KeyboardType.Number)
             LabeledTextField("Notes / scope", form.notes, { form = form.copy(notes = it) }, singleLine = false, minLines = 3)
 
+            Text(
+                "Bucket criteria — steps auto-assign here if they match",
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 14.dp),
+            )
+            SegmentedControl(
+                options = listOf(ANY_PRIORITY, StepPriority.Low.name, StepPriority.Medium.name, StepPriority.High.name),
+                selected = form.priorityFilter,
+                onSelect = { form = form.copy(priorityFilter = it) },
+            )
+            LabeledTextField(
+                "Budget cap (\$) — blank = unlimited", form.budgetCap, { form = form.copy(budgetCap = it) },
+                keyboardType = KeyboardType.Decimal,
+            )
+
             Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 24.dp)) {
                 if (phase != null) {
-                    OutlinedButton(onClick = { onDelete(phase.id) }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f)) {
                         Text("Delete", color = garageColors.alarmText)
                     }
                     Spacer(Modifier.width(10.dp))
@@ -97,6 +125,8 @@ fun PhaseFormSheet(
                                 status = form.status,
                                 order = form.order.trim().toIntOrNull() ?: 0,
                                 notes = form.notes.trim(),
+                                priorityFilter = form.priorityFilter.takeIf { it != ANY_PRIORITY },
+                                budgetCap = form.budgetCap.trim().toDoubleOrNull(),
                             ),
                         )
                     },
@@ -104,5 +134,14 @@ fun PhaseFormSheet(
                 ) { Text("Save") }
             }
         }
+    }
+
+    if (showDeleteConfirm && phase != null) {
+        ConfirmDialog(
+            title = "Delete build phase?",
+            message = "This can't be undone.",
+            onConfirm = { onDelete(phase.id) },
+            onDismiss = { showDeleteConfirm = false },
+        )
     }
 }
