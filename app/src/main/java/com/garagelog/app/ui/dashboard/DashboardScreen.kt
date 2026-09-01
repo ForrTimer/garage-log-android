@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.IssueStatus
@@ -44,6 +49,7 @@ fun DashboardScreen(
     onEditVehicle: (VehicleEntity) -> Unit,
     onOpenSchedule: () -> Unit,
     onOpenCostTrend: () -> Unit,
+    onUpdateMileage: (VehicleEntity, Int) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
@@ -52,7 +58,7 @@ fun DashboardScreen(
             item { EmptyState("No vehicles yet. Tap + to add one.") }
         }
         items(vehicles, key = { it.id }) { v ->
-            VehicleDashboardCard(uiState, v, onEditVehicle)
+            VehicleDashboardCard(uiState, v, onEditVehicle, onOpenSchedule, onUpdateMileage)
             Spacer(Modifier.padding(bottom = 12.dp))
         }
         if (vehicles.isNotEmpty()) {
@@ -67,14 +73,24 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun VehicleDashboardCard(uiState: GarageLogUiState, v: VehicleEntity, onEditVehicle: (VehicleEntity) -> Unit) {
+private fun VehicleDashboardCard(
+    uiState: GarageLogUiState,
+    v: VehicleEntity,
+    onEditVehicle: (VehicleEntity) -> Unit,
+    onOpenSchedule: () -> Unit,
+    onUpdateMileage: (VehicleEntity, Int) -> Unit,
+) {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
     val openIssues = uiState.issues.filter { it.vehicleId == v.id && it.status != IssueStatus.Resolved.label }
     val totalSpent = logs.sumOf { it.cost ?: 0.0 }
     val lastLog = logs.maxByOrNull { it.date }
-    val dueItems = uiState.schedules.filter { it.vehicleId == v.id }
-        .map { it to computeDueInfo(it, v.miles) }
+    val schedulesForVehicle = uiState.schedules.filter { it.vehicleId == v.id }
+    val dueItems = schedulesForVehicle
+        .map { it to computeDueInfo(it, v.miles, v.isSevereDuty) }
         .filter { it.second.status == DueStatus.OVERDUE || it.second.status == DueStatus.DUE_SOON }
+        .sortedByDescending { it.second.status == DueStatus.OVERDUE }
+
+    var showMileageDialog by remember(v.id) { mutableStateOf(false) }
 
     GarageCard {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -91,20 +107,11 @@ private fun VehicleDashboardCard(uiState: GarageLogUiState, v: VehicleEntity, on
                 modifier = Modifier.clickable { onEditVehicle(v) },
             )
         }
-        val subtitle = listOfNotNull(v.engine.ifBlank { null }, v.drivetrain.ifBlank { null }).joinToString(" · ")
-        if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-        if (v.role.isNotBlank()) Text(v.role, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
 
-        StatGrid(
-            listOf(
-                formatMiles(v.miles) to "current miles",
-                openIssues.size.toString() to "open issues",
-                formatMoney(totalSpent) to "logged spend",
-            ),
-        )
-
-        if (dueItems.isNotEmpty()) {
-            Column(modifier = Modifier.padding(top = 10.dp)) {
+        // Maintenance alerts lead the card — this is the thing an owner actually opens the app
+        // to check, so it shouldn't be buried below static vehicle specs.
+        Column(modifier = Modifier.padding(top = 10.dp).fillMaxWidth().clickable(onClick = onOpenSchedule)) {
+            if (dueItems.isNotEmpty()) {
                 dueItems.forEach { (sched, info) ->
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                         PillBadge(
@@ -115,8 +122,37 @@ private fun VehicleDashboardCard(uiState: GarageLogUiState, v: VehicleEntity, on
                         Text("${sched.taskName} — ${info.label}", style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
                     }
                 }
+            } else if (schedulesForVehicle.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                    PillBadge(text = "On track", tone = PillTone.Resolved)
+                    Spacer(Modifier.width(8.dp))
+                    Text("All maintenance up to date", style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+                }
+            } else {
+                Text(
+                    "No maintenance tracked yet — tap to add a schedule",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = garageColors.textMuted,
+                    textDecoration = TextDecoration.Underline,
+                )
             }
         }
+
+        StatGrid(
+            listOf(
+                formatMiles(v.miles) to "current miles",
+                openIssues.size.toString() to "open issues",
+                formatMoney(totalSpent) to "logged spend",
+            ),
+        )
+
+        Text(
+            "Update mileage",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.labelMedium,
+            textDecoration = TextDecoration.Underline,
+            modifier = Modifier.padding(top = 8.dp).clickable { showMileageDialog = true },
+        )
 
         Text(
             text = lastLog?.let { "Last logged: ${formatDate(it.date)} — ${it.task}" } ?: "No log entries yet.",
@@ -124,23 +160,58 @@ private fun VehicleDashboardCard(uiState: GarageLogUiState, v: VehicleEntity, on
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 10.dp),
         )
-        if (v.notes.isNotBlank()) {
+
+        val subtitle = listOfNotNull(v.engine.ifBlank { null }, v.drivetrain.ifBlank { null }).joinToString(" · ")
+        val hasDetails = subtitle.isNotBlank() || v.role.isNotBlank() || v.notes.isNotBlank()
+        if (hasDetails) {
             var showDetails by remember(v.id) { mutableStateOf(false) }
             Text(
-                text = if (showDetails) "Hide details" else "Show details",
+                text = if (showDetails) "Hide vehicle details" else "Show vehicle details",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelMedium,
                 textDecoration = TextDecoration.Underline,
                 modifier = Modifier.padding(top = 10.dp).clickable { showDetails = !showDetails },
             )
             if (showDetails) {
-                Text(
-                    v.notes,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
+                Column(modifier = Modifier.padding(top = 6.dp)) {
+                    if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    if (v.role.isNotBlank()) Text(v.role, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    if (v.notes.isNotBlank()) Text(v.notes, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
     }
+
+    if (showMileageDialog) {
+        UpdateMileageDialog(
+            currentMiles = v.miles,
+            onConfirm = { newMiles -> onUpdateMileage(v, newMiles) },
+            onDismiss = { showMileageDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun UpdateMileageDialog(currentMiles: Int?, onConfirm: (Int) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf(currentMiles?.toString() ?: "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Update mileage") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Current mileage") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                text.trim().toIntOrNull()?.let(onConfirm)
+                onDismiss()
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
