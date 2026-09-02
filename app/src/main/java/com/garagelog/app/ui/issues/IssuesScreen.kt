@@ -42,7 +42,7 @@ fun IssuesScreen(uiState: GarageLogUiState, onItemClick: (IssueEntity) -> Unit) 
     val issues = uiState.issuesFor(uiState.activeVehicleId)
         .sortedWith(compareBy<IssueEntity> { statusRank(it.status) }.thenByDescending { it.dateOpened })
 
-    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 24.dp)) {
+    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 88.dp)) {
         item {
             GarageCard {
                 if (issues.isEmpty()) {
