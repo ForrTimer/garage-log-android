@@ -25,10 +25,13 @@ import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
 
+// Log entries are always things already done, not open problems — Repair shouldn't wear the
+// same alarm red as an overdue/open issue. Upgrade gets its own blue so it reads as its own kind
+// of entry rather than reusing the neutral "upcoming" gray.
 private fun categoryTone(category: String): PillTone = when (category) {
     LogCategory.Routine.name -> PillTone.Resolved
-    LogCategory.Repair.name -> PillTone.Open
-    LogCategory.Upgrade.name -> PillTone.Upcoming
+    LogCategory.Repair.name -> PillTone.Neutral
+    LogCategory.Upgrade.name -> PillTone.Info
     else -> PillTone.Progress
 }
 
@@ -36,7 +39,7 @@ private fun categoryTone(category: String): PillTone = when (category) {
 fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit) {
     val logs = uiState.logsFor(uiState.activeVehicleId).sortedByDescending { it.date }
 
-    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 24.dp)) {
+    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 88.dp)) {
         item {
             GarageCard {
                 if (logs.isEmpty()) {
