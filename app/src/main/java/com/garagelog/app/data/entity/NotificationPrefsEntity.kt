@@ -8,8 +8,10 @@ enum class ReminderCadence { Daily, Weekly, Monthly, Yearly }
 /**
  * Single-row settings table (fixed [id]) for the "remind me to log mileage" notification.
  * [dayOfWeek] uses [java.util.Calendar] constants (SUNDAY=1..SATURDAY=7) and applies to Weekly;
- * [dayOfMonth] (1-28, to stay valid in every month) applies to Monthly and Yearly; [month] uses
- * Calendar constants (JANUARY=0..DECEMBER=11) and applies to Yearly only.
+ * [dayOfMonth] (1-31) applies to Monthly and Yearly — a month shorter than the chosen day
+ * clamps to that month's actual last day (see MileageReminderScheduler.setDayOfMonthClamped),
+ * it doesn't roll over into the next month; [month] uses Calendar constants
+ * (JANUARY=0..DECEMBER=11) and applies to Yearly only.
  */
 @Entity(tableName = "notification_prefs")
 data class NotificationPrefsEntity(

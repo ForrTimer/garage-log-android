@@ -238,18 +238,30 @@ private fun MileageReminderCard(saved: NotificationPrefsEntity, viewModel: Garag
                 }
                 ReminderCadence.Monthly -> {
                     LabeledTextField(
-                        "Day of month (1-28)", draft.dayOfMonth.toString(),
-                        { it.toIntOrNull()?.let { d -> draft = draft.copy(dayOfMonth = d.coerceIn(1, 28)) } },
+                        "Day of month (1-31)", draft.dayOfMonth.toString(),
+                        { it.toIntOrNull()?.let { d -> draft = draft.copy(dayOfMonth = d.coerceIn(1, 31)) } },
                         keyboardType = KeyboardType.Number,
+                    )
+                    Text(
+                        "Months shorter than this use their last day instead.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
                 ReminderCadence.Yearly -> {
                     Text("Which month", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
                     MonthDropdown(selectedMonth = draft.month, onSelect = { draft = draft.copy(month = it) })
                     LabeledTextField(
-                        "Day of month (1-28)", draft.dayOfMonth.toString(),
-                        { it.toIntOrNull()?.let { d -> draft = draft.copy(dayOfMonth = d.coerceIn(1, 28)) } },
+                        "Day of month (1-31)", draft.dayOfMonth.toString(),
+                        { it.toIntOrNull()?.let { d -> draft = draft.copy(dayOfMonth = d.coerceIn(1, 31)) } },
                         keyboardType = KeyboardType.Number,
+                    )
+                    Text(
+                        "Months shorter than this use their last day instead.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
                 ReminderCadence.Daily -> Unit

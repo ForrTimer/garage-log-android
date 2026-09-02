@@ -56,15 +56,34 @@ object MileageReminderScheduler {
                 if (!candidate.after(now)) candidate.add(Calendar.WEEK_OF_YEAR, 1)
             }
             ReminderCadence.Monthly -> {
-                candidate.set(Calendar.DAY_OF_MONTH, prefs.dayOfMonth)
-                if (!candidate.after(now)) candidate.add(Calendar.MONTH, 1)
+                setDayOfMonthClamped(candidate, prefs.dayOfMonth)
+                if (!candidate.after(now)) {
+                    candidate.set(Calendar.DAY_OF_MONTH, 1) // safe value before changing MONTH
+                    candidate.add(Calendar.MONTH, 1)
+                    setDayOfMonthClamped(candidate, prefs.dayOfMonth)
+                }
             }
             ReminderCadence.Yearly -> {
+                candidate.set(Calendar.DAY_OF_MONTH, 1) // safe value before changing MONTH
                 candidate.set(Calendar.MONTH, prefs.month)
-                candidate.set(Calendar.DAY_OF_MONTH, prefs.dayOfMonth)
-                if (!candidate.after(now)) candidate.add(Calendar.YEAR, 1)
+                setDayOfMonthClamped(candidate, prefs.dayOfMonth)
+                if (!candidate.after(now)) {
+                    candidate.set(Calendar.DAY_OF_MONTH, 1)
+                    candidate.add(Calendar.YEAR, 1)
+                    setDayOfMonthClamped(candidate, prefs.dayOfMonth)
+                }
             }
         }
         return candidate.timeInMillis
+    }
+
+    /**
+     * Sets DAY_OF_MONTH to [day], clamped to the current YEAR/MONTH's actual last day —
+     * Calendar.set(DAY_OF_MONTH, 31) on a 30-day month rolls into next month instead of
+     * clamping, which isn't what "the 31st of every month" should mean.
+     */
+    private fun setDayOfMonthClamped(cal: Calendar, day: Int) {
+        val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        cal.set(Calendar.DAY_OF_MONTH, day.coerceAtMost(maxDay))
     }
 }
