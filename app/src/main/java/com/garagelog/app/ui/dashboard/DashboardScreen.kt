@@ -48,6 +48,7 @@ import com.garagelog.app.util.formatMoney
 fun DashboardScreen(
     uiState: GarageLogUiState,
     onEditVehicle: (VehicleEntity) -> Unit,
+    onAddVehicle: () -> Unit,
     onOpenSchedule: () -> Unit,
     onOpenCostTrend: () -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
@@ -58,7 +59,10 @@ fun DashboardScreen(
 
     LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 24.dp)) {
         if (vehicles.isEmpty()) {
-            item { EmptyState("No vehicles yet. Tap + to add one.") }
+            item {
+                EmptyState("No vehicles yet.")
+                OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth()) { Text("Add a vehicle") }
+            }
         }
         items(vehicles, key = { it.id }) { v ->
             VehicleDashboardCard(uiState, v, onEditVehicle, onOpenSchedule, onUpdateMileage, onOpenVehicleTab, onOpenVehicleCostTrend)
