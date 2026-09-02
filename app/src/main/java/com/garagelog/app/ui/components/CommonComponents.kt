@@ -22,13 +22,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.ui.theme.GarageCardShape
+import com.garagelog.app.ui.theme.GarageChipShape
+import com.garagelog.app.ui.theme.GaragePillShape
 import com.garagelog.app.ui.theme.garageColors
 
 @Composable
@@ -48,21 +51,22 @@ fun VehiclePickerRow(vehicles: List<VehicleEntity>, activeVehicleId: String?, on
 private fun VehicleChip(text: String, selected: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        shape = RectangleShape,
+        shape = GarageChipShape,
         color = if (selected) colors.primary else colors.surfaceVariant,
         contentColor = if (selected) colors.onPrimary else colors.onSurfaceVariant,
         border = BorderStroke(1.dp, if (selected) colors.primary else colors.outline),
-        modifier = Modifier.defaultMinSize(minHeight = 40.dp).clickable(onClick = onClick),
+        modifier = Modifier.clickable(onClick = onClick),
     ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelMedium,
-        )
+        Box(
+            modifier = Modifier.defaultMinSize(minHeight = 40.dp).padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = text, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
+        }
     }
 }
 
-enum class PillTone { Open, Progress, Resolved, Upcoming }
+enum class PillTone { Open, Progress, Resolved, Upcoming, Info, Neutral }
 
 @Composable
 private fun PillTone.color(): Color = when (this) {
@@ -70,13 +74,15 @@ private fun PillTone.color(): Color = when (this) {
     PillTone.Progress -> garageColors.warn
     PillTone.Resolved -> garageColors.ok
     PillTone.Upcoming -> MaterialTheme.colorScheme.onSurfaceVariant
+    PillTone.Info -> garageColors.info
+    PillTone.Neutral -> garageColors.textMuted
 }
 
 @Composable
 fun PillBadge(text: String, tone: PillTone, modifier: Modifier = Modifier) {
     val color = tone.color()
     Surface(
-        shape = RectangleShape,
+        shape = GaragePillShape,
         color = color.copy(alpha = garageColors.pillTintAlpha),
         contentColor = color,
         modifier = modifier,
@@ -92,7 +98,7 @@ fun PillBadge(text: String, tone: PillTone, modifier: Modifier = Modifier) {
 @Composable
 fun GarageCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Surface(
-        shape = RectangleShape,
+        shape = GarageCardShape,
         color = MaterialTheme.colorScheme.surface,
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -175,17 +181,18 @@ fun SegmentedControl(options: List<String>, selected: String, onSelect: (String)
         options.forEach { option ->
             val isSelected = option == selected
             Surface(
-                shape = RectangleShape,
+                shape = GarageChipShape,
                 color = if (isSelected) colors.primary else colors.surfaceVariant,
                 contentColor = if (isSelected) colors.onPrimary else colors.onSurfaceVariant,
                 border = BorderStroke(1.dp, if (isSelected) colors.primary else colors.outline),
-                modifier = Modifier.defaultMinSize(minHeight = 48.dp).clickable { onSelect(option) },
+                modifier = Modifier.clickable { onSelect(option) },
             ) {
-                Text(
-                    option,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                )
+                Box(
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp).padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(option, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
+                }
             }
         }
     }
