@@ -3,6 +3,8 @@ package com.garagelog.app.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -104,6 +106,22 @@ private val LocalGarageColors = staticCompositionLocalOf { DarkExtras }
 
 val garageColors: GarageColors
     @Composable @ReadOnlyComposable get() = LocalGarageColors.current
+
+/**
+ * Default Material3 [Switch] colors pull several tonal-surface slots this theme never
+ * defines, falling back to Google's baseline palette — on the unchecked (off) state that
+ * produced a near-invisible dark-on-dark thumb/track in dark mode. Explicit, theme-matched
+ * colors instead.
+ */
+@Composable
+fun garageSwitchColors(): SwitchColors = SwitchDefaults.colors(
+    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+    checkedTrackColor = MaterialTheme.colorScheme.primary,
+    checkedBorderColor = MaterialTheme.colorScheme.primary,
+    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+    uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+)
 
 private val GarageLogTypography = Typography(
     titleLarge = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),

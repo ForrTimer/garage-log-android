@@ -48,6 +48,7 @@ import com.garagelog.app.ui.components.SegmentedControl
 import com.garagelog.app.ui.components.StatGrid
 import com.garagelog.app.ui.components.TimeField
 import com.garagelog.app.ui.theme.garageColors
+import com.garagelog.app.ui.theme.garageSwitchColors
 import com.garagelog.app.util.dayOfWeekName
 import com.garagelog.app.util.monthName
 import com.garagelog.app.util.todayIso
@@ -214,6 +215,7 @@ private fun MileageReminderCard(saved: NotificationPrefsEntity, viewModel: Garag
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 },
+                colors = garageSwitchColors(),
             )
         }
 
