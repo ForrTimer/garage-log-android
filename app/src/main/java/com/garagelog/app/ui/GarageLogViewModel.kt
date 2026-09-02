@@ -14,8 +14,10 @@ import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.NotificationPrefsEntity
+import com.garagelog.app.data.entity.PhaseStatus
 import com.garagelog.app.data.entity.PhotoEntity
 import com.garagelog.app.data.entity.PhotoOwnerType
+import com.garagelog.app.data.entity.StepPriority
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.data.auth.SignInStep
@@ -154,6 +156,12 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         showCostTrendScreen.value = true
     }
 
+    /** Resets to the Home tab with no vehicle filter — cold start, app resume, and tapping Home. */
+    fun resetToHome() {
+        activeVehicleId.value = null
+        selectTab(AppTab.Dashboard)
+    }
+
     private fun requestSync() = locator.requestSync()
 
     fun saveVehicle(vehicle: VehicleEntity) = viewModelScope.launch {
@@ -275,6 +283,41 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
                 _messages.emit("\"${step.title}\" moved to $phaseName.")
             }
         }
+    }
+
+    /**
+     * One-time bootstrap: splits a phase's free-text notes on commas into individual
+     * [BuildStepEntity] checklist items, so there's real starting data instead of a blank
+     * checklist. Pinned to this phase (manualPhaseOverride) so the auto-bucketer leaves them
+     * put. No-ops if the phase already has steps, so it's safe to invoke more than once.
+     */
+    fun importStepsFromPhaseNotes(phase: BuildPhaseEntity) = viewModelScope.launch {
+        val existingSteps = locator.buildStepRepository.getAll().filter { it.phaseId == phase.id }
+        if (existingSteps.isNotEmpty()) return@launch
+        // Split on commas that separate list items, not thousands-separator commas inside a
+        // number like "$1,250" — a comma immediately followed by a digit doesn't count.
+        val titles = phase.notes.split(Regex(",(?!\\d)")).map { it.trim().trim('.') }.filter { it.isNotBlank() }
+        if (titles.isEmpty()) return@launch
+        val now = System.currentTimeMillis()
+        titles.forEachIndexed { index, title ->
+            locator.buildStepRepository.upsert(
+                BuildStepEntity(
+                    id = UUID.randomUUID().toString(),
+                    vehicleId = phase.vehicleId,
+                    phaseId = phase.id,
+                    title = title,
+                    notes = "",
+                    priority = StepPriority.Medium.name,
+                    status = PhaseStatus.NotStarted.label,
+                    estimatedCost = null,
+                    actualCost = null,
+                    order = index + 1,
+                    manualPhaseOverride = true,
+                    updatedAt = now,
+                ),
+            )
+        }
+        requestSync()
     }
 
     fun saveSchedule(schedule: MaintenanceScheduleEntity) = viewModelScope.launch {
