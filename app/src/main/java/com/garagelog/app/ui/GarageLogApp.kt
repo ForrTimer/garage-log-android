@@ -5,11 +5,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
@@ -17,30 +20,33 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.garagelog.app.R
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.garagelog.app.ui.theme.GarageFabShape
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.data.entity.BuildPhaseEntity
 import com.garagelog.app.data.entity.BuildStepEntity
@@ -64,6 +70,16 @@ import com.garagelog.app.ui.settings.SettingsScreen
 import com.garagelog.app.ui.settings.VehicleFormSheet
 import kotlinx.coroutines.flow.collectLatest
 
+private val mainTabs = listOf(AppTab.Dashboard, AppTab.Log, AppTab.Issues, AppTab.Build, AppTab.Settings)
+
+private fun AppTab.label(): String = when (this) {
+    AppTab.Dashboard -> "Home"
+    AppTab.Log -> "Log"
+    AppTab.Issues -> "Issues"
+    AppTab.Build -> "Build"
+    AppTab.Settings -> "More"
+}
+
 private sealed class Sheet {
     data object None : Sheet()
     data class VehicleForm(val vehicle: VehicleEntity?) : Sheet()
@@ -86,8 +102,34 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         }
     }
 
+    // Always land on Home (and clear the vehicle filter) whenever the app comes to the
+    // foreground — cold start or returning from the background — not wherever it was left.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) viewModel.resetToHome()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val pagerState = rememberPagerState(initialPage = mainTabs.indexOf(uiState.currentTab).coerceAtLeast(0)) { mainTabs.size }
+    LaunchedEffect(uiState.currentTab) {
+        val target = mainTabs.indexOf(uiState.currentTab)
+        if (target >= 0 && pagerState.currentPage != target) pagerState.animateScrollToPage(target)
+    }
+    // settledPage (not currentPage) — currentPage updates continuously mid-swipe/mid-animation,
+    // and feeding that back into the ViewModel raced with the animateScrollToPage above,
+    // causing the pager to stall fighting itself.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collectLatest { page ->
+            mainTabs.getOrNull(page)?.let { tab -> if (tab != uiState.currentTab) viewModel.selectTab(tab) }
+        }
+    }
+    val liveTab = mainTabs.getOrNull(pagerState.currentPage) ?: uiState.currentTab
+
     val showingSubScreen = uiState.showScheduleScreen || uiState.showCostTrendScreen
-    val showFab = !showingSubScreen && uiState.currentTab != AppTab.Settings
+    val showFab = !showingSubScreen && uiState.currentTab != AppTab.Settings && uiState.currentTab != AppTab.Dashboard
 
     val itemColors = NavigationBarItemDefaults.colors(
         selectedIconColor = garageColors.alarm,
@@ -110,8 +152,13 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 )
                 Surface(color = garageColors.chrome, modifier = Modifier.fillMaxWidth()) {
                     Column {
+                        val headerTitle = when {
+                            uiState.showScheduleScreen -> "Maintenance"
+                            uiState.showCostTrendScreen -> "Cost trend"
+                            else -> liveTab.label()
+                        }
                         Text(
-                            text = "🔧 " + stringResource(R.string.app_name),
+                            text = "🔧 $headerTitle",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 10.dp),
@@ -133,7 +180,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 NavigationBar(containerColor = garageColors.chrome) {
                     NavigationBarItem(
                         selected = uiState.currentTab == AppTab.Dashboard && !showingSubScreen,
-                        onClick = { viewModel.selectTab(AppTab.Dashboard) },
+                        onClick = { viewModel.resetToHome() },
                         icon = { Icon(Icons.Filled.Home, contentDescription = null) },
                         label = { Text("Home") },
                         colors = itemColors,
@@ -171,8 +218,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         },
         floatingActionButton = {
             if (showFab) {
-                FloatingActionButton(
-                    shape = RectangleShape,
+                SmallFloatingActionButton(
+                    shape = GarageFabShape,
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     onClick = {
@@ -206,37 +253,43 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     uiState = uiState,
                     onBack = viewModel::closeSubScreen,
                 )
-                uiState.currentTab == AppTab.Dashboard -> DashboardScreen(
-                    uiState = uiState,
-                    onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
-                    onOpenSchedule = viewModel::openSchedule,
-                    onOpenCostTrend = viewModel::openCostTrend,
-                    onUpdateMileage = viewModel::updateMileage,
-                    onOpenVehicleTab = viewModel::openVehicleTab,
-                    onOpenVehicleCostTrend = viewModel::openVehicleCostTrend,
-                )
-                uiState.currentTab == AppTab.Log -> LogScreen(
-                    uiState = uiState,
-                    onItemClick = { activeSheet = Sheet.LogForm(it) },
-                )
-                uiState.currentTab == AppTab.Issues -> IssuesScreen(
-                    uiState = uiState,
-                    onItemClick = { activeSheet = Sheet.IssueForm(it) },
-                )
-                uiState.currentTab == AppTab.Build -> BuildScreen(
-                    uiState = uiState,
-                    onPhaseClick = { activeSheet = Sheet.PhaseForm(it) },
-                    onStepClick = { activeSheet = Sheet.StepForm(it) },
-                    onAddPhase = { vehicleId -> activeSheet = Sheet.PhaseForm(null, vehicleId) },
-                )
-                uiState.currentTab == AppTab.Settings -> SettingsScreen(
-                    uiState = uiState,
-                    viewModel = viewModel,
-                    onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
-                    onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
-                    onOpenSchedule = viewModel::openSchedule,
-                    onOpenCostTrend = viewModel::openCostTrend,
-                )
+                else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                    when (mainTabs[page]) {
+                        AppTab.Dashboard -> DashboardScreen(
+                            uiState = uiState,
+                            onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
+                            onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
+                            onOpenSchedule = viewModel::openSchedule,
+                            onOpenCostTrend = viewModel::openCostTrend,
+                            onUpdateMileage = viewModel::updateMileage,
+                            onOpenVehicleTab = viewModel::openVehicleTab,
+                            onOpenVehicleCostTrend = viewModel::openVehicleCostTrend,
+                        )
+                        AppTab.Log -> LogScreen(
+                            uiState = uiState,
+                            onItemClick = { activeSheet = Sheet.LogForm(it) },
+                        )
+                        AppTab.Issues -> IssuesScreen(
+                            uiState = uiState,
+                            onItemClick = { activeSheet = Sheet.IssueForm(it) },
+                        )
+                        AppTab.Build -> BuildScreen(
+                            uiState = uiState,
+                            onPhaseClick = { activeSheet = Sheet.PhaseForm(it) },
+                            onStepClick = { activeSheet = Sheet.StepForm(it) },
+                            onAddPhase = { vehicleId -> activeSheet = Sheet.PhaseForm(null, vehicleId) },
+                            onImportStepsFromNotes = viewModel::importStepsFromPhaseNotes,
+                        )
+                        AppTab.Settings -> SettingsScreen(
+                            uiState = uiState,
+                            viewModel = viewModel,
+                            onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
+                            onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
+                            onOpenSchedule = viewModel::openSchedule,
+                            onOpenCostTrend = viewModel::openCostTrend,
+                        )
+                    }
+                }
             }
         }
     }
