@@ -46,11 +46,12 @@ fun BuildScreen(
     onPhaseClick: (BuildPhaseEntity) -> Unit,
     onStepClick: (BuildStepEntity) -> Unit,
     onAddPhase: (vehicleId: String) -> Unit,
+    onImportStepsFromNotes: (BuildPhaseEntity) -> Unit,
 ) {
     val vehicles = (uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles)
         .filter { v -> uiState.buildPhases.any { it.vehicleId == v.id } || uiState.buildSteps.any { it.vehicleId == v.id } }
 
-    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 24.dp)) {
+    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 88.dp)) {
         if (vehicles.isEmpty()) {
             item {
                 val vehicleName = uiState.activeVehicle?.name
@@ -63,7 +64,13 @@ fun BuildScreen(
             val steps = uiState.buildSteps.filter { it.vehicleId == v.id }
             phases.forEach { phase ->
                 item {
-                    PhaseCard(phase, steps.filter { it.phaseId == phase.id }, onPhaseClick = { onPhaseClick(phase) }, onStepClick = onStepClick)
+                    PhaseCard(
+                        phase,
+                        steps.filter { it.phaseId == phase.id },
+                        onPhaseClick = { onPhaseClick(phase) },
+                        onStepClick = onStepClick,
+                        onImportStepsFromNotes = { onImportStepsFromNotes(phase) },
+                    )
                 }
             }
             val unbucketed = steps.filter { it.phaseId == null }
@@ -97,7 +104,13 @@ fun BuildScreen(
 }
 
 @Composable
-private fun PhaseCard(phase: BuildPhaseEntity, steps: List<BuildStepEntity>, onPhaseClick: () -> Unit, onStepClick: (BuildStepEntity) -> Unit) {
+private fun PhaseCard(
+    phase: BuildPhaseEntity,
+    steps: List<BuildStepEntity>,
+    onPhaseClick: () -> Unit,
+    onStepClick: (BuildStepEntity) -> Unit,
+    onImportStepsFromNotes: () -> Unit,
+) {
     var expanded by remember(phase.id) { mutableStateOf(true) }
     val spent = steps.sumOf { (if (it.status == PhaseStatus.Done.label) it.actualCost ?: it.estimatedCost else it.estimatedCost) ?: 0.0 }
 
@@ -116,13 +129,25 @@ private fun PhaseCard(phase: BuildPhaseEntity, steps: List<BuildStepEntity>, onP
         if (phase.notes.isNotBlank()) {
             Text(phase.notes, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
         }
-        Text(
-            "Edit phase",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.labelSmall,
-            textDecoration = TextDecoration.Underline,
-            modifier = Modifier.padding(top = 6.dp).clickable(onClick = onPhaseClick),
-        )
+        Row(modifier = Modifier.padding(top = 6.dp)) {
+            Text(
+                "Edit phase",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelSmall,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable(onClick = onPhaseClick),
+            )
+            if (phase.notes.isNotBlank() && steps.isEmpty()) {
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    "Import steps from notes",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelSmall,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable(onClick = onImportStepsFromNotes),
+                )
+            }
+        }
         if (expanded) {
             if (steps.isEmpty()) {
                 Text(
