@@ -101,7 +101,7 @@ fun GarageCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.(
 }
 
 @Composable
-fun StatGrid(stats: List<Pair<String, String>>) {
+fun StatGrid(stats: List<Pair<String, String>>, onItemClick: ((Int) -> Unit)? = null) {
     Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         stats.forEachIndexed { index, (value, label) ->
             if (index != 0) {
@@ -113,7 +113,9 @@ fun StatGrid(stats: List<Pair<String, String>>) {
                 )
             }
             Column(
-                modifier = Modifier.weight(1f).padding(horizontal = if (index == 0) 0.dp else 14.dp),
+                modifier = Modifier.weight(1f)
+                    .padding(horizontal = if (index == 0) 0.dp else 14.dp)
+                    .let { m -> if (onItemClick != null) m.clickable { onItemClick(index) } else m },
             ) {
                 Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.ui.AppTab
 import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
@@ -50,6 +51,8 @@ fun DashboardScreen(
     onOpenSchedule: () -> Unit,
     onOpenCostTrend: () -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
+    onOpenVehicleTab: (String, AppTab) -> Unit,
+    onOpenVehicleCostTrend: (String) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
@@ -58,7 +61,7 @@ fun DashboardScreen(
             item { EmptyState("No vehicles yet. Tap + to add one.") }
         }
         items(vehicles, key = { it.id }) { v ->
-            VehicleDashboardCard(uiState, v, onEditVehicle, onOpenSchedule, onUpdateMileage)
+            VehicleDashboardCard(uiState, v, onEditVehicle, onOpenSchedule, onUpdateMileage, onOpenVehicleTab, onOpenVehicleCostTrend)
             Spacer(Modifier.padding(bottom = 12.dp))
         }
         if (vehicles.isNotEmpty()) {
@@ -79,6 +82,8 @@ private fun VehicleDashboardCard(
     onEditVehicle: (VehicleEntity) -> Unit,
     onOpenSchedule: () -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
+    onOpenVehicleTab: (String, AppTab) -> Unit,
+    onOpenVehicleCostTrend: (String) -> Unit,
 ) {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
     val openIssues = uiState.issues.filter { it.vehicleId == v.id && it.status != IssueStatus.Resolved.label }
@@ -144,6 +149,13 @@ private fun VehicleDashboardCard(
                 openIssues.size.toString() to "open issues",
                 formatMoney(totalSpent) to "logged spend",
             ),
+            onItemClick = { index ->
+                when (index) {
+                    0 -> showMileageDialog = true
+                    1 -> onOpenVehicleTab(v.id, AppTab.Issues)
+                    2 -> onOpenVehicleCostTrend(v.id)
+                }
+            },
         )
 
         Text(

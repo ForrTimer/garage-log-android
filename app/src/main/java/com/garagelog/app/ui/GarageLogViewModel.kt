@@ -142,6 +142,18 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     fun openCostTrend() { showCostTrendScreen.value = true }
     fun closeSubScreen() { showScheduleScreen.value = false; showCostTrendScreen.value = false }
 
+    /** Filters to [vehicleId] and switches to [tab] — e.g. tapping a dashboard stat. */
+    fun openVehicleTab(vehicleId: String, tab: AppTab) {
+        activeVehicleId.value = vehicleId
+        selectTab(tab)
+    }
+
+    fun openVehicleCostTrend(vehicleId: String) {
+        activeVehicleId.value = vehicleId
+        showScheduleScreen.value = false
+        showCostTrendScreen.value = true
+    }
+
     private fun requestSync() = locator.requestSync()
 
     fun saveVehicle(vehicle: VehicleEntity) = viewModelScope.launch {

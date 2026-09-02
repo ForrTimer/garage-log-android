@@ -212,6 +212,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     onOpenSchedule = viewModel::openSchedule,
                     onOpenCostTrend = viewModel::openCostTrend,
                     onUpdateMileage = viewModel::updateMileage,
+                    onOpenVehicleTab = viewModel::openVehicleTab,
+                    onOpenVehicleCostTrend = viewModel::openVehicleCostTrend,
                 )
                 uiState.currentTab == AppTab.Log -> LogScreen(
                     uiState = uiState,
