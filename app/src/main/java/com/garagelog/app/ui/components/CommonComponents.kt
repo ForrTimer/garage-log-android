@@ -40,15 +40,26 @@ fun VehiclePickerRow(vehicles: List<VehicleEntity>, activeVehicleId: String?, on
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
     ) {
-        item { VehicleChip(text = "All", selected = activeVehicleId == null, onClick = { onSelect(null) }) }
+        item { SelectableChip(text = "All", selected = activeVehicleId == null, onClick = { onSelect(null) }) }
         items(vehicles, key = { it.id }) { v ->
-            VehicleChip(text = v.name, selected = v.id == activeVehicleId, onClick = { onSelect(v.id) })
+            SelectableChip(text = v.name, selected = v.id == activeVehicleId, onClick = { onSelect(v.id) })
+        }
+    }
+}
+
+/** A horizontally scrolling "All" + one-of-[options] chip row, e.g. category/status filters. */
+@Composable
+fun ChipFilterRow(options: List<String>, selected: String?, onSelect: (String?) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 2.dp)) {
+        item { SelectableChip(text = "All", selected = selected == null, onClick = { onSelect(null) }) }
+        items(options) { option ->
+            SelectableChip(text = option, selected = option == selected, onClick = { onSelect(option) })
         }
     }
 }
 
 @Composable
-private fun VehicleChip(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun SelectableChip(text: String, selected: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
         shape = GarageChipShape,

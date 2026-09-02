@@ -12,6 +12,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -19,6 +23,7 @@ import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.IssuePriority
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.ui.GarageLogUiState
+import com.garagelog.app.ui.components.ChipFilterRow
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
@@ -39,14 +44,25 @@ private fun statusRank(status: String): Int = when (status) {
 
 @Composable
 fun IssuesScreen(uiState: GarageLogUiState, onItemClick: (IssueEntity) -> Unit) {
+    var statusFilter by remember { mutableStateOf<String?>(null) }
     val issues = uiState.issuesFor(uiState.activeVehicleId)
+        .filter { statusFilter == null || it.status == statusFilter }
         .sortedWith(compareBy<IssueEntity> { statusRank(it.status) }.thenByDescending { it.dateOpened })
 
     LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 88.dp)) {
         item {
-            GarageCard {
+            ChipFilterRow(
+                options = IssueStatus.entries.map { it.label },
+                selected = statusFilter,
+                onSelect = { statusFilter = it },
+            )
+        }
+        item {
+            GarageCard(modifier = Modifier.padding(top = 12.dp)) {
                 if (issues.isEmpty()) {
-                    EmptyState("No issues logged. Tap + to add a gremlin or open item.")
+                    EmptyState(
+                        if (statusFilter != null) "No $statusFilter issues." else "No issues logged. Tap + to add a gremlin or open item.",
+                    )
                 } else {
                     issues.forEachIndexed { index, issue ->
                         IssueRow(issue, uiState, onClick = { onItemClick(issue) })

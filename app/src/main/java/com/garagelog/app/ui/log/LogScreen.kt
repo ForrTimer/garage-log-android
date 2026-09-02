@@ -11,12 +11,17 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.ui.GarageLogUiState
+import com.garagelog.app.ui.components.ChipFilterRow
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
@@ -37,13 +42,25 @@ private fun categoryTone(category: String): PillTone = when (category) {
 
 @Composable
 fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit) {
-    val logs = uiState.logsFor(uiState.activeVehicleId).sortedByDescending { it.date }
+    var categoryFilter by remember { mutableStateOf<String?>(null) }
+    val logs = uiState.logsFor(uiState.activeVehicleId)
+        .filter { categoryFilter == null || it.category == categoryFilter }
+        .sortedByDescending { it.date }
 
     LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 88.dp)) {
         item {
-            GarageCard {
+            ChipFilterRow(
+                options = LogCategory.entries.map { it.name },
+                selected = categoryFilter,
+                onSelect = { categoryFilter = it },
+            )
+        }
+        item {
+            GarageCard(modifier = Modifier.padding(top = 12.dp)) {
                 if (logs.isEmpty()) {
-                    EmptyState("No maintenance entries yet. Tap + to log a service.")
+                    EmptyState(
+                        if (categoryFilter != null) "No $categoryFilter entries." else "No maintenance entries yet. Tap + to log a service.",
+                    )
                 } else {
                     logs.forEachIndexed { index, entry ->
                         LogRow(entry, uiState, onClick = { onItemClick(entry) })
