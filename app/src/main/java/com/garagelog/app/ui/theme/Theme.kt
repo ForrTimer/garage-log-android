@@ -1,6 +1,7 @@
 package com.garagelog.app.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -12,7 +13,14 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/** Shared corner rounding for cards/pills/chips/buttons — replaces the old hard-edged look. */
+val GarageCardShape = RoundedCornerShape(14.dp)
+val GarageChipShape = RoundedCornerShape(10.dp)
+val GaragePillShape = RoundedCornerShape(6.dp)
+val GarageFabShape = RoundedCornerShape(18.dp)
 
 private val DarkScheme = darkColorScheme(
     primary = DarkInverse,
@@ -64,6 +72,7 @@ data class GarageColors(
     val alarmText: Color,
     val warn: Color,
     val ok: Color,
+    val info: Color,
     val pillTintAlpha: Float,
 )
 
@@ -75,6 +84,7 @@ private val DarkExtras = GarageColors(
     alarmText = DarkAlarmText,
     warn = DarkWarn,
     ok = DarkOk,
+    info = DarkInfo,
     pillTintAlpha = PillTintAlphaDark,
 )
 
@@ -86,6 +96,7 @@ private val LightExtras = GarageColors(
     alarmText = LightAlarmText,
     warn = LightWarn,
     ok = LightOk,
+    info = LightInfo,
     pillTintAlpha = PillTintAlphaLight,
 )
 
