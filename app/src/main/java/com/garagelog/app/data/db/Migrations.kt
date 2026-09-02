@@ -71,3 +71,10 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         )
     }
 }
+
+/** Adds an optional cover-photo path to vehicles, shown on the Dashboard tile. */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE vehicles ADD COLUMN photoPath TEXT DEFAULT NULL")
+    }
+}

@@ -170,6 +170,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun deleteVehicle(id: String) = viewModelScope.launch {
+        locator.vehicleRepository.getAll().find { it.id == id }?.photoPath?.let { locator.photoStore.delete(it) }
         locator.photoRepository.softDeleteForVehicle(id)
         locator.logRepository.softDeleteForVehicle(id)
         locator.issueRepository.softDeleteForVehicle(id)
@@ -178,6 +179,19 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         locator.scheduleRepository.softDeleteForVehicle(id)
         locator.vehicleRepository.softDelete(id)
         if (activeVehicleId.value == id) activeVehicleId.value = null
+        requestSync()
+    }
+
+    fun setVehiclePhoto(vehicle: VehicleEntity, sourceUri: Uri) = viewModelScope.launch {
+        val path = locator.photoStore.copyIntoAppStorage(sourceUri, UUID.randomUUID().toString()) ?: return@launch
+        vehicle.photoPath?.let { locator.photoStore.delete(it) }
+        locator.vehicleRepository.upsert(vehicle.copy(photoPath = path, updatedAt = System.currentTimeMillis()))
+        requestSync()
+    }
+
+    fun removeVehiclePhoto(vehicle: VehicleEntity) = viewModelScope.launch {
+        vehicle.photoPath?.let { locator.photoStore.delete(it) }
+        locator.vehicleRepository.upsert(vehicle.copy(photoPath = null, updatedAt = System.currentTimeMillis()))
         requestSync()
     }
 

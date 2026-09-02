@@ -298,6 +298,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         is Sheet.None -> Unit
         is Sheet.VehicleForm -> VehicleFormSheet(
             vehicle = sheet.vehicle,
+            viewModel = viewModel,
             onDismiss = { activeSheet = Sheet.None },
             onSave = { v, starterServices ->
                 viewModel.saveVehicle(v)

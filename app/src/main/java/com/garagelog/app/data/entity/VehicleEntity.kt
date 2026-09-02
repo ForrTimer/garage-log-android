@@ -19,6 +19,7 @@ data class VehicleEntity(
     val role: String,
     val notes: String,
     val sortOrder: Int = 0,
+    val photoPath: String? = null,
     // Severe-duty conditions from typical OEM maintenance manuals — any of these set halves
     // computed maintenance intervals (see util.ScheduleStatus.computeDueInfo).
     val severeDustyAreas: Boolean = false,

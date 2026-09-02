@@ -1,17 +1,29 @@
 package com.garagelog.app.ui.settings
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -24,14 +36,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.CommonMaintenanceServices
 import com.garagelog.app.util.todayIso
+import java.io.File
 import java.util.UUID
 
 private data class VehicleFormState(
@@ -60,6 +78,7 @@ private data class VehicleFormState(
 @Composable
 fun VehicleFormSheet(
     vehicle: VehicleEntity?,
+    viewModel: GarageLogViewModel,
     onDismiss: () -> Unit,
     onSave: (VehicleEntity, List<String>) -> Unit,
     onDelete: (String) -> Unit,
@@ -100,6 +119,10 @@ fun VehicleFormSheet(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding(),
         ) {
             Text(if (vehicle == null) "Add vehicle" else "Edit vehicle", style = MaterialTheme.typography.titleLarge)
+
+            if (vehicle != null) {
+                VehiclePhotoPicker(vehicle = vehicle, viewModel = viewModel)
+            }
 
             LabeledTextField("Name / nickname", form.name, { form = form.copy(name = it) })
             LabeledTextField("Year", form.year, { form = form.copy(year = it) }, keyboardType = KeyboardType.Number)
@@ -192,6 +215,54 @@ fun VehicleFormSheet(
             onConfirm = { onDelete(vehicle.id) },
             onDismiss = { showDeleteConfirm = false },
         )
+    }
+}
+
+@Composable
+private fun VehiclePhotoPicker(vehicle: VehicleEntity, viewModel: GarageLogViewModel) {
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        if (uri != null) viewModel.setVehiclePhoto(vehicle, uri)
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (vehicle.photoPath != null) {
+                AsyncImage(
+                    model = File(vehicle.photoPath),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(72.dp),
+                )
+            } else {
+                Icon(Icons.Filled.AddAPhoto, contentDescription = "Add photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column {
+            Text(
+                if (vehicle.photoPath == null) "Add a photo" else "Change photo",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelMedium,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            )
+            if (vehicle.photoPath != null) {
+                Text(
+                    "Remove photo",
+                    color = garageColors.alarmText,
+                    style = MaterialTheme.typography.labelMedium,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.padding(top = 4.dp).clickable { viewModel.removeVehiclePhoto(vehicle) },
+                )
+            }
+        }
     }
 }
 
