@@ -120,32 +120,39 @@ fun GarageCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.(
 
 @Composable
 fun StatGrid(stats: List<Pair<String, String>>, onItemClick: ((Int) -> Unit)? = null) {
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        stats.forEachIndexed { index, (value, label) ->
-            if (index != 0) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant),
-                )
+    if (onItemClick != null) {
+        // Each stat reads as its own tappable tile, so all three need identical, symmetric
+        // spacing on every side — a shared divider between plain-text columns (below) would
+        // sit at an inconsistent distance from each tile's box edge.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            stats.forEachIndexed { index, (value, label) ->
+                Column(
+                    modifier = Modifier.weight(1f)
+                        .clip(GarageChipShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = garageColors.pillTintAlpha))
+                        .clickable { onItemClick(index) }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                ) {
+                    Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+                }
             }
-            Column(
-                modifier = Modifier.weight(1f)
-                    .padding(horizontal = if (index == 0) 0.dp else 14.dp)
-                    .let { m ->
-                        if (onItemClick != null) {
-                            m.clip(GarageChipShape)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = garageColors.pillTintAlpha))
-                                .clickable { onItemClick(index) }
-                                .padding(horizontal = 8.dp, vertical = 6.dp)
-                        } else {
-                            m
-                        }
-                    },
-            ) {
-                Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+        }
+    } else {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            stats.forEachIndexed { index, (value, label) ->
+                if (index != 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f).padding(horizontal = if (index == 0) 0.dp else 14.dp)) {
+                    Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+                }
             }
         }
     }

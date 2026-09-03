@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -101,64 +102,67 @@ fun DashboardScreen(
 
     val orderedVehicles = orderIds.mapNotNull { id -> vehicles.find { it.id == id } }
 
-    LazyColumn(state = listState, contentPadding = GarageDimens.listContentPadding) {
-        if (vehicles.isEmpty()) {
-            item {
-                EmptyState("No vehicles yet.")
-                OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth()) { Text("Add a vehicle") }
+    Column(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = listState, modifier = Modifier.weight(1f), contentPadding = GarageDimens.listContentPadding) {
+            if (vehicles.isEmpty()) {
+                item {
+                    EmptyState("No vehicles yet.")
+                    OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth()) { Text("Add a vehicle") }
+                }
             }
-        }
-        items(orderedVehicles, key = { it.id }) { v ->
-            Box(
-                modifier = Modifier
-                    .zIndex(if (v.id == draggingId) 1f else 0f)
-                    .graphicsLayer { translationY = if (v.id == draggingId) dragOffset else 0f },
-            ) {
-                VehicleDashboardCard(
-                    uiState = uiState,
-                    v = v,
-                    onEditVehicle = onEditVehicle,
-                    onOpenSchedule = onOpenSchedule,
-                    onUpdateMileage = onUpdateMileage,
-                    onOpenVehicleTab = onOpenVehicleTab,
-                    onOpenVehicleCostTrend = onOpenVehicleCostTrend,
-                    onSetVehiclePhoto = onSetVehiclePhoto,
-                    showDragHandle = canReorder,
-                    onDragStart = { draggingId = v.id; dragOffset = 0f; liveOrderIds = baseOrderIds },
-                    onDrag = onDrag@{ delta ->
-                        dragOffset += delta
-                        val id = draggingId ?: return@onDrag
-                        val current = liveOrderIds ?: return@onDrag
-                        val itemsInfo = listState.layoutInfo.visibleItemsInfo
-                        val dragged = itemsInfo.firstOrNull { it.key == id } ?: return@onDrag
-                        val draggedCenter = dragged.offset + dragOffset + dragged.size / 2
-                        val target = itemsInfo.firstOrNull { other ->
-                            other.key != id && draggedCenter > other.offset && draggedCenter < other.offset + other.size
-                        }
-                        if (target != null) {
-                            val from = current.indexOf(id)
-                            val to = current.indexOf(target.key as String)
-                            if (from != -1 && to != -1 && from != to) {
-                                dragOffset += dragged.offset - target.offset
-                                liveOrderIds = current.toMutableList().apply { add(to, removeAt(from)) }
+            items(orderedVehicles, key = { it.id }) { v ->
+                Box(
+                    modifier = Modifier
+                        .zIndex(if (v.id == draggingId) 1f else 0f)
+                        .graphicsLayer { translationY = if (v.id == draggingId) dragOffset else 0f },
+                ) {
+                    VehicleDashboardCard(
+                        uiState = uiState,
+                        v = v,
+                        onEditVehicle = onEditVehicle,
+                        onOpenSchedule = onOpenSchedule,
+                        onUpdateMileage = onUpdateMileage,
+                        onOpenVehicleTab = onOpenVehicleTab,
+                        onOpenVehicleCostTrend = onOpenVehicleCostTrend,
+                        onSetVehiclePhoto = onSetVehiclePhoto,
+                        showDragHandle = canReorder,
+                        onDragStart = { draggingId = v.id; dragOffset = 0f; liveOrderIds = baseOrderIds },
+                        onDrag = onDrag@{ delta ->
+                            dragOffset += delta
+                            val id = draggingId ?: return@onDrag
+                            val current = liveOrderIds ?: return@onDrag
+                            val itemsInfo = listState.layoutInfo.visibleItemsInfo
+                            val dragged = itemsInfo.firstOrNull { it.key == id } ?: return@onDrag
+                            val draggedCenter = dragged.offset + dragOffset + dragged.size / 2
+                            val target = itemsInfo.firstOrNull { other ->
+                                other.key != id && draggedCenter > other.offset && draggedCenter < other.offset + other.size
                             }
-                        }
-                    },
-                    onDragEnd = {
-                        draggingId = null
-                        dragOffset = 0f
-                        liveOrderIds?.let { onReorderVehicles(it) }
-                    },
-                )
+                            if (target != null) {
+                                val from = current.indexOf(id)
+                                val to = current.indexOf(target.key as String)
+                                if (from != -1 && to != -1 && from != to) {
+                                    dragOffset += dragged.offset - target.offset
+                                    liveOrderIds = current.toMutableList().apply { add(to, removeAt(from)) }
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            draggingId = null
+                            dragOffset = 0f
+                            liveOrderIds?.let { onReorderVehicles(it) }
+                        },
+                    )
+                }
+                Spacer(Modifier.padding(bottom = 12.dp))
             }
-            Spacer(Modifier.padding(bottom = 12.dp))
         }
         if (vehicles.isNotEmpty()) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    OutlinedButton(onClick = onOpenSchedule, modifier = Modifier.weight(1f)) { Text("Maintenance") }
-                    OutlinedButton(onClick = onOpenCostTrend, modifier = Modifier.weight(1f)) { Text("Cost trend") }
-                }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = GarageDimens.screenHorizontal, vertical = 12.dp),
+            ) {
+                OutlinedButton(onClick = onOpenSchedule, modifier = Modifier.weight(1f)) { Text("Maintenance") }
+                OutlinedButton(onClick = onOpenCostTrend, modifier = Modifier.weight(1f)) { Text("Cost trend") }
             }
         }
     }

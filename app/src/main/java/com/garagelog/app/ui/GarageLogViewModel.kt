@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -89,6 +90,12 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     private val _pendingDriveConsent = MutableSharedFlow<IntentSender>()
     val pendingDriveConsent: SharedFlow<IntentSender> = _pendingDriveConsent
 
+    // True once the first real Room read has landed — distinct from uiState's synchronous
+    // default value, so the splash screen can wait for actual data instead of dismissing
+    // on the next frame regardless of whether anything has loaded yet.
+    private val _isDataLoaded = MutableStateFlow(false)
+    val isDataLoaded: StateFlow<Boolean> = _isDataLoaded
+
     val signedInEmail: StateFlow<String?> = locator.authManager.signedInEmail
     val syncStatus: StateFlow<SyncStatus> = locator.syncStatusHolder.status
 
@@ -100,6 +107,13 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         locator.scheduleRepository.observeAll(),
     ) { vehicles, logs, issues, phases, schedules ->
         RepoBundle(vehicles, logs, issues, phases, schedules)
+    }
+
+    init {
+        viewModelScope.launch {
+            repoBundle.first()
+            _isDataLoaded.value = true
+        }
     }
 
     private val extraBundle = combine(

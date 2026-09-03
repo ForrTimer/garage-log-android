@@ -2,6 +2,7 @@ package com.garagelog.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.pager.HorizontalPager
@@ -38,8 +40,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +83,14 @@ private fun AppTab.label(): String = when (this) {
     AppTab.Issues -> "Issues"
     AppTab.Build -> "Build"
     AppTab.Settings -> "More"
+}
+
+private fun AppTab.icon(): ImageVector = when (this) {
+    AppTab.Dashboard -> Icons.Filled.Home
+    AppTab.Log -> Icons.Filled.MenuBook
+    AppTab.Issues -> Icons.Filled.Warning
+    AppTab.Build -> Icons.Filled.Build
+    AppTab.Settings -> Icons.Filled.MoreHoriz
 }
 
 private sealed class Sheet {
@@ -157,12 +170,24 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             uiState.showCostTrendScreen -> "Cost trend"
                             else -> liveTab.label()
                         }
-                        Text(
-                            text = "🔧 $headerTitle",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 10.dp),
-                        )
+                        // A large, low-opacity watermark of the current tab's icon behind the
+                        // title — sized off the header's own width so it scales with the phone,
+                        // and clipped to the fixed-height box so it crops top/bottom instead of
+                        // pushing the header taller.
+                        BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(64.dp).clipToBounds()) {
+                            Icon(
+                                imageVector = liveTab.icon(),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
+                                modifier = Modifier.size(maxWidth * 0.9f).align(Alignment.Center),
+                            )
+                            Text(
+                                text = headerTitle,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp),
+                            )
+                        }
                         VehiclePickerRow(
                             vehicles = uiState.vehicles,
                             activeVehicleId = uiState.activeVehicleId,
