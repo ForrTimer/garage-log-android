@@ -44,7 +44,7 @@ class DriveApiClient(private val httpClient: OkHttpClient = OkHttpClient()) {
         val request = authedRequest(accessToken, url).build()
         httpClient.newCall(request).execute().use { response ->
             check(response.isSuccessful) { "Drive list failed: ${response.code}" }
-            decodeFileList(response.body?.string().orEmpty()).firstOrNull()
+            decodeFileList(response.body.string()).firstOrNull()
         }
     }
 
@@ -58,7 +58,7 @@ class DriveApiClient(private val httpClient: OkHttpClient = OkHttpClient()) {
             val request = authedRequest(accessToken, url).build()
             httpClient.newCall(request).execute().use { response ->
                 check(response.isSuccessful) { "Drive list failed: ${response.code}" }
-                decodeFileList(response.body?.string().orEmpty())
+                decodeFileList(response.body.string())
             }
         }
 
@@ -69,7 +69,7 @@ class DriveApiClient(private val httpClient: OkHttpClient = OkHttpClient()) {
         val request = authedRequest(accessToken, url).build()
         httpClient.newCall(request).execute().use { response ->
             check(response.isSuccessful) { "Drive download failed: ${response.code}" }
-            response.body?.string().orEmpty()
+            response.body.string()
         }
     }
 
@@ -80,7 +80,7 @@ class DriveApiClient(private val httpClient: OkHttpClient = OkHttpClient()) {
         val request = authedRequest(accessToken, url).build()
         httpClient.newCall(request).execute().use { response ->
             check(response.isSuccessful) { "Drive download failed: ${response.code}" }
-            destination.outputStream().use { out -> response.body?.byteStream()?.copyTo(out) }
+            destination.outputStream().use { out -> response.body.byteStream().copyTo(out) }
         }
         Unit
     }
@@ -140,7 +140,7 @@ class DriveApiClient(private val httpClient: OkHttpClient = OkHttpClient()) {
             .build()
         httpClient.newCall(request).execute().use { response ->
             check(response.isSuccessful) { "Drive upload failed: ${response.code}" }
-            return json.decodeFromString(DriveFile.serializer(), response.body?.string().orEmpty()).id
+            return json.decodeFromString(DriveFile.serializer(), response.body.string()).id
         }
     }
 
