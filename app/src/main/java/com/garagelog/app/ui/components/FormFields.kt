@@ -123,15 +123,37 @@ fun TimeField(label: String, hour: Int, minute: Int, onTimeChange: (hour: Int, m
 
 @Composable
 fun VehicleDropdown(label: String, vehicles: List<VehicleEntity>, selectedId: String?, onSelect: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedName = vehicles.find { it.id == selectedId }?.name ?: ""
+    ReadOnlyDropdownField(
+        displayValue = vehicles.find { it.id == selectedId }?.name ?: "",
+        options = vehicles,
+        optionLabel = { it.name },
+        onSelect = { onSelect(it.id) },
+        label = label,
+    )
+}
 
-    Box(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+/**
+ * A read-only text field that opens a dropdown menu of [options] on tap — the shared shape
+ * behind [VehicleDropdown] and the phase/month pickers, which differed only in what they list
+ * and how a value is displayed/selected.
+ */
+@Composable
+fun <T> ReadOnlyDropdownField(
+    displayValue: String,
+    options: Iterable<T>,
+    optionLabel: (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier.fillMaxWidth().padding(top = 10.dp)) {
         OutlinedTextField(
-            value = selectedName,
+            value = displayValue,
             onValueChange = {},
             readOnly = true,
-            label = { Text(label) },
+            label = label?.let { { Text(it) } },
             trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -144,8 +166,8 @@ fun VehicleDropdown(label: String, vehicles: List<VehicleEntity>, selectedId: St
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.fillMaxWidth(0.85f)) {
-            vehicles.forEach { v ->
-                DropdownMenuItem(text = { Text(v.name) }, onClick = { onSelect(v.id); expanded = false })
+            options.forEach { option ->
+                DropdownMenuItem(text = { Text(optionLabel(option)) }, onClick = { onSelect(option); expanded = false })
             }
         }
     }
