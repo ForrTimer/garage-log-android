@@ -71,6 +71,7 @@ class BackupManager(
         SeedData.logEntries().forEach { logRepository.upsert(it.copy(updatedAt = now)) }
         SeedData.issues().forEach { issueRepository.upsert(it.copy(updatedAt = now)) }
         SeedData.buildPhases().forEach { buildPhaseRepository.upsert(it.copy(updatedAt = now)) }
+        SeedData.buildSteps().forEach { buildStepRepository.upsert(it.copy(updatedAt = now)) }
         SeedData.maintenanceSchedules().forEach { scheduleRepository.upsert(it.copy(updatedAt = now)) }
     }
 

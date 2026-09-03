@@ -95,6 +95,7 @@ class ServiceLocator(context: Context) {
         SeedData.logEntries().forEach { logRepository.upsert(it) }
         SeedData.issues().forEach { issueRepository.upsert(it) }
         SeedData.buildPhases().forEach { buildPhaseRepository.upsert(it) }
+        SeedData.buildSteps().forEach { buildStepRepository.upsert(it) }
         SeedData.maintenanceSchedules().forEach { scheduleRepository.upsert(it) }
     }
 }

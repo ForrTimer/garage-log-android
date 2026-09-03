@@ -1,6 +1,7 @@
 package com.garagelog.app.data.seed
 
 import com.garagelog.app.data.entity.BuildPhaseEntity
+import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.IssuePriority
 import com.garagelog.app.data.entity.IssueStatus
@@ -8,11 +9,14 @@ import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.PhaseStatus
+import com.garagelog.app.data.entity.StepPriority
 import com.garagelog.app.data.entity.VehicleEntity
 
 /**
- * Ported field-for-field from the PWA's seedData() in app.js, as of 2026-08-05 —
- * see the "Vehicle Maintenance and Build" Claude Project docs for the source facts.
+ * Ethan's own real vehicle data, captured from a JSON backup of his phone (2026-09-02) so a
+ * fresh install or a reset starts from his actual current setup instead of a stale snapshot.
+ * Previously ported field-for-field from the PWA's seedData() in app.js as of 2026-08-05 —
+ * see the "Vehicle Maintenance and Build" Claude Project docs for that original source.
  */
 object SeedData {
     const val GUPPY_ID = "guppy"
@@ -23,7 +27,7 @@ object SeedData {
         VehicleEntity(
             id = GUPPY_ID, name = "Guppy", year = 2010, make = "GMC", model = "Sierra 2500HD SLE",
             engine = "6.0L Vortec V8 (gas, flex-fuel)", drivetrain = "4x4",
-            vin = "1GT4K0BG4AF106987", color = "Blue", miles = 203000, milesDate = "2026-08-05",
+            vin = "1GT4K0BG4AF106987", color = "Blue", miles = 204295, milesDate = "2026-09-02",
             role = "A-to-B / backup daily driver",
             notes = "Bought 4/3/2026 from Jacob Tramp, \$9,000, as-is. Runs Royal Purple oil.",
             sortOrder = 0,
@@ -73,6 +77,10 @@ object SeedData {
             id = "guppy-log-6", vehicleId = GUPPY_ID, date = "2026-08-05", mileage = 203000,
             category = LogCategory.Repair.name, task = "Brake light switch replaced", cost = null, parts = "", notes = "",
         ),
+        LogEntryEntity(
+            id = "guppy-log-7", vehicleId = GUPPY_ID, date = "2026-08-31", mileage = 203556,
+            category = LogCategory.Routine.name, task = "Untitled entry", cost = null, parts = "", notes = "",
+        ),
     )
 
     fun issues(): List<IssueEntity> = listOf(
@@ -85,8 +93,8 @@ object SeedData {
         ),
         IssueEntity(
             id = "guppy-issue-2", vehicleId = GUPPY_ID, title = "Headlight pods need replacing",
-            status = IssueStatus.Open.label, priority = IssuePriority.Normal.label,
-            dateOpened = "2026-08-05", dateResolved = "", description = "About to be replaced.",
+            status = IssueStatus.Resolved.label, priority = IssuePriority.Normal.label,
+            dateOpened = "2026-08-05", dateResolved = "2026-08-16", description = "About to be replaced.",
         ),
         IssueEntity(
             id = "guppy-issue-3", vehicleId = GUPPY_ID, title = "Turn signal switch needs replacing",
@@ -165,14 +173,97 @@ object SeedData {
         ),
     )
 
+    /** Steps under tuna-phase-1, imported from that phase's notes via the Build tab's "Import steps from notes" link. */
+    fun buildSteps(): List<BuildStepEntity> = listOf(
+        BuildStepEntity(
+            id = "tuna-step-1", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
+            title = "ARP Fasteners", notes = "", priority = StepPriority.Medium.name,
+            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
+            order = 1, manualPhaseOverride = true,
+        ),
+        BuildStepEntity(
+            id = "tuna-step-2", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
+            title = "Fluidampr balancer", notes = "", priority = StepPriority.Medium.name,
+            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
+            order = 2, manualPhaseOverride = true,
+        ),
+        BuildStepEntity(
+            id = "tuna-step-3", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
+            title = "FASS lift pump", notes = "", priority = StepPriority.Medium.name,
+            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
+            order = 3, manualPhaseOverride = true,
+        ),
+        BuildStepEntity(
+            id = "tuna-step-4", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
+            title = "Flowkooler water pump", notes = "", priority = StepPriority.Medium.name,
+            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
+            order = 4, manualPhaseOverride = true,
+        ),
+        BuildStepEntity(
+            id = "tuna-step-5", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
+            title = "coolant filter kit", notes = "", priority = StepPriority.Medium.name,
+            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
+            order = 5, manualPhaseOverride = true,
+        ),
+        BuildStepEntity(
+            id = "tuna-step-6", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
+            title = "new injector lines", notes = "", priority = StepPriority.Medium.name,
+            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
+            order = 6, manualPhaseOverride = true,
+        ),
+        BuildStepEntity(
+            id = "tuna-step-7", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
+            title = "Harland Sharp rockers if heads come off. Super 54 currently out of stock at Quadstar (\$1,250) — need to contact for restock timing",
+            notes = "", priority = StepPriority.Medium.name,
+            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
+            order = 7, manualPhaseOverride = true,
+        ),
+    )
+
     fun maintenanceSchedules(): List<MaintenanceScheduleEntity> = listOf(
         MaintenanceScheduleEntity(
             id = "guppy-sched-1", vehicleId = GUPPY_ID, taskName = "Oil change",
-            intervalMiles = 5000, intervalMonths = 6, lastDoneMileage = 203000, lastDoneDate = "2026-08-05",
+            intervalMiles = 3000, intervalMonths = 3, lastDoneMileage = 198999, lastDoneDate = "2026-09-02",
         ),
         MaintenanceScheduleEntity(
             id = "guppy-sched-2", vehicleId = GUPPY_ID, taskName = "Tire rotation",
-            intervalMiles = 6000, intervalMonths = null, lastDoneMileage = null, lastDoneDate = null,
+            intervalMiles = 6000, intervalMonths = 6, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-3", vehicleId = GUPPY_ID, taskName = "Change Automatic Transmission Fluid and Filter",
+            intervalMiles = 30000, intervalMonths = 30, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-4", vehicleId = GUPPY_ID, taskName = "Change Brake Fluid",
+            intervalMiles = 30000, intervalMonths = 30, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-5", vehicleId = GUPPY_ID, taskName = "Change Differential Oil",
+            intervalMiles = 60000, intervalMonths = 48, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-6", vehicleId = GUPPY_ID, taskName = "Change Transfer Case Oil",
+            intervalMiles = 30000, intervalMonths = 30, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-7", vehicleId = GUPPY_ID, taskName = "Flush Cooling System",
+            intervalMiles = 100000, intervalMonths = 60, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-8", vehicleId = GUPPY_ID, taskName = "Lube the Chassis",
+            intervalMiles = 15000, intervalMonths = 12, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-9", vehicleId = GUPPY_ID, taskName = "Replace Air Filter",
+            intervalMiles = 30000, intervalMonths = 30, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-10", vehicleId = GUPPY_ID, taskName = "Replace Spark Plug Wires",
+            intervalMiles = 60000, intervalMonths = 48, lastDoneMileage = null, lastDoneDate = null,
+        ),
+        MaintenanceScheduleEntity(
+            id = "guppy-sched-11", vehicleId = GUPPY_ID, taskName = "Replace Spark Plugs",
+            intervalMiles = 60000, intervalMonths = 48, lastDoneMileage = null, lastDoneDate = null,
         ),
         MaintenanceScheduleEntity(
             id = "tuna-sched-1", vehicleId = BLUE_TUNA_ID, taskName = "Oil & filter (6.5L Detroit Diesel)",
