@@ -3,7 +3,6 @@ package com.garagelog.app.ui.issues
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,6 +27,7 @@ import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
+import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.util.formatDate
 
 private fun statusTone(status: String): PillTone = when (status) {
@@ -49,7 +49,7 @@ fun IssuesScreen(uiState: GarageLogUiState, onItemClick: (IssueEntity) -> Unit) 
         .filter { statusFilter == null || it.status == statusFilter }
         .sortedWith(compareBy<IssueEntity> { statusRank(it.status) }.thenByDescending { it.dateOpened })
 
-    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 88.dp)) {
+    LazyColumn(contentPadding = GarageDimens.listContentPaddingWithFab) {
         item {
             ChipFilterRow(
                 options = IssueStatus.entries.map { it.label },

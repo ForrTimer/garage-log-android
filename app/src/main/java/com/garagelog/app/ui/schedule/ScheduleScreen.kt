@@ -30,6 +30,7 @@ import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
 import com.garagelog.app.ui.components.SectionTitle
+import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.util.DueStatus
 import com.garagelog.app.util.computeDueInfo
 
@@ -50,7 +51,7 @@ fun ScheduleScreen(
             IconButton(onClick = onAddNew) { Icon(Icons.Filled.Add, contentDescription = "Add schedule") }
         }
 
-        LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp)) {
+        LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
             if (vehicles.none { v -> uiState.schedules.any { it.vehicleId == v.id } }) {
                 item { EmptyState("No maintenance intervals tracked yet. Tap + to add one, like \"Oil change every 5,000 mi.\"") }
             }

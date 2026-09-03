@@ -1,7 +1,6 @@
 package com.garagelog.app.ui.log
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,6 +25,7 @@ import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
+import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
@@ -47,7 +47,7 @@ fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit) 
         .filter { categoryFilter == null || it.category == categoryFilter }
         .sortedByDescending { it.date }
 
-    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 88.dp)) {
+    LazyColumn(contentPadding = GarageDimens.listContentPaddingWithFab) {
         item {
             ChipFilterRow(
                 options = LogCategory.entries.map { it.name },

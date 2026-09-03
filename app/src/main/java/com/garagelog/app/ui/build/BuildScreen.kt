@@ -3,7 +3,6 @@ package com.garagelog.app.ui.build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,12 +24,14 @@ import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.BuildPhaseEntity
 import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.PhaseStatus
+import com.garagelog.app.data.entity.StepPriority
 import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
 import com.garagelog.app.ui.components.SectionTitle
+import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.formatMoney
 
@@ -51,7 +52,7 @@ fun BuildScreen(
     val vehicles = (uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles)
         .filter { v -> uiState.buildPhases.any { it.vehicleId == v.id } || uiState.buildSteps.any { it.vehicleId == v.id } }
 
-    LazyColumn(contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 88.dp)) {
+    LazyColumn(contentPadding = GarageDimens.listContentPaddingWithFab) {
         if (vehicles.isEmpty()) {
             item {
                 val vehicleName = uiState.activeVehicle?.name
@@ -174,7 +175,7 @@ private fun StepRow(step: BuildStepEntity, onClick: () -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             Text(step.title, style = MaterialTheme.typography.bodyMedium)
             val cost = (if (step.status == PhaseStatus.Done.label) step.actualCost ?: step.estimatedCost else step.estimatedCost)
-            val meta = listOfNotNull(step.priority.takeIf { it != "Medium" }?.let { "$it priority" }, cost?.let { formatMoney(it) })
+            val meta = listOfNotNull(step.priority.takeIf { it != StepPriority.Medium.name }?.let { "$it priority" }, cost?.let { formatMoney(it) })
                 .joinToString(" · ")
             if (meta.isNotBlank()) Text(meta, color = garageColors.textMuted, style = MaterialTheme.typography.bodySmall)
         }

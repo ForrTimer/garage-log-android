@@ -4,13 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,16 +20,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.SectionTitle
+import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.util.formatMoney
-import java.util.Locale
+import com.garagelog.app.util.monthName
 
 @Composable
 fun CostTrendScreen(uiState: GarageLogUiState, onBack: () -> Unit) {
@@ -43,7 +42,7 @@ fun CostTrendScreen(uiState: GarageLogUiState, onBack: () -> Unit) {
             Text("Cost trend", style = MaterialTheme.typography.titleMedium)
         }
 
-        LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp)) {
+        LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
             if (vehicles.isEmpty()) {
                 item { EmptyState("No vehicles yet.") }
             }
@@ -87,9 +86,8 @@ private fun monthlyTotals(logs: List<LogEntryEntity>): List<Pair<String, Double>
 private fun monthLabel(yyyyMm: String): String {
     val parts = yyyyMm.split("-")
     if (parts.size != 2) return yyyyMm
-    val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     val monthIndex = parts[1].toIntOrNull()?.minus(1) ?: return yyyyMm
-    return if (monthIndex in monthNames.indices) monthNames[monthIndex] else yyyyMm
+    return monthName(monthIndex).take(3)
 }
 
 @Composable
@@ -137,9 +135,15 @@ private fun CategoryBreakdown(logs: List<LogEntryEntity>) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
         byCategory.forEach { (category, total) ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Text(category, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(90.dp))
+                Text(
+                    category,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
                 Box(
-                    modifier = Modifier.weight(1f).height(10.dp)
+                    modifier = Modifier.weight(2f).height(10.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)),
                 ) {
                     Box(
