@@ -248,6 +248,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     onEdit = { activeSheet = Sheet.ScheduleForm(it) },
                     onAddNew = { activeSheet = Sheet.ScheduleForm(null) },
                     onMarkDone = viewModel::markScheduleDoneToday,
+                    onCopySchedule = viewModel::copySchedulesToVehicle,
                 )
                 uiState.showCostTrendScreen -> CostTrendScreen(
                     uiState = uiState,
@@ -264,6 +265,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onUpdateMileage = viewModel::updateMileage,
                             onOpenVehicleTab = viewModel::openVehicleTab,
                             onOpenVehicleCostTrend = viewModel::openVehicleCostTrend,
+                            onSetVehiclePhoto = viewModel::setVehiclePhoto,
+                            onReorderVehicles = viewModel::reorderVehicles,
                         )
                         AppTab.Log -> LogScreen(
                             uiState = uiState,
@@ -300,8 +303,9 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             vehicle = sheet.vehicle,
             viewModel = viewModel,
             onDismiss = { activeSheet = Sheet.None },
-            onSave = { v, starterServices ->
+            onSave = { v, starterServices, photoUri ->
                 viewModel.saveVehicle(v)
+                if (photoUri != null) viewModel.setVehiclePhoto(v, photoUri)
                 if (starterServices.isNotEmpty()) viewModel.addStarterSchedules(v.id, starterServices)
                 activeSheet = Sheet.None
             },

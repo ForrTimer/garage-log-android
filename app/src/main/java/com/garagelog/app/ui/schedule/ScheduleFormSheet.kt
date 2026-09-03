@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
@@ -12,6 +13,7 @@ import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.VehicleDropdown
+import com.garagelog.app.ui.components.capitalizeWords
 import java.util.UUID
 
 private data class ScheduleFormState(
@@ -66,7 +68,12 @@ fun ScheduleFormSheet(
         },
     ) {
         VehicleDropdown("Vehicle", vehicles, form.vehicleId) { form = form.copy(vehicleId = it) }
-        LabeledTextField("Task", form.taskName, { form = form.copy(taskName = it) })
+        LabeledTextField(
+            "Task",
+            form.taskName,
+            { form = form.copy(taskName = capitalizeWords(it)) },
+            capitalization = KeyboardCapitalization.Words,
+        )
         LabeledTextField("Interval (miles)", form.intervalMiles, { form = form.copy(intervalMiles = it) }, keyboardType = KeyboardType.Number)
         LabeledTextField("Interval (months)", form.intervalMonths, { form = form.copy(intervalMonths = it) }, keyboardType = KeyboardType.Number)
         LabeledTextField("Last done — mileage", form.lastDoneMileage, { form = form.copy(lastDoneMileage = it) }, keyboardType = KeyboardType.Number)

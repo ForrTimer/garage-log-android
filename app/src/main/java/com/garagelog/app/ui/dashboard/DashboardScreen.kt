@@ -1,7 +1,14 @@
 package com.garagelog.app.ui.dashboard
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,31 +18,41 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.AppTab
 import com.garagelog.app.ui.GarageLogUiState
+import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
@@ -60,18 +77,80 @@ fun DashboardScreen(
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onOpenVehicleCostTrend: (String) -> Unit,
+    onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
+    onReorderVehicles: (List<String>) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
+    val canReorder = uiState.activeVehicleId == null && vehicles.size > 1
+    val baseOrderIds = vehicles.map { it.id }
 
-    LazyColumn(contentPadding = GarageDimens.listContentPadding) {
+    // While the user is actively dragging (or waiting for the reorder to round-trip through the
+    // database), the dragged arrangement lives here instead of being derived from `vehicles` —
+    // otherwise the live-reordered list would fight the not-yet-updated upstream order. Once the
+    // database confirms the same order, this drops back to null so `vehicles` is the sole source
+    // of truth again.
+    var liveOrderIds by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(baseOrderIds) {
+        if (liveOrderIds != null && liveOrderIds == baseOrderIds) liveOrderIds = null
+    }
+    val orderIds = liveOrderIds ?: baseOrderIds
+
+    val listState = rememberLazyListState()
+    var draggingId by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+
+    val orderedVehicles = orderIds.mapNotNull { id -> vehicles.find { it.id == id } }
+
+    LazyColumn(state = listState, contentPadding = GarageDimens.listContentPadding) {
         if (vehicles.isEmpty()) {
             item {
                 EmptyState("No vehicles yet.")
                 OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth()) { Text("Add a vehicle") }
             }
         }
-        items(vehicles, key = { it.id }) { v ->
-            VehicleDashboardCard(uiState, v, onEditVehicle, onOpenSchedule, onUpdateMileage, onOpenVehicleTab, onOpenVehicleCostTrend)
+        items(orderedVehicles, key = { it.id }) { v ->
+            Box(
+                modifier = Modifier
+                    .zIndex(if (v.id == draggingId) 1f else 0f)
+                    .graphicsLayer { translationY = if (v.id == draggingId) dragOffset else 0f },
+            ) {
+                VehicleDashboardCard(
+                    uiState = uiState,
+                    v = v,
+                    onEditVehicle = onEditVehicle,
+                    onOpenSchedule = onOpenSchedule,
+                    onUpdateMileage = onUpdateMileage,
+                    onOpenVehicleTab = onOpenVehicleTab,
+                    onOpenVehicleCostTrend = onOpenVehicleCostTrend,
+                    onSetVehiclePhoto = onSetVehiclePhoto,
+                    showDragHandle = canReorder,
+                    onDragStart = { draggingId = v.id; dragOffset = 0f; liveOrderIds = baseOrderIds },
+                    onDrag = onDrag@{ delta ->
+                        dragOffset += delta
+                        val id = draggingId ?: return@onDrag
+                        val current = liveOrderIds ?: return@onDrag
+                        val itemsInfo = listState.layoutInfo.visibleItemsInfo
+                        val dragged = itemsInfo.firstOrNull { it.key == id } ?: return@onDrag
+                        val draggedCenter = dragged.offset + dragOffset + dragged.size / 2
+                        val target = itemsInfo.firstOrNull { other ->
+                            other.key != id && draggedCenter > other.offset && draggedCenter < other.offset + other.size
+                        }
+                        if (target != null) {
+                            val from = current.indexOf(id)
+                            val to = current.indexOf(target.key as String)
+                            if (from != -1 && to != -1 && from != to) {
+                                dragOffset += dragged.offset - target.offset
+                                liveOrderIds = current.toMutableList().apply { add(to, removeAt(from)) }
+                            }
+                        }
+                    },
+                    onDragEnd = {
+                        draggingId = null
+                        dragOffset = 0f
+                        liveOrderIds?.let { onReorderVehicles(it) }
+                    },
+                )
+            }
             Spacer(Modifier.padding(bottom = 12.dp))
         }
         if (vehicles.isNotEmpty()) {
@@ -94,6 +173,11 @@ private fun VehicleDashboardCard(
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onOpenVehicleCostTrend: (String) -> Unit,
+    onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
+    showDragHandle: Boolean,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
 ) {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
     val openIssues = uiState.issues.filter { it.vehicleId == v.id && it.status != IssueStatus.Resolved.label }
@@ -107,29 +191,56 @@ private fun VehicleDashboardCard(
 
     var showMileageDialog by remember(v.id) { mutableStateOf(false) }
 
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        if (uri != null) onSetVehiclePhoto(v, uri)
+    }
+
     GarageCard {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            if (v.photoPath != null) {
-                AsyncImage(
-                    model = File(v.photoPath),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(44.dp).clip(CircleShape),
-                )
-                Spacer(Modifier.width(12.dp))
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (v.photoPath != null) {
+                    AsyncImage(
+                        model = File(v.photoPath),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(48.dp),
+                    )
+                } else {
+                    Icon(Icons.Filled.DirectionsCar, contentDescription = "Add a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            val title = buildString {
-                append(listOfNotNull(v.year?.toString(), v.make.ifBlank { null }, v.model.ifBlank { null }).joinToString(" "))
-                if (v.name.isNotBlank() && v.name != v.model) append(" \"${v.name}\"")
+            Spacer(Modifier.width(12.dp))
+            val title = if (v.name.isNotBlank() && v.name != v.model) {
+                v.name
+            } else {
+                listOfNotNull(v.year?.toString(), v.model.ifBlank { null }).joinToString(" ")
             }
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            Text(
-                "Edit",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.labelMedium,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable { onEditVehicle(v) },
-            )
+            if (showDragHandle) {
+                Icon(
+                    Icons.Filled.DragHandle,
+                    contentDescription = "Drag to reorder",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .pointerInput(v.id) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { onDragStart() },
+                                onDragEnd = { onDragEnd() },
+                                onDragCancel = { onDragEnd() },
+                                onDrag = { change, dragAmount -> change.consume(); onDrag(dragAmount.y) },
+                            )
+                        },
+                )
+            }
+            ActionLink("Edit", onClick = { onEditVehicle(v) })
         }
 
         // Maintenance alerts lead the card — this is the thing an owner actually opens the app
@@ -157,7 +268,6 @@ private fun VehicleDashboardCard(
                     "No maintenance tracked yet — tap to add a schedule",
                     style = MaterialTheme.typography.bodySmall,
                     color = garageColors.textMuted,
-                    textDecoration = TextDecoration.Underline,
                 )
             }
         }
@@ -177,13 +287,7 @@ private fun VehicleDashboardCard(
             },
         )
 
-        Text(
-            "Update mileage",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.labelMedium,
-            textDecoration = TextDecoration.Underline,
-            modifier = Modifier.padding(top = 8.dp).clickable { showMileageDialog = true },
-        )
+        ActionLink("Update mileage", onClick = { showMileageDialog = true }, modifier = Modifier.padding(top = 8.dp))
 
         Text(
             text = lastLog?.let { "Last logged: ${formatDate(it.date)} — ${it.task}" } ?: "No log entries yet.",
@@ -192,23 +296,20 @@ private fun VehicleDashboardCard(
             modifier = Modifier.padding(top = 10.dp),
         )
 
-        val subtitle = listOfNotNull(v.engine.ifBlank { null }, v.drivetrain.ifBlank { null }).joinToString(" · ")
-        val hasDetails = subtitle.isNotBlank() || v.role.isNotBlank() || v.notes.isNotBlank()
-        if (hasDetails) {
-            var showDetails by remember(v.id) { mutableStateOf(false) }
-            Text(
-                text = if (showDetails) "Hide vehicle details" else "Show vehicle details",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.labelMedium,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.padding(top = 10.dp).clickable { showDetails = !showDetails },
-            )
-            if (showDetails) {
-                Column(modifier = Modifier.padding(top = 6.dp)) {
-                    if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                    if (v.role.isNotBlank()) Text(v.role, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                    if (v.notes.isNotBlank()) Text(v.notes, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                }
+        var showDetails by remember(v.id) { mutableStateOf(false) }
+        ActionLink(
+            text = if (showDetails) "Hide vehicle details" else "Show vehicle details",
+            onClick = { showDetails = !showDetails },
+            modifier = Modifier.padding(top = 10.dp),
+        )
+        if (showDetails) {
+            val identity = listOfNotNull(v.year?.toString(), v.make.ifBlank { null }, v.model.ifBlank { null }).joinToString(" ")
+            val subtitle = listOfNotNull(v.engine.ifBlank { null }, v.drivetrain.ifBlank { null }).joinToString(" · ")
+            Column(modifier = Modifier.padding(top = 6.dp)) {
+                if (identity.isNotBlank()) Text(identity, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                if (v.role.isNotBlank()) Text(v.role, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                if (v.notes.isNotBlank()) Text(v.notes, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

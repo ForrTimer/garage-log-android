@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.VehicleEntity
@@ -44,6 +45,7 @@ fun LabeledTextField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
+    capitalization: KeyboardCapitalization = KeyboardCapitalization.None,
     singleLine: Boolean = true,
     minLines: Int = 1,
 ) {
@@ -53,9 +55,20 @@ fun LabeledTextField(
         label = { Text(label) },
         singleLine = singleLine,
         minLines = minLines,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, capitalization = capitalization),
         modifier = modifier.fillMaxWidth().padding(top = 10.dp),
     )
+}
+
+/** Capitalizes the first letter of every word as the user types, leaving the rest of each word untouched. */
+fun capitalizeWords(text: String): String {
+    val sb = StringBuilder(text.length)
+    var capitalizeNext = true
+    for (c in text) {
+        sb.append(if (capitalizeNext && c.isLetter()) c.uppercaseChar() else c)
+        capitalizeNext = c == ' '
+    }
+    return sb.toString()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

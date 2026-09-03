@@ -200,6 +200,36 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         requestSync()
     }
 
+    /** Persists a new home-tab display order after the user drags a vehicle tile to a new spot. */
+    fun reorderVehicles(orderedIds: List<String>) = viewModelScope.launch {
+        val vehicles = locator.vehicleRepository.getAll()
+        val now = System.currentTimeMillis()
+        orderedIds.forEachIndexed { index, id ->
+            val vehicle = vehicles.find { it.id == id } ?: return@forEachIndexed
+            if (vehicle.sortOrder != index) locator.vehicleRepository.upsert(vehicle.copy(sortOrder = index, updatedAt = now))
+        }
+        requestSync()
+    }
+
+    /** Copies every active maintenance schedule item from one vehicle onto another, as fresh (not-yet-done) entries. */
+    fun copySchedulesToVehicle(sourceVehicleId: String, targetVehicleId: String) = viewModelScope.launch {
+        val schedules = locator.scheduleRepository.getAll().filter { it.vehicleId == sourceVehicleId }
+        val now = System.currentTimeMillis()
+        schedules.forEach { sched ->
+            locator.scheduleRepository.upsert(
+                sched.copy(
+                    id = UUID.randomUUID().toString(),
+                    vehicleId = targetVehicleId,
+                    lastDoneMileage = null,
+                    lastDoneDate = null,
+                    updatedAt = now,
+                ),
+            )
+        }
+        requestSync()
+        _messages.emit(if (schedules.size == 1) "Copied 1 maintenance item." else "Copied ${schedules.size} maintenance items.")
+    }
+
     /** Adds a batch of starter maintenance schedules (see VehicleFormSheet's common-services checklist). */
     fun addStarterSchedules(vehicleId: String, taskNames: List<String>) = viewModelScope.launch {
         val now = System.currentTimeMillis()

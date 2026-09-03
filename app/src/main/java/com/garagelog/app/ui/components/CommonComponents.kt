@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -132,7 +133,16 @@ fun StatGrid(stats: List<Pair<String, String>>, onItemClick: ((Int) -> Unit)? = 
             Column(
                 modifier = Modifier.weight(1f)
                     .padding(horizontal = if (index == 0) 0.dp else 14.dp)
-                    .let { m -> if (onItemClick != null) m.clickable { onItemClick(index) } else m },
+                    .let { m ->
+                        if (onItemClick != null) {
+                            m.clip(GarageChipShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = garageColors.pillTintAlpha))
+                                .clickable { onItemClick(index) }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        } else {
+                            m
+                        }
+                    },
             ) {
                 Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
@@ -169,6 +179,7 @@ fun ConfirmDialog(
     title: String,
     message: String,
     confirmLabel: String = "Delete",
+    confirmColor: Color = garageColors.alarmText,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -177,12 +188,32 @@ fun ConfirmDialog(
         title = { Text(title) },
         text = { Text(message) },
         confirmButton = {
-            TextButton(onClick = { onConfirm(); onDismiss() }) { Text(confirmLabel, color = garageColors.alarmText) }
+            TextButton(onClick = { onConfirm(); onDismiss() }) { Text(confirmLabel, color = confirmColor) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
+}
+
+/**
+ * A small filled color-box "button" for a secondary tap action (Edit, Update mileage, etc.) —
+ * replaces plain underlined text so it's unambiguous that the label is tappable.
+ */
+@Composable
+fun ActionLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.primary) {
+    Surface(
+        shape = GarageChipShape,
+        color = tint.copy(alpha = garageColors.pillTintAlpha),
+        contentColor = tint,
+        modifier = modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
 }
 
 @Composable

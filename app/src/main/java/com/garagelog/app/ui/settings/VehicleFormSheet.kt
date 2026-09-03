@@ -71,9 +71,10 @@ fun VehicleFormSheet(
     vehicle: VehicleEntity?,
     viewModel: GarageLogViewModel,
     onDismiss: () -> Unit,
-    onSave: (VehicleEntity, List<String>) -> Unit,
+    onSave: (VehicleEntity, List<String>, Uri?) -> Unit,
     onDelete: (String) -> Unit,
 ) {
+    var pendingPhotoUri by remember(vehicle?.id) { mutableStateOf<Uri?>(null) }
     var form by remember(vehicle?.id) {
         mutableStateOf(
             VehicleFormState(
@@ -137,11 +138,24 @@ fun VehicleFormSheet(
                     severeDeepWater = form.severeDeepWater,
                 ),
                 selectedServices.toList(),
+                pendingPhotoUri,
             )
         },
     ) {
         if (vehicle != null) {
-            VehiclePhotoPicker(vehicle = vehicle, viewModel = viewModel)
+            VehiclePhotoPicker(
+                photoPath = vehicle.photoPath,
+                pendingUri = null,
+                onPhotoPicked = { uri -> viewModel.setVehiclePhoto(vehicle, uri) },
+                onRemovePhoto = { viewModel.removeVehiclePhoto(vehicle) },
+            )
+        } else {
+            VehiclePhotoPicker(
+                photoPath = null,
+                pendingUri = pendingPhotoUri,
+                onPhotoPicked = { uri -> pendingPhotoUri = uri },
+                onRemovePhoto = { pendingPhotoUri = null },
+            )
         }
 
         LabeledTextField("Name / nickname", form.name, { form = form.copy(name = it) })
@@ -188,10 +202,16 @@ fun VehicleFormSheet(
 }
 
 @Composable
-private fun VehiclePhotoPicker(vehicle: VehicleEntity, viewModel: GarageLogViewModel) {
+private fun VehiclePhotoPicker(
+    photoPath: String?,
+    pendingUri: Uri?,
+    onPhotoPicked: (Uri) -> Unit,
+    onRemovePhoto: () -> Unit,
+) {
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        if (uri != null) viewModel.setVehiclePhoto(vehicle, uri)
+        if (uri != null) onPhotoPicked(uri)
     }
+    val hasPhoto = photoPath != null || pendingUri != null
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) {
         Box(
@@ -202,33 +222,38 @@ private fun VehiclePhotoPicker(vehicle: VehicleEntity, viewModel: GarageLogViewM
                 .clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             contentAlignment = Alignment.Center,
         ) {
-            if (vehicle.photoPath != null) {
-                AsyncImage(
-                    model = File(vehicle.photoPath),
+            when {
+                pendingUri != null -> AsyncImage(
+                    model = pendingUri,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.size(72.dp),
                 )
-            } else {
-                Icon(Icons.Filled.AddAPhoto, contentDescription = "Add photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                photoPath != null -> AsyncImage(
+                    model = File(photoPath),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(72.dp),
+                )
+                else -> Icon(Icons.Filled.AddAPhoto, contentDescription = "Add photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.width(14.dp))
         Column {
             Text(
-                if (vehicle.photoPath == null) "Add a photo" else "Change photo",
+                if (hasPhoto) "Change photo" else "Add a photo",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelMedium,
                 textDecoration = TextDecoration.Underline,
                 modifier = Modifier.clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             )
-            if (vehicle.photoPath != null) {
+            if (hasPhoto) {
                 Text(
                     "Remove photo",
                     color = garageColors.alarmText,
                     style = MaterialTheme.typography.labelMedium,
                     textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.padding(top = 4.dp).clickable { viewModel.removeVehiclePhoto(vehicle) },
+                    modifier = Modifier.padding(top = 4.dp).clickable(onClick = onRemovePhoto),
                 )
             }
         }
