@@ -2,5 +2,14 @@
 <resources>
     <color name="window_background">#161413</color>
     <color name="splash_background">#161413</color>
-    <color name="splash_icon_tint">#E4572E</color>
+    <color name="splash_icon_tint">#E43D2E</color>
+
+    <!-- Home-screen widget — mirrors ui/theme/Color.kt's Dark* palette. -->
+    <color name="widget_background">#1C1A18</color>
+    <color name="widget_chrome">#332E2A</color>
+    <color name="widget_text">#F2EEEB</color>
+    <color name="widget_text_muted">#8A827D</color>
+    <color name="widget_overdue">#E43D2E</color>
+    <color name="widget_due_soon">#E8A33D</color>
+    <color name="widget_ok">#7BC47F</color>
 </resources>

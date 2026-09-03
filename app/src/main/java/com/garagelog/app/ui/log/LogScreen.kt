@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +27,8 @@ import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
+import com.garagelog.app.ui.components.SearchField
+import com.garagelog.app.ui.components.SwipeToDeleteRow
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
@@ -41,14 +45,22 @@ private fun categoryTone(category: String): PillTone = when (category) {
 }
 
 @Composable
-fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit) {
+fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit, onDelete: (LogEntryEntity) -> Unit) {
     var categoryFilter by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
     val logs = uiState.logsFor(uiState.activeVehicleId)
         .filter { categoryFilter == null || it.category == categoryFilter }
+        .filter { entry ->
+            query.isBlank() ||
+                entry.task.contains(query, ignoreCase = true) ||
+                entry.parts.contains(query, ignoreCase = true) ||
+                entry.notes.contains(query, ignoreCase = true)
+        }
         .sortedByDescending { it.date }
 
     LazyColumn(contentPadding = GarageDimens.listContentPaddingWithFab) {
         item {
+            SearchField(query, onQueryChange = { query = it }, placeholder = "Search log entries…")
             ChipFilterRow(
                 options = LogCategory.entries.map { it.name },
                 selected = categoryFilter,
@@ -59,11 +71,16 @@ fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit) 
             GarageCard(modifier = Modifier.padding(top = 12.dp)) {
                 if (logs.isEmpty()) {
                     EmptyState(
-                        if (categoryFilter != null) "No $categoryFilter entries." else "No maintenance entries yet. Tap + to log a service.",
+                        when {
+                            query.isNotBlank() -> "No entries match \"$query\"."
+                            categoryFilter != null -> "No $categoryFilter entries."
+                            else -> "No maintenance entries yet. Tap + to log a service."
+                        },
+                        icon = Icons.Filled.Receipt,
                     )
                 } else {
                     logs.forEachIndexed { index, entry ->
-                        LogRow(entry, uiState, onClick = { onItemClick(entry) })
+                        LogRow(entry, uiState, onClick = { onItemClick(entry) }, onDelete = { onDelete(entry) })
                         if (index != logs.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
@@ -73,22 +90,24 @@ fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit) 
 }
 
 @Composable
-private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 11.dp),
-    ) {
-        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
-                Text(entry.task, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                PillBadge(text = entry.category, tone = categoryTone(entry.category))
+private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: () -> Unit, onDelete: () -> Unit) {
+    SwipeToDeleteRow(deleteTitle = "Delete this log entry?", onDelete = onDelete) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 11.dp),
+        ) {
+            androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+                    Text(entry.task, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    PillBadge(text = entry.category, tone = categoryTone(entry.category))
+                }
+                val subtitleParts = buildList {
+                    if (uiState.activeVehicleId == null) add(uiState.vehicleName(entry.vehicleId))
+                    add(formatDate(entry.date))
+                    add(formatMiles(entry.mileage))
+                    if (entry.cost != null) add(formatMoney(entry.cost))
+                }
+                Text(subtitleParts.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
-            val subtitleParts = buildList {
-                if (uiState.activeVehicleId == null) add(uiState.vehicleName(entry.vehicleId))
-                add(formatDate(entry.date))
-                add(formatMiles(entry.mileage))
-                if (entry.cost != null) add(formatMoney(entry.cost))
-            }
-            Text(subtitleParts.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

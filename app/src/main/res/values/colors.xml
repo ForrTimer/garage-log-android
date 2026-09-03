@@ -3,5 +3,15 @@
     <!-- light default: warm paper ground -->
     <color name="window_background">#EDEAE6</color>
     <color name="splash_background">#EDEAE6</color>
-    <color name="splash_icon_tint">#C63F17</color>
+    <color name="splash_icon_tint">#C62B17</color>
+
+    <!-- Home-screen widget — mirrors ui/theme/Color.kt's Light* palette, since Glance widgets
+         render outside Compose and can't read GarageColors directly. -->
+    <color name="widget_background">#F8F6F3</color>
+    <color name="widget_chrome">#CCC2B4</color>
+    <color name="widget_text">#191715</color>
+    <color name="widget_text_muted">#635C55</color>
+    <color name="widget_overdue">#C62B17</color>
+    <color name="widget_due_soon">#8A5A08</color>
+    <color name="widget_ok">#316B3B</color>
 </resources>

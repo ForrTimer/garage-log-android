@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,7 +46,7 @@ fun CostTrendScreen(uiState: GarageLogUiState, onBack: () -> Unit) {
 
         LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
             if (vehicles.isEmpty()) {
-                item { EmptyState("No vehicles yet.") }
+                item { EmptyState("No vehicles yet.", icon = Icons.Filled.DirectionsCar) }
             }
             vehicles.forEach { v ->
                 val logs = uiState.logs.filter { it.vehicleId == v.id && it.cost != null }
@@ -53,7 +55,7 @@ fun CostTrendScreen(uiState: GarageLogUiState, onBack: () -> Unit) {
                     GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
                         Text("Monthly spend", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (logs.isEmpty()) {
-                            EmptyState("No costed log entries yet.")
+                            EmptyState("No costed log entries yet.", icon = Icons.Filled.BarChart)
                         } else {
                             MonthlySpendChart(logs)
                         }
@@ -63,7 +65,7 @@ fun CostTrendScreen(uiState: GarageLogUiState, onBack: () -> Unit) {
                     GarageCard {
                         Text("By category", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (logs.isEmpty()) {
-                            EmptyState("No costed log entries yet.")
+                            EmptyState("No costed log entries yet.", icon = Icons.Filled.BarChart)
                         } else {
                             CategoryBreakdown(logs)
                         }

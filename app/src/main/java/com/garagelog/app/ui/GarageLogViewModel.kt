@@ -176,7 +176,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         selectTab(AppTab.Dashboard)
     }
 
-    private fun requestSync() = locator.requestSync()
+    private suspend fun requestSync() = locator.requestSync()
 
     fun saveVehicle(vehicle: VehicleEntity) = viewModelScope.launch {
         locator.vehicleRepository.upsert(vehicle.copy(updatedAt = System.currentTimeMillis()))
@@ -476,7 +476,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         _messages.emit("Signed out.")
     }
 
-    fun syncNow() = requestSync()
+    fun syncNow() = viewModelScope.launch { requestSync() }
 
     fun saveNotificationPrefs(context: Context, prefs: NotificationPrefsEntity) = viewModelScope.launch {
         locator.notificationPrefsRepository.upsert(prefs)

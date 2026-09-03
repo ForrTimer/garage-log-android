@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Construction
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,7 +58,10 @@ fun BuildScreen(
         if (vehicles.isEmpty()) {
             item {
                 val vehicleName = uiState.activeVehicle?.name
-                EmptyState("No build plan${vehicleName?.let { " for $it" } ?: ""} yet. Tap + to add a step — useful for a rebuild project.")
+                EmptyState(
+                    "No build plan${vehicleName?.let { " for $it" } ?: ""} yet. Tap + to add a step — useful for a rebuild project.",
+                    icon = Icons.Filled.Construction,
+                )
             }
         }
         vehicles.forEach { v ->

@@ -88,4 +88,5 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.okhttp)
+    implementation(libs.androidx.glance.appwidget)
 }

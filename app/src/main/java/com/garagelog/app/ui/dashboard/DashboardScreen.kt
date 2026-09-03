@@ -26,12 +26,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,14 +45,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.ui.AppTab
 import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.components.ActionLink
@@ -68,9 +73,12 @@ import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
 import java.io.File
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     uiState: GarageLogUiState,
+    syncStatus: SyncStatus,
+    onRefresh: () -> Unit,
     onEditVehicle: (VehicleEntity) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenSchedule: () -> Unit,
@@ -84,6 +92,7 @@ fun DashboardScreen(
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
     val canReorder = uiState.activeVehicleId == null && vehicles.size > 1
     val baseOrderIds = vehicles.map { it.id }
+    val haptics = LocalHapticFeedback.current
 
     // While the user is actively dragging (or waiting for the reorder to round-trip through the
     // database), the dragged arrangement lives here instead of being derived from `vehicles` —
@@ -102,11 +111,12 @@ fun DashboardScreen(
 
     val orderedVehicles = orderIds.mapNotNull { id -> vehicles.find { it.id == id } }
 
+    PullToRefreshBox(isRefreshing = syncStatus.isSyncing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.weight(1f), contentPadding = GarageDimens.listContentPadding) {
             if (vehicles.isEmpty()) {
                 item {
-                    EmptyState("No vehicles yet.")
+                    EmptyState("No vehicles yet.", icon = Icons.Filled.DirectionsCar)
                     OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth()) { Text("Add a vehicle") }
                 }
             }
@@ -126,7 +136,12 @@ fun DashboardScreen(
                         onOpenVehicleCostTrend = onOpenVehicleCostTrend,
                         onSetVehiclePhoto = onSetVehiclePhoto,
                         showDragHandle = canReorder,
-                        onDragStart = { draggingId = v.id; dragOffset = 0f; liveOrderIds = baseOrderIds },
+                        onDragStart = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            draggingId = v.id
+                            dragOffset = 0f
+                            liveOrderIds = baseOrderIds
+                        },
                         onDrag = onDrag@{ delta ->
                             dragOffset += delta
                             val id = draggingId ?: return@onDrag
@@ -143,6 +158,7 @@ fun DashboardScreen(
                                 if (from != -1 && to != -1 && from != to) {
                                     dragOffset += dragged.offset - target.offset
                                     liveOrderIds = current.toMutableList().apply { add(to, removeAt(from)) }
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }
                             }
                         },
@@ -165,6 +181,7 @@ fun DashboardScreen(
                 OutlinedButton(onClick = onOpenCostTrend, modifier = Modifier.weight(1f)) { Text("Cost trend") }
             }
         }
+    }
     }
 }
 

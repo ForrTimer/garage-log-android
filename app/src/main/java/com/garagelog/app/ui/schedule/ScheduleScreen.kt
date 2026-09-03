@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -80,7 +81,12 @@ fun ScheduleScreen(
 
         LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
             if (vehicles.none { v -> uiState.schedules.any { it.vehicleId == v.id } }) {
-                item { EmptyState("No maintenance intervals tracked yet. Tap + to add one, like \"Oil change every 5,000 mi.\"") }
+                item {
+                    EmptyState(
+                        "No maintenance intervals tracked yet. Tap + to add one, like \"Oil change every 5,000 mi.\"",
+                        icon = Icons.Filled.Build,
+                    )
+                }
             }
             vehicles.forEach { v ->
                 val schedules = uiState.schedules.filter { it.vehicleId == v.id }

@@ -106,6 +106,7 @@ private sealed class Sheet {
 @Composable
 fun GarageLogApp(viewModel: GarageLogViewModel) {
     val uiState by viewModel.uiState.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
     val context = LocalContext.current
 
@@ -283,6 +284,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     when (mainTabs[page]) {
                         AppTab.Dashboard -> DashboardScreen(
                             uiState = uiState,
+                            syncStatus = syncStatus,
+                            onRefresh = viewModel::syncNow,
                             onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                             onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
                             onOpenSchedule = viewModel::openSchedule,
@@ -296,10 +299,12 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         AppTab.Log -> LogScreen(
                             uiState = uiState,
                             onItemClick = { activeSheet = Sheet.LogForm(it) },
+                            onDelete = { viewModel.deleteLog(it.id) },
                         )
                         AppTab.Issues -> IssuesScreen(
                             uiState = uiState,
                             onItemClick = { activeSheet = Sheet.IssueForm(it) },
+                            onDelete = { viewModel.deleteIssue(it.id) },
                         )
                         AppTab.Build -> BuildScreen(
                             uiState = uiState,

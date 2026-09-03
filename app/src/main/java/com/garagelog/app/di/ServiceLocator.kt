@@ -30,6 +30,8 @@ import com.garagelog.app.data.sync.DriveApiClient
 import com.garagelog.app.data.sync.SyncRepository
 import com.garagelog.app.data.sync.SyncStatusHolder
 import com.garagelog.app.data.sync.SyncWorker
+import com.garagelog.app.widget.GarageLogWidget
+import androidx.glance.appwidget.updateAll
 
 /**
  * Hand-rolled composition root — no DI framework needed for a single-user local app.
@@ -85,8 +87,12 @@ class ServiceLocator(context: Context) {
     )
 
     /** Fire-and-forget debounced sync request — safe to call after every mutation, signed in or not. */
-    fun requestSync() {
+    suspend fun requestSync() {
         SyncWorker.enqueueOneOff(appContext)
+        // Piggyback the home-screen widget's refresh on the same "something changed" signal
+        // every mutation already calls, rather than threading a widget update through every
+        // individual save/delete call site.
+        runCatching { GarageLogWidget().updateAll(appContext) }
     }
 
     suspend fun seedIfEmpty() {
