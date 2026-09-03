@@ -25,4 +25,7 @@ object CommonMaintenanceServices {
     )
 
     val byName: Map<String, CommonServiceTemplate> = all.associateBy { it.name }
+
+    /** Pre-checked by default when adding a new vehicle — the two services every owner tracks. */
+    val defaultSelected: Set<String> = setOf("Oil change", "Tire rotation")
 }

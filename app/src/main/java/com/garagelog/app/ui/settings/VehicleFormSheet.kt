@@ -11,24 +11,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogViewModel
-import com.garagelog.app.ui.components.ConfirmDialog
+import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.CommonMaintenanceServices
@@ -74,7 +66,6 @@ private data class VehicleFormState(
     val severeDeepWater: Boolean,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VehicleFormSheet(
     vehicle: VehicleEntity?,
@@ -109,112 +100,90 @@ fun VehicleFormSheet(
         )
     }
     var selectedServices by remember(vehicle?.id) {
-        mutableStateOf(if (vehicle == null) setOf("Oil change", "Tire rotation") else emptySet())
+        mutableStateOf(if (vehicle == null) CommonMaintenanceServices.defaultSelected else emptySet())
     }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding(),
-        ) {
-            Text(if (vehicle == null) "Add vehicle" else "Edit vehicle", style = MaterialTheme.typography.titleLarge)
+    FormSheetScaffold(
+        title = if (vehicle == null) "Add vehicle" else "Edit vehicle",
+        onDismiss = onDismiss,
+        showDelete = vehicle != null,
+        deleteTitle = "Delete vehicle?",
+        deleteMessage = "This will also delete all of its logs, issues, build phases, and maintenance schedules. This can't be undone.",
+        onDelete = { vehicle?.let { onDelete(it.id) } },
+        onSave = {
+            onSave(
+                VehicleEntity(
+                    id = vehicle?.id ?: UUID.randomUUID().toString(),
+                    name = form.name.trim().ifBlank { "Unnamed vehicle" },
+                    year = form.year.trim().toIntOrNull(),
+                    make = form.make.trim(),
+                    model = form.model.trim(),
+                    engine = form.engine.trim(),
+                    drivetrain = form.drivetrain.trim(),
+                    vin = form.vin.trim(),
+                    color = form.color.trim(),
+                    miles = form.miles.trim().toIntOrNull(),
+                    milesDate = todayIso(),
+                    role = form.role.trim(),
+                    notes = form.notes.trim(),
+                    sortOrder = vehicle?.sortOrder ?: 0,
+                    severeDustyAreas = form.severeDustyAreas,
+                    severeTowing = form.severeTowing,
+                    severeExtendedIdling = form.severeExtendedIdling,
+                    severeLowSpeedColdWeather = form.severeLowSpeedColdWeather,
+                    severeHeavyCityTrafficHot = form.severeHeavyCityTrafficHot,
+                    severeMountainousHot = form.severeMountainousHot,
+                    severeFrequentTowing = form.severeFrequentTowing,
+                    severeDeepWater = form.severeDeepWater,
+                ),
+                selectedServices.toList(),
+            )
+        },
+    ) {
+        if (vehicle != null) {
+            VehiclePhotoPicker(vehicle = vehicle, viewModel = viewModel)
+        }
 
-            if (vehicle != null) {
-                VehiclePhotoPicker(vehicle = vehicle, viewModel = viewModel)
-            }
+        LabeledTextField("Name / nickname", form.name, { form = form.copy(name = it) })
+        LabeledTextField("Year", form.year, { form = form.copy(year = it) }, keyboardType = KeyboardType.Number)
+        LabeledTextField("Make", form.make, { form = form.copy(make = it) })
+        LabeledTextField("Model", form.model, { form = form.copy(model = it) })
+        LabeledTextField("Engine", form.engine, { form = form.copy(engine = it) })
+        LabeledTextField("Drivetrain", form.drivetrain, { form = form.copy(drivetrain = it) })
+        LabeledTextField("VIN", form.vin, { form = form.copy(vin = it) })
+        LabeledTextField("Color", form.color, { form = form.copy(color = it) })
+        LabeledTextField("Current mileage", form.miles, { form = form.copy(miles = it) }, keyboardType = KeyboardType.Number)
+        LabeledTextField("Role / notes", form.role, { form = form.copy(role = it) }, singleLine = false, minLines = 2)
+        LabeledTextField("Free-form notes", form.notes, { form = form.copy(notes = it) }, singleLine = false, minLines = 2)
 
-            LabeledTextField("Name / nickname", form.name, { form = form.copy(name = it) })
-            LabeledTextField("Year", form.year, { form = form.copy(year = it) }, keyboardType = KeyboardType.Number)
-            LabeledTextField("Make", form.make, { form = form.copy(make = it) })
-            LabeledTextField("Model", form.model, { form = form.copy(model = it) })
-            LabeledTextField("Engine", form.engine, { form = form.copy(engine = it) })
-            LabeledTextField("Drivetrain", form.drivetrain, { form = form.copy(drivetrain = it) })
-            LabeledTextField("VIN", form.vin, { form = form.copy(vin = it) })
-            LabeledTextField("Color", form.color, { form = form.copy(color = it) })
-            LabeledTextField("Current mileage", form.miles, { form = form.copy(miles = it) }, keyboardType = KeyboardType.Number)
-            LabeledTextField("Role / notes", form.role, { form = form.copy(role = it) }, singleLine = false, minLines = 2)
-            LabeledTextField("Free-form notes", form.notes, { form = form.copy(notes = it) }, singleLine = false, minLines = 2)
+        Text("Severe-duty conditions", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
+        Text(
+            "Any of these checked halves computed maintenance intervals, per typical OEM severe-duty schedules.",
+            style = MaterialTheme.typography.bodySmall,
+            color = garageColors.textMuted,
+        )
+        CheckboxRow("Driving in dusty areas", form.severeDustyAreas) { form = form.copy(severeDustyAreas = it) }
+        CheckboxRow("Towing a trailer", form.severeTowing) { form = form.copy(severeTowing = it) }
+        CheckboxRow("Idling for extended periods", form.severeExtendedIdling) { form = form.copy(severeExtendedIdling = it) }
+        CheckboxRow("Low speed / short trips in below-freezing temps", form.severeLowSpeedColdWeather) { form = form.copy(severeLowSpeedColdWeather = it) }
+        CheckboxRow("Heavy city traffic above 90°F", form.severeHeavyCityTrafficHot) { form = form.copy(severeHeavyCityTrafficHot = it) }
+        CheckboxRow("Hilly/mountainous terrain above 90°F", form.severeMountainousHot) { form = form.copy(severeMountainousHot = it) }
+        CheckboxRow("Frequent trailer towing", form.severeFrequentTowing) { form = form.copy(severeFrequentTowing = it) }
+        CheckboxRow("Driven through deep water", form.severeDeepWater) { form = form.copy(severeDeepWater = it) }
 
-            Text("Severe-duty conditions", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
+        if (vehicle == null) {
+            Text("Starter maintenance schedule", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
             Text(
-                "Any of these checked halves computed maintenance intervals, per typical OEM severe-duty schedules.",
+                "Check the services you want tracked — default intervals get added, which you can edit any time.",
                 style = MaterialTheme.typography.bodySmall,
                 color = garageColors.textMuted,
             )
-            CheckboxRow("Driving in dusty areas", form.severeDustyAreas) { form = form.copy(severeDustyAreas = it) }
-            CheckboxRow("Towing a trailer", form.severeTowing) { form = form.copy(severeTowing = it) }
-            CheckboxRow("Idling for extended periods", form.severeExtendedIdling) { form = form.copy(severeExtendedIdling = it) }
-            CheckboxRow("Low speed / short trips in below-freezing temps", form.severeLowSpeedColdWeather) { form = form.copy(severeLowSpeedColdWeather = it) }
-            CheckboxRow("Heavy city traffic above 90°F", form.severeHeavyCityTrafficHot) { form = form.copy(severeHeavyCityTrafficHot = it) }
-            CheckboxRow("Hilly/mountainous terrain above 90°F", form.severeMountainousHot) { form = form.copy(severeMountainousHot = it) }
-            CheckboxRow("Frequent trailer towing", form.severeFrequentTowing) { form = form.copy(severeFrequentTowing = it) }
-            CheckboxRow("Driven through deep water", form.severeDeepWater) { form = form.copy(severeDeepWater = it) }
-
-            if (vehicle == null) {
-                Text("Starter maintenance schedule", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
-                Text(
-                    "Check the services you want tracked — default intervals get added, which you can edit any time.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = garageColors.textMuted,
-                )
-                CommonMaintenanceServices.all.forEach { template ->
-                    CheckboxRow(template.name, template.name in selectedServices) { checked ->
-                        selectedServices = if (checked) selectedServices + template.name else selectedServices - template.name
-                    }
+            CommonMaintenanceServices.all.forEach { template ->
+                CheckboxRow(template.name, template.name in selectedServices) { checked ->
+                    selectedServices = if (checked) selectedServices + template.name else selectedServices - template.name
                 }
-            }
-
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 24.dp)) {
-                if (vehicle != null) {
-                    OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f)) {
-                        Text("Delete", color = garageColors.alarmText)
-                    }
-                    Spacer(Modifier.width(10.dp))
-                }
-                Button(
-                    onClick = {
-                        onSave(
-                            VehicleEntity(
-                                id = vehicle?.id ?: UUID.randomUUID().toString(),
-                                name = form.name.trim().ifBlank { "Unnamed vehicle" },
-                                year = form.year.trim().toIntOrNull(),
-                                make = form.make.trim(),
-                                model = form.model.trim(),
-                                engine = form.engine.trim(),
-                                drivetrain = form.drivetrain.trim(),
-                                vin = form.vin.trim(),
-                                color = form.color.trim(),
-                                miles = form.miles.trim().toIntOrNull(),
-                                milesDate = todayIso(),
-                                role = form.role.trim(),
-                                notes = form.notes.trim(),
-                                sortOrder = vehicle?.sortOrder ?: 0,
-                                severeDustyAreas = form.severeDustyAreas,
-                                severeTowing = form.severeTowing,
-                                severeExtendedIdling = form.severeExtendedIdling,
-                                severeLowSpeedColdWeather = form.severeLowSpeedColdWeather,
-                                severeHeavyCityTrafficHot = form.severeHeavyCityTrafficHot,
-                                severeMountainousHot = form.severeMountainousHot,
-                                severeFrequentTowing = form.severeFrequentTowing,
-                                severeDeepWater = form.severeDeepWater,
-                            ),
-                            selectedServices.toList(),
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Save") }
             }
         }
-    }
-
-    if (showDeleteConfirm && vehicle != null) {
-        ConfirmDialog(
-            title = "Delete vehicle?",
-            message = "This will also delete all of its logs, issues, build phases, and maintenance schedules. This can't be undone.",
-            onConfirm = { onDelete(vehicle.id) },
-            onDismiss = { showDeleteConfirm = false },
-        )
     }
 }
 
