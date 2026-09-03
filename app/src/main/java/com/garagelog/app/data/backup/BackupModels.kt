@@ -1,5 +1,10 @@
 package com.garagelog.app.data.backup
 
+import com.garagelog.app.data.entity.IssuePriority
+import com.garagelog.app.data.entity.IssueStatus
+import com.garagelog.app.data.entity.LogCategory
+import com.garagelog.app.data.entity.PhaseStatus
+import com.garagelog.app.data.entity.StepPriority
 import kotlinx.serialization.Serializable
 
 /**
@@ -53,7 +58,7 @@ data class BackupLog(
     val vehicleId: String,
     val date: String = "",
     val mileage: String? = null,
-    val category: String = "Routine",
+    val category: String = LogCategory.Routine.name,
     val task: String = "",
     val cost: String? = null,
     val parts: String = "",
@@ -65,8 +70,8 @@ data class BackupIssue(
     val id: String,
     val vehicleId: String,
     val title: String = "",
-    val status: String = "Open",
-    val priority: String = "Normal",
+    val status: String = IssueStatus.Open.label,
+    val priority: String = IssuePriority.Normal.label,
     val dateOpened: String = "",
     val dateResolved: String = "",
     val description: String = "",
@@ -77,7 +82,7 @@ data class BackupPhase(
     val id: String,
     val vehicleId: String,
     val phase: String = "",
-    val status: String = "Not started",
+    val status: String = PhaseStatus.NotStarted.label,
     val order: String? = "0",
     val notes: String = "",
     val priorityFilter: String? = null,
@@ -91,8 +96,8 @@ data class BackupStep(
     val phaseId: String? = null,
     val title: String = "",
     val notes: String = "",
-    val priority: String = "Medium",
-    val status: String = "Not started",
+    val priority: String = StepPriority.Medium.name,
+    val status: String = PhaseStatus.NotStarted.label,
     val estimatedCost: String? = null,
     val actualCost: String? = null,
     val order: String? = "0",
