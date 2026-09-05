@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -130,14 +132,23 @@ fun PillBadge(text: String, tone: PillTone, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * [accentColor], when set, draws a colored leading bar down the card's left edge — a quiet
+ * "this needs your attention" cue that doesn't depend on the reader parsing a pill's color.
+ */
 @Composable
-fun GarageCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun GarageCard(modifier: Modifier = Modifier, accentColor: Color? = null, content: @Composable ColumnScope.() -> Unit) {
     Surface(
         shape = GarageCardShape,
         color = MaterialTheme.colorScheme.surface,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(20.dp), content = content)
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            if (accentColor != null) {
+                Box(modifier = Modifier.fillMaxHeight().width(4.dp).background(accentColor))
+            }
+            Column(modifier = Modifier.padding(20.dp).weight(1f), content = content)
+        }
     }
 }
 
@@ -325,16 +336,27 @@ fun ActionLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
 }
 
 @Composable
-fun SegmentedControl(options: List<String>, selected: String, onSelect: (String) -> Unit) {
+fun SegmentedControl(
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    // Lets one specific option (e.g. "Safety-critical") escalate past the normal
+    // primary-fill selected look, without changing every other SegmentedControl in the app.
+    // Return null for an option to keep the default styling.
+    accentColorFor: (@Composable (String) -> Color?)? = null,
+) {
     val colors = MaterialTheme.colorScheme
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
         options.forEach { option ->
             val isSelected = option == selected
+            val accent = accentColorFor?.invoke(option)
+            val fillColor = if (isSelected) (accent ?: colors.primary) else colors.surfaceVariant
+            val textColor = if (isSelected) (if (accent != null) Color.White else colors.onPrimary) else colors.onSurfaceVariant
             Surface(
                 shape = GarageChipShape,
-                color = if (isSelected) colors.primary else colors.surfaceVariant,
-                contentColor = if (isSelected) colors.onPrimary else colors.onSurfaceVariant,
-                border = BorderStroke(1.dp, if (isSelected) colors.primary else colors.outline),
+                color = fillColor,
+                contentColor = textColor,
+                border = BorderStroke(1.dp, if (isSelected) fillColor else colors.outline),
                 modifier = Modifier.clickable { onSelect(option) },
             ) {
                 Box(

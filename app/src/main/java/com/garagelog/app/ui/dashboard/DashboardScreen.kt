@@ -4,6 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -40,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +75,7 @@ import com.garagelog.app.util.computeDueInfo
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
+import kotlinx.coroutines.launch
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,6 +113,7 @@ fun DashboardScreen(
     val listState = rememberLazyListState()
     var draggingId by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    val dragScope = rememberCoroutineScope()
 
     val orderedVehicles = orderIds.mapNotNull { id -> vehicles.find { it.id == id } }
 
@@ -163,9 +169,20 @@ fun DashboardScreen(
                             }
                         },
                         onDragEnd = {
-                            draggingId = null
-                            dragOffset = 0f
                             liveOrderIds?.let { onReorderVehicles(it) }
+                            // Spring the released card back to rest instead of snapping it — the
+                            // dragged item keeps its raised z-index/offset treatment until the
+                            // animation finishes, so it settles into its new slot rather than
+                            // teleporting there.
+                            val startOffset = dragOffset
+                            dragScope.launch {
+                                animate(
+                                    initialValue = startOffset,
+                                    targetValue = 0f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                                ) { value, _ -> dragOffset = value }
+                                draggingId = null
+                            }
                         },
                     )
                 }
@@ -216,7 +233,16 @@ private fun VehicleDashboardCard(
         if (uri != null) onSetVehiclePhoto(v, uri)
     }
 
-    GarageCard {
+    // A quiet leading-edge cue for urgency that doesn't require reading a pill — an overdue
+    // vehicle should look different from an on-track one at a glance, not just same-weight card
+    // with different colored text buried inside it.
+    val cardAccent = when {
+        dueItems.any { it.second.status == DueStatus.OVERDUE } -> garageColors.alarm
+        dueItems.any { it.second.status == DueStatus.DUE_SOON } -> garageColors.warn
+        else -> null
+    }
+
+    GarageCard(accentColor = cardAccent) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier

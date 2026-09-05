@@ -22,6 +22,7 @@ import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.PhotoGridSection
 import com.garagelog.app.ui.components.SegmentedControl
 import com.garagelog.app.ui.components.VehicleDropdown
+import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.todayIso
 import java.util.UUID
 
@@ -100,6 +101,7 @@ fun IssueFormSheet(
             options = listOf(IssuePriority.Normal.label, IssuePriority.SafetyCritical.label),
             selected = form.priority,
             onSelect = { form = form.copy(priority = it) },
+            accentColorFor = { option -> if (option == IssuePriority.SafetyCritical.label) garageColors.alarm else null },
         )
 
         DateField("Date opened", form.dateOpened) { form = form.copy(dateOpened = it) }

@@ -34,10 +34,13 @@ import com.garagelog.app.ui.components.SwipeToDeleteRow
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.util.formatDate
 
+// Being "Open" is an issue's default, majority-of-the-time state, not by itself an alarm — using
+// the same red as a genuinely urgent overdue/safety-critical item everywhere would make that red
+// wallpaper instead of a signal. Safety-critical gets its own escalation (see IssueRow) instead.
 private fun statusTone(status: String): PillTone = when (status) {
     IssueStatus.Resolved.label -> PillTone.Resolved
     IssueStatus.InProgress.label -> PillTone.Progress
-    else -> PillTone.Open
+    else -> PillTone.Upcoming
 }
 
 private fun statusRank(status: String): Int = when (status) {
@@ -97,11 +100,15 @@ private fun IssueRow(issue: IssueEntity, uiState: GarageLogUiState, onClick: () 
             Column(modifier = Modifier.fillMaxWidth()) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(issue.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    PillBadge(text = issue.status, tone = statusTone(issue.status))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (issue.priority == IssuePriority.SafetyCritical.label) {
+                            PillBadge(text = "Safety-critical", tone = PillTone.Open)
+                        }
+                        PillBadge(text = issue.status, tone = statusTone(issue.status))
+                    }
                 }
                 val subtitleParts = buildList {
                     if (uiState.activeVehicleId == null) add(uiState.vehicleName(issue.vehicleId))
-                    if (issue.priority == IssuePriority.SafetyCritical.label) add("⚠ Safety-critical")
                     add("opened ${formatDate(issue.dateOpened)}")
                 }
                 Text(subtitleParts.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)

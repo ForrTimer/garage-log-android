@@ -21,13 +21,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.BuildPhaseEntity
 import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.PhaseStatus
 import com.garagelog.app.data.entity.StepPriority
 import com.garagelog.app.ui.GarageLogUiState
+import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
@@ -37,10 +37,12 @@ import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.formatMoney
 
+// "Not started" is just a future to-do, not an alarm — reserving red for genuine urgency
+// elsewhere keeps that color meaningful when it does show up.
 private fun statusTone(status: String): PillTone = when (status) {
     PhaseStatus.Done.label -> PillTone.Resolved
     PhaseStatus.InProgress.label -> PillTone.Progress
-    else -> PillTone.Open
+    else -> PillTone.Upcoming
 }
 
 @Composable
@@ -97,13 +99,7 @@ fun BuildScreen(
                 }
             }
             item {
-                Text(
-                    "+ Add phase",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.labelMedium,
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.padding(top = 6.dp, bottom = 4.dp).clickable { onAddPhase(v.id) },
-                )
+                ActionLink("+ Add phase", onClick = { onAddPhase(v.id) }, modifier = Modifier.padding(top = 6.dp, bottom = 4.dp))
             }
         }
     }
@@ -136,22 +132,10 @@ private fun PhaseCard(
             Text(phase.notes, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
         }
         Row(modifier = Modifier.padding(top = 6.dp)) {
-            Text(
-                "Edit phase",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.labelSmall,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable(onClick = onPhaseClick),
-            )
+            ActionLink("Edit phase", onClick = onPhaseClick)
             if (phase.notes.isNotBlank() && steps.isEmpty()) {
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    "Import steps from notes",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.labelSmall,
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable(onClick = onImportStepsFromNotes),
-                )
+                Spacer(Modifier.width(8.dp))
+                ActionLink("Import steps from notes", onClick = onImportStepsFromNotes)
             }
         }
         if (expanded) {

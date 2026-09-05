@@ -145,9 +145,12 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     val showingSubScreen = uiState.showScheduleScreen || uiState.showCostTrendScreen
     val showFab = !showingSubScreen && uiState.currentTab != AppTab.Settings && uiState.currentTab != AppTab.Dashboard
 
+    // Deliberately not garageColors.alarm here — that red is reserved for genuine urgency
+    // (overdue maintenance, safety-critical issues). Reusing it for "this is the selected tab"
+    // would make every screen look like something's wrong just because you're looking at it.
     val itemColors = NavigationBarItemDefaults.colors(
-        selectedIconColor = garageColors.alarm,
-        selectedTextColor = garageColors.alarm,
+        selectedIconColor = garageColors.info,
+        selectedTextColor = garageColors.info,
         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
         indicatorColor = Color.Transparent,
