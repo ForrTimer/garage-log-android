@@ -25,7 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +44,6 @@ import com.garagelog.app.util.CommonMaintenanceServices
 import com.garagelog.app.util.todayIso
 import java.io.File
 import java.util.UUID
-import kotlinx.coroutines.launch
 
 private data class VehicleFormState(
     val name: String,
@@ -83,10 +82,11 @@ fun VehicleFormSheet(
     // itself can't wait for Save either: the picker's content:// Uri only grants short-lived read
     // access, so holding onto just the Uri until Save was tapped made the photo go unreadable
     // within seconds. Copying immediately and holding the resulting stable file path instead
-    // avoids both problems.
-    var pendingPhotoPath by remember(vehicle?.id) { mutableStateOf<String?>(null) }
-    var currentPhotoPath by remember(vehicle?.id) { mutableStateOf(vehicle?.photoPath) }
-    val photoScope = rememberCoroutineScope()
+    // avoids both problems. rememberSaveable (not remember) because launching the system photo
+    // picker backgrounds this activity, and some devices reclaim enough of it in the meantime
+    // that plain `remember` state doesn't survive the round trip back.
+    var pendingPhotoPath by rememberSaveable(vehicle?.id) { mutableStateOf<String?>(null) }
+    var currentPhotoPath by rememberSaveable(vehicle?.id) { mutableStateOf(vehicle?.photoPath) }
     var form by remember(vehicle?.id) {
         mutableStateOf(
             VehicleFormState(
@@ -170,10 +170,7 @@ fun VehicleFormSheet(
         VehiclePhotoPicker(
             photoPath = pendingPhotoPath ?: currentPhotoPath,
             onPhotoPicked = { uri ->
-                photoScope.launch {
-                    val copied = viewModel.copyPhotoToAppStorage(uri)
-                    if (copied != null) pendingPhotoPath = copied
-                }
+                viewModel.copyPhotoToAppStorage(uri) { copied -> if (copied != null) pendingPhotoPath = copied }
             },
             onRemovePhoto = {
                 pendingPhotoPath?.let { viewModel.deletePhotoFile(it) }
