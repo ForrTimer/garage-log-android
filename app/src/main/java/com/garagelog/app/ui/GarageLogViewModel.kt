@@ -196,6 +196,21 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         requestSync()
     }
 
+    /**
+     * Copies a freshly-picked photo into app storage right away and hands back the resulting
+     * stable file path — used by VehicleFormSheet so the sheet can preview/carry the photo
+     * through to Save without holding onto the picker's own content:// Uri. That Uri's read
+     * grant is short-lived (Android's Photo Picker doesn't intend it to be held onto), so a photo
+     * held only as a Uri until Save was tapped would go unreadable within seconds.
+     */
+    suspend fun copyPhotoToAppStorage(sourceUri: Uri): String? =
+        locator.photoStore.copyIntoAppStorage(sourceUri, UUID.randomUUID().toString())
+
+    /** Deletes a photo file directly — for a staged-but-not-yet-saved copy from [copyPhotoToAppStorage]. */
+    fun deletePhotoFile(path: String) {
+        locator.photoStore.delete(path)
+    }
+
     fun setVehiclePhoto(vehicle: VehicleEntity, sourceUri: Uri) = viewModelScope.launch {
         val path = locator.photoStore.copyIntoAppStorage(sourceUri, UUID.randomUUID().toString()) ?: return@launch
         vehicle.photoPath?.let { locator.photoStore.delete(it) }

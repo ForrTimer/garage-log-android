@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import com.garagelog.app.util.CommonMaintenanceServices
 import com.garagelog.app.util.todayIso
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.launch
 
 private data class VehicleFormState(
     val name: String,
@@ -71,16 +73,20 @@ fun VehicleFormSheet(
     vehicle: VehicleEntity?,
     viewModel: GarageLogViewModel,
     onDismiss: () -> Unit,
-    onSave: (VehicleEntity, List<String>, Uri?) -> Unit,
+    onSave: (VehicleEntity, List<String>) -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    // Newly picked photos are staged here rather than written immediately, even when editing an
-    // existing vehicle — writing straight to the DB used to race with Save reconstructing the
-    // VehicleEntity from scratch (which never carried photoPath forward), silently wiping the
-    // photo back to null the moment the sheet was saved. Deferring the write to Save time, using
-    // the same path the "create a new vehicle with a photo" flow already relied on, avoids that.
-    var pendingPhotoUri by remember(vehicle?.id) { mutableStateOf<Uri?>(null) }
+    // A freshly-picked photo is copied into app storage the instant it's picked (see
+    // onPhotoPicked below) rather than saved to the DB right away — writing straight to the DB
+    // used to race with Save reconstructing the VehicleEntity from scratch (which never carried
+    // photoPath forward), silently wiping the photo the moment the sheet was saved. But the copy
+    // itself can't wait for Save either: the picker's content:// Uri only grants short-lived read
+    // access, so holding onto just the Uri until Save was tapped made the photo go unreadable
+    // within seconds. Copying immediately and holding the resulting stable file path instead
+    // avoids both problems.
+    var pendingPhotoPath by remember(vehicle?.id) { mutableStateOf<String?>(null) }
     var currentPhotoPath by remember(vehicle?.id) { mutableStateOf(vehicle?.photoPath) }
+    val photoScope = rememberCoroutineScope()
     var form by remember(vehicle?.id) {
         mutableStateOf(
             VehicleFormState(
@@ -126,6 +132,11 @@ fun VehicleFormSheet(
         deleteMessage = "This will also delete all of its logs, issues, build phases, and maintenance schedules. This can't be undone.",
         onDelete = { vehicle?.let { onDelete(it.id) } },
         onSave = {
+            // A pending photo replacing an already-saved one leaves the old file orphaned on
+            // disk once this commits — clean it up now that it's actually being superseded.
+            if (pendingPhotoPath != null && currentPhotoPath != null && pendingPhotoPath != currentPhotoPath) {
+                viewModel.deletePhotoFile(currentPhotoPath!!)
+            }
             onSave(
                 VehicleEntity(
                     id = vehicle?.id ?: UUID.randomUUID().toString(),
@@ -142,7 +153,7 @@ fun VehicleFormSheet(
                     role = form.role.trim(),
                     notes = form.notes.trim(),
                     sortOrder = vehicle?.sortOrder ?: 0,
-                    photoPath = currentPhotoPath,
+                    photoPath = pendingPhotoPath ?: currentPhotoPath,
                     severeDustyAreas = form.severeDustyAreas,
                     severeTowing = form.severeTowing,
                     severeExtendedIdling = form.severeExtendedIdling,
@@ -153,16 +164,20 @@ fun VehicleFormSheet(
                     severeDeepWater = form.severeDeepWater,
                 ),
                 selectedServices.toList(),
-                pendingPhotoUri,
             )
         },
     ) {
         VehiclePhotoPicker(
-            photoPath = currentPhotoPath,
-            pendingUri = pendingPhotoUri,
-            onPhotoPicked = { uri -> pendingPhotoUri = uri },
+            photoPath = pendingPhotoPath ?: currentPhotoPath,
+            onPhotoPicked = { uri ->
+                photoScope.launch {
+                    val copied = viewModel.copyPhotoToAppStorage(uri)
+                    if (copied != null) pendingPhotoPath = copied
+                }
+            },
             onRemovePhoto = {
-                pendingPhotoUri = null
+                pendingPhotoPath?.let { viewModel.deletePhotoFile(it) }
+                pendingPhotoPath = null
                 if (currentPhotoPath != null) vehicle?.let { viewModel.removeVehiclePhoto(it) }
                 currentPhotoPath = null
             },
@@ -229,14 +244,13 @@ fun VehicleFormSheet(
 @Composable
 private fun VehiclePhotoPicker(
     photoPath: String?,
-    pendingUri: Uri?,
     onPhotoPicked: (Uri) -> Unit,
     onRemovePhoto: () -> Unit,
 ) {
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) onPhotoPicked(uri)
     }
-    val hasPhoto = photoPath != null || pendingUri != null
+    val hasPhoto = photoPath != null
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) {
         Box(
@@ -247,20 +261,15 @@ private fun VehiclePhotoPicker(
                 .clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             contentAlignment = Alignment.Center,
         ) {
-            when {
-                pendingUri != null -> AsyncImage(
-                    model = pendingUri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(72.dp),
-                )
-                photoPath != null -> AsyncImage(
+            if (photoPath != null) {
+                AsyncImage(
                     model = File(photoPath),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.size(72.dp),
                 )
-                else -> Icon(Icons.Filled.AddAPhoto, contentDescription = "Add photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Icon(Icons.Filled.AddAPhoto, contentDescription = "Add photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.width(14.dp))

@@ -355,9 +355,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             vehicle = sheet.vehicle,
             viewModel = viewModel,
             onDismiss = { activeSheet = Sheet.None },
-            onSave = { v, starterServices, photoUri ->
+            onSave = { v, starterServices ->
                 viewModel.saveVehicle(v)
-                if (photoUri != null) viewModel.setVehiclePhoto(v, photoUri)
                 if (starterServices.isNotEmpty()) viewModel.addStarterSchedules(v.id, starterServices)
                 activeSheet = Sheet.None
             },
