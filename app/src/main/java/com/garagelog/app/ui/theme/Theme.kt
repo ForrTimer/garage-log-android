@@ -25,12 +25,12 @@ val GaragePillShape = RoundedCornerShape(6.dp)
 val GarageFabShape = RoundedCornerShape(18.dp)
 
 private val DarkScheme = darkColorScheme(
-    primary = DarkInverse,
-    onPrimary = DarkOnInverse,
+    primary = DarkAccent,
+    onPrimary = DarkOnAccent,
     secondary = DarkOk,
-    onSecondary = DarkOnInverse,
+    onSecondary = DarkOnAccent,
     tertiary = DarkWarn,
-    onTertiary = DarkOnInverse,
+    onTertiary = DarkOnAccent,
     background = DarkBg,
     onBackground = DarkText,
     surface = DarkPanel,
@@ -40,16 +40,16 @@ private val DarkScheme = darkColorScheme(
     outline = DarkEdge,
     outlineVariant = DarkRule,
     error = DarkAlarm,
-    onError = DarkOnInverse,
+    onError = DarkOnAccent,
 )
 
 private val LightScheme = lightColorScheme(
-    primary = LightInverse,
-    onPrimary = LightOnInverse,
+    primary = LightAccent,
+    onPrimary = LightOnAccent,
     secondary = LightOk,
-    onSecondary = LightOnInverse,
+    onSecondary = LightOnAccent,
     tertiary = LightWarn,
-    onTertiary = LightOnInverse,
+    onTertiary = LightOnAccent,
     background = LightBg,
     onBackground = LightText,
     surface = LightPanel,
@@ -59,7 +59,7 @@ private val LightScheme = lightColorScheme(
     outline = LightEdge,
     outlineVariant = LightRule,
     error = LightAlarm,
-    onError = LightOnInverse,
+    onError = LightOnAccent,
 )
 
 /**
@@ -86,7 +86,7 @@ private val DarkExtras = GarageColors(
     alarmText = DarkAlarmText,
     warn = DarkWarn,
     ok = DarkOk,
-    info = DarkInfo,
+    info = DarkAccent,
     pillTintAlpha = PillTintAlphaDark,
 )
 
@@ -98,7 +98,7 @@ private val LightExtras = GarageColors(
     alarmText = LightAlarmText,
     warn = LightWarn,
     ok = LightOk,
-    info = LightInfo,
+    info = LightAccent,
     pillTintAlpha = PillTintAlphaLight,
 )
 

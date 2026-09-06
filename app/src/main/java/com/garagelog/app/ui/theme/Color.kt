@@ -4,7 +4,8 @@ import androidx.compose.ui.graphics.Color
 
 // Redesign palette. Warm graphite (dark) / warm paper (light).
 // Replaces the navy set ported from the PWA. Rust is reserved for alarm states only —
-// primary actions are bone-on-dark / ink-on-light, never the alarm color.
+// primary actions use the brand accent blue (matching the launcher icon's wrench), never the
+// alarm color, so red stays a genuine, uncompeted-for signal wherever it appears.
 
 // ---- Dark ----------------------------------------------------------------
 val DarkBg = Color(0xFF161413) // content ground
@@ -20,9 +21,11 @@ val DarkAlarm = Color(0xFFE43D2E) // rust: open counts, overdue, active-tab mark
 val DarkAlarmText = Color(0xFFF05E54) // rust legible as small text on panel
 val DarkWarn = Color(0xFFE8A33D)
 val DarkOk = Color(0xFF7BC47F)
-val DarkInfo = Color(0xFF6FA8DC) // steel blue: upgrades, informational
-val DarkInverse = Color(0xFFF2EEEB) // primary button fill
-val DarkOnInverse = Color(0xFF17110F)
+// Brand accent — the exact blue of the launcher icon's wrench (ic_launcher_foreground.xml),
+// used as primary/info everywhere so there's one consistent "this app's color" instead of the
+// old bone-fill primary and a separately-tuned steel blue for "info".
+val DarkAccent = Color(0xFF4DA3FF)
+val DarkOnAccent = Color(0xFF0B1E33)
 
 // ---- Light ---------------------------------------------------------------
 val LightBg = Color(0xFFEDEAE6)
@@ -38,9 +41,10 @@ val LightAlarm = Color(0xFFC62B17)
 val LightAlarmText = Color(0xFFA82310)
 val LightWarn = Color(0xFF8A5A08)
 val LightOk = Color(0xFF316B3B)
-val LightInfo = Color(0xFF2F6FA8) // steel blue: upgrades, informational
-val LightInverse = Color(0xFF191715)
-val LightOnInverse = Color(0xFFF8F6F3)
+// Same brand blue as DarkAccent, darkened to hold contrast as text/fill against the light paper
+// background — the raw icon blue is too pale to read reliably on a near-white ground.
+val LightAccent = Color(0xFF1D5FAD)
+val LightOnAccent = Color(0xFFF7FAFF)
 
 // Status-pill tint. Light mode needs a weaker tint or the pill reads as a filled button.
 const val PillTintAlphaDark = 0.16f

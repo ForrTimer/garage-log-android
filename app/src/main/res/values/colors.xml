@@ -3,7 +3,7 @@
     <!-- light default: warm paper ground -->
     <color name="window_background">#EDEAE6</color>
     <color name="splash_background">#EDEAE6</color>
-    <color name="splash_icon_tint">#C62B17</color>
+    <color name="splash_icon_tint">#1D5FAD</color>
 
     <!-- Home-screen widget — mirrors ui/theme/Color.kt's Light* palette, since Glance widgets
          render outside Compose and can't read GarageColors directly. -->

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.garagelog.app.data.entity.IssueStatus
+import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.ui.AppTab
@@ -71,6 +72,7 @@ import com.garagelog.app.ui.components.StatGrid
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DueStatus
+import com.garagelog.app.util.ScheduleDueInfo
 import com.garagelog.app.util.computeDueInfo
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
@@ -225,7 +227,10 @@ private fun VehicleDashboardCard(
     val dueItems = schedulesForVehicle
         .map { it to computeDueInfo(it, v.miles, v.isSevereDuty) }
         .filter { it.second.status == DueStatus.OVERDUE || it.second.status == DueStatus.DUE_SOON }
-        .sortedByDescending { it.second.status == DueStatus.OVERDUE }
+        .sortedWith(
+            compareByDescending<Pair<MaintenanceScheduleEntity, ScheduleDueInfo>> { it.second.status == DueStatus.OVERDUE }
+                .thenBy { it.second.remainingMiles ?: it.first.intervalMiles ?: Int.MAX_VALUE },
+        )
 
     var showMileageDialog by remember(v.id) { mutableStateOf(false) }
 
@@ -321,7 +326,10 @@ private fun VehicleDashboardCard(
 
         StatGrid(
             listOf(
-                formatMiles(v.miles) to "current miles",
+                // No " mi" suffix here — the tile is narrow enough that it wrapped to a second
+                // line on higher-mileage vehicles, and the "current miles" label underneath
+                // already says what the unit is.
+                formatMiles(v.miles).removeSuffix(" mi") to "current miles",
                 openIssues.size.toString() to "open issues",
                 formatMoney(totalSpent) to "logged spend",
             ),

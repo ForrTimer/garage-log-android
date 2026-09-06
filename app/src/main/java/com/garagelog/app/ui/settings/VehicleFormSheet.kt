@@ -31,11 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.theme.garageColors
@@ -74,7 +74,13 @@ fun VehicleFormSheet(
     onSave: (VehicleEntity, List<String>, Uri?) -> Unit,
     onDelete: (String) -> Unit,
 ) {
+    // Newly picked photos are staged here rather than written immediately, even when editing an
+    // existing vehicle — writing straight to the DB used to race with Save reconstructing the
+    // VehicleEntity from scratch (which never carried photoPath forward), silently wiping the
+    // photo back to null the moment the sheet was saved. Deferring the write to Save time, using
+    // the same path the "create a new vehicle with a photo" flow already relied on, avoids that.
     var pendingPhotoUri by remember(vehicle?.id) { mutableStateOf<Uri?>(null) }
+    var currentPhotoPath by remember(vehicle?.id) { mutableStateOf(vehicle?.photoPath) }
     var form by remember(vehicle?.id) {
         mutableStateOf(
             VehicleFormState(
@@ -104,6 +110,14 @@ fun VehicleFormSheet(
         mutableStateOf(if (vehicle == null) CommonMaintenanceServices.defaultSelected else emptySet())
     }
 
+    // Collapsed by default for a blank/new vehicle, but auto-expanded when editing one that
+    // already has data there — editing shouldn't feel like it hid something that was visible
+    // a moment ago.
+    var showMoreDetails by remember(vehicle?.id) {
+        mutableStateOf(listOf(vehicle?.engine, vehicle?.drivetrain, vehicle?.vin, vehicle?.color).any { !it.isNullOrBlank() })
+    }
+    var showSevereDuty by remember(vehicle?.id) { mutableStateOf(vehicle?.isSevereDuty ?: false) }
+
     FormSheetScaffold(
         title = if (vehicle == null) "Add vehicle" else "Edit vehicle",
         onDismiss = onDismiss,
@@ -128,6 +142,7 @@ fun VehicleFormSheet(
                     role = form.role.trim(),
                     notes = form.notes.trim(),
                     sortOrder = vehicle?.sortOrder ?: 0,
+                    photoPath = currentPhotoPath,
                     severeDustyAreas = form.severeDustyAreas,
                     severeTowing = form.severeTowing,
                     severeExtendedIdling = form.severeExtendedIdling,
@@ -142,48 +157,58 @@ fun VehicleFormSheet(
             )
         },
     ) {
-        if (vehicle != null) {
-            VehiclePhotoPicker(
-                photoPath = vehicle.photoPath,
-                pendingUri = null,
-                onPhotoPicked = { uri -> viewModel.setVehiclePhoto(vehicle, uri) },
-                onRemovePhoto = { viewModel.removeVehiclePhoto(vehicle) },
-            )
-        } else {
-            VehiclePhotoPicker(
-                photoPath = null,
-                pendingUri = pendingPhotoUri,
-                onPhotoPicked = { uri -> pendingPhotoUri = uri },
-                onRemovePhoto = { pendingPhotoUri = null },
-            )
-        }
+        VehiclePhotoPicker(
+            photoPath = currentPhotoPath,
+            pendingUri = pendingPhotoUri,
+            onPhotoPicked = { uri -> pendingPhotoUri = uri },
+            onRemovePhoto = {
+                pendingPhotoUri = null
+                if (currentPhotoPath != null) vehicle?.let { viewModel.removeVehiclePhoto(it) }
+                currentPhotoPath = null
+            },
+        )
 
         LabeledTextField("Name / nickname", form.name, { form = form.copy(name = it) })
         LabeledTextField("Year", form.year, { form = form.copy(year = it) }, keyboardType = KeyboardType.Number)
         LabeledTextField("Make", form.make, { form = form.copy(make = it) })
         LabeledTextField("Model", form.model, { form = form.copy(model = it) })
-        LabeledTextField("Engine", form.engine, { form = form.copy(engine = it) })
-        LabeledTextField("Drivetrain", form.drivetrain, { form = form.copy(drivetrain = it) })
-        LabeledTextField("VIN", form.vin, { form = form.copy(vin = it) })
-        LabeledTextField("Color", form.color, { form = form.copy(color = it) })
         LabeledTextField("Current mileage", form.miles, { form = form.copy(miles = it) }, keyboardType = KeyboardType.Number)
         LabeledTextField("Role / notes", form.role, { form = form.copy(role = it) }, singleLine = false, minLines = 2)
-        LabeledTextField("Free-form notes", form.notes, { form = form.copy(notes = it) }, singleLine = false, minLines = 2)
 
-        Text("Severe-duty conditions", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
-        Text(
-            "Any of these checked halves computed maintenance intervals, per typical OEM severe-duty schedules.",
-            style = MaterialTheme.typography.bodySmall,
-            color = garageColors.textMuted,
+        ActionLink(
+            if (showMoreDetails) "Hide more details" else "Show more details",
+            onClick = { showMoreDetails = !showMoreDetails },
+            modifier = Modifier.padding(top = 12.dp),
         )
-        CheckboxRow("Driving in dusty areas", form.severeDustyAreas) { form = form.copy(severeDustyAreas = it) }
-        CheckboxRow("Towing a trailer", form.severeTowing) { form = form.copy(severeTowing = it) }
-        CheckboxRow("Idling for extended periods", form.severeExtendedIdling) { form = form.copy(severeExtendedIdling = it) }
-        CheckboxRow("Low speed / short trips in below-freezing temps", form.severeLowSpeedColdWeather) { form = form.copy(severeLowSpeedColdWeather = it) }
-        CheckboxRow("Heavy city traffic above 90°F", form.severeHeavyCityTrafficHot) { form = form.copy(severeHeavyCityTrafficHot = it) }
-        CheckboxRow("Hilly/mountainous terrain above 90°F", form.severeMountainousHot) { form = form.copy(severeMountainousHot = it) }
-        CheckboxRow("Frequent trailer towing", form.severeFrequentTowing) { form = form.copy(severeFrequentTowing = it) }
-        CheckboxRow("Driven through deep water", form.severeDeepWater) { form = form.copy(severeDeepWater = it) }
+        if (showMoreDetails) {
+            LabeledTextField("Engine", form.engine, { form = form.copy(engine = it) })
+            LabeledTextField("Drivetrain", form.drivetrain, { form = form.copy(drivetrain = it) })
+            LabeledTextField("VIN", form.vin, { form = form.copy(vin = it) })
+            LabeledTextField("Color", form.color, { form = form.copy(color = it) })
+            LabeledTextField("Free-form notes", form.notes, { form = form.copy(notes = it) }, singleLine = false, minLines = 2)
+        }
+
+        ActionLink(
+            if (showSevereDuty) "Hide severe-duty conditions" else "Show severe-duty conditions",
+            onClick = { showSevereDuty = !showSevereDuty },
+            modifier = Modifier.padding(top = 10.dp),
+        )
+        if (showSevereDuty) {
+            Text(
+                "Any of these checked halves computed maintenance intervals, per typical OEM severe-duty schedules.",
+                style = MaterialTheme.typography.bodySmall,
+                color = garageColors.textMuted,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            CheckboxRow("Driving in dusty areas", form.severeDustyAreas) { form = form.copy(severeDustyAreas = it) }
+            CheckboxRow("Towing a trailer", form.severeTowing) { form = form.copy(severeTowing = it) }
+            CheckboxRow("Idling for extended periods", form.severeExtendedIdling) { form = form.copy(severeExtendedIdling = it) }
+            CheckboxRow("Low speed / short trips in below-freezing temps", form.severeLowSpeedColdWeather) { form = form.copy(severeLowSpeedColdWeather = it) }
+            CheckboxRow("Heavy city traffic above 90°F", form.severeHeavyCityTrafficHot) { form = form.copy(severeHeavyCityTrafficHot = it) }
+            CheckboxRow("Hilly/mountainous terrain above 90°F", form.severeMountainousHot) { form = form.copy(severeMountainousHot = it) }
+            CheckboxRow("Frequent trailer towing", form.severeFrequentTowing) { form = form.copy(severeFrequentTowing = it) }
+            CheckboxRow("Driven through deep water", form.severeDeepWater) { form = form.copy(severeDeepWater = it) }
+        }
 
         if (vehicle == null) {
             Text("Starter maintenance schedule", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
@@ -240,20 +265,16 @@ private fun VehiclePhotoPicker(
         }
         Spacer(Modifier.width(14.dp))
         Column {
-            Text(
+            ActionLink(
                 if (hasPhoto) "Change photo" else "Add a photo",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.labelMedium,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onClick = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             )
             if (hasPhoto) {
-                Text(
+                ActionLink(
                     "Remove photo",
-                    color = garageColors.alarmText,
-                    style = MaterialTheme.typography.labelMedium,
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.padding(top = 4.dp).clickable(onClick = onRemovePhoto),
+                    onClick = onRemovePhoto,
+                    tint = garageColors.alarmText,
+                    modifier = Modifier.padding(top = 6.dp),
                 )
             }
         }

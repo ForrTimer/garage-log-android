@@ -56,6 +56,7 @@ import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.data.entity.BuildPhaseEntity
 import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.IssueEntity
+import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
@@ -73,6 +74,7 @@ import com.garagelog.app.ui.schedule.ScheduleFormSheet
 import com.garagelog.app.ui.schedule.ScheduleScreen
 import com.garagelog.app.ui.settings.SettingsScreen
 import com.garagelog.app.ui.settings.VehicleFormSheet
+import com.garagelog.app.util.todayIso
 import kotlinx.coroutines.flow.collectLatest
 
 private val mainTabs = listOf(AppTab.Dashboard, AppTab.Log, AppTab.Issues, AppTab.Build, AppTab.Settings)
@@ -96,7 +98,7 @@ private fun AppTab.icon(): ImageVector = when (this) {
 private sealed class Sheet {
     data object None : Sheet()
     data class VehicleForm(val vehicle: VehicleEntity?) : Sheet()
-    data class LogForm(val entry: LogEntryEntity?) : Sheet()
+    data class LogForm(val entry: LogEntryEntity?, val prefill: LogEntryEntity? = null) : Sheet()
     data class IssueForm(val issue: IssueEntity?) : Sheet()
     data class PhaseForm(val phase: BuildPhaseEntity?, val vehicleId: String? = null) : Sheet()
     data class StepForm(val step: BuildStepEntity?, val vehicleId: String? = null) : Sheet()
@@ -278,6 +280,23 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     onAddNew = { activeSheet = Sheet.ScheduleForm(null) },
                     onMarkDone = viewModel::markScheduleDoneToday,
                     onCopySchedule = viewModel::copySchedulesToVehicle,
+                    onLogSchedule = { sched ->
+                        val vehicle = uiState.vehicles.find { it.id == sched.vehicleId }
+                        activeSheet = Sheet.LogForm(
+                            entry = null,
+                            prefill = LogEntryEntity(
+                                id = "",
+                                vehicleId = sched.vehicleId,
+                                date = todayIso(),
+                                mileage = vehicle?.miles,
+                                category = LogCategory.Routine.name,
+                                task = sched.taskName,
+                                cost = null,
+                                parts = "",
+                                notes = "",
+                            ),
+                        )
+                    },
                 )
                 uiState.showCostTrendScreen -> CostTrendScreen(
                     uiState = uiState,
@@ -346,6 +365,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         )
         is Sheet.LogForm -> LogFormSheet(
             entry = sheet.entry,
+            prefill = sheet.prefill,
             vehicles = uiState.vehicles,
             defaultVehicleId = uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id,
             viewModel = viewModel,

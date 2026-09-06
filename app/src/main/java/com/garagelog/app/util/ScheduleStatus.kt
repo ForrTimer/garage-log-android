@@ -4,7 +4,12 @@ import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 
 enum class DueStatus { OK, DUE_SOON, OVERDUE, UNKNOWN }
 
-data class ScheduleDueInfo(val status: DueStatus, val label: String)
+/**
+ * [remainingMiles] is exposed alongside the human-readable [label] so callers can sort a list of
+ * schedules by actual urgency (soonest-due first) instead of just grouping by [status] — null
+ * when there's no mileage basis to compute it from (no interval set, or no service history yet).
+ */
+data class ScheduleDueInfo(val status: DueStatus, val label: String, val remainingMiles: Int? = null)
 
 private const val DUE_SOON_MILES_WINDOW = 500
 
@@ -38,11 +43,13 @@ fun computeDueInfo(schedule: MaintenanceScheduleEntity, currentMiles: Int?, seve
                 if (mileageOverdue && dateOverdue) append(" · ")
                 if (dateOverdue) append("overdue since ${formatDate(dueDate)}")
             },
+            mileageRemaining,
         )
-        mileageDueSoon -> ScheduleDueInfo(DueStatus.DUE_SOON, "Due in $mileageRemaining mi")
+        mileageDueSoon -> ScheduleDueInfo(DueStatus.DUE_SOON, "Due in $mileageRemaining mi", mileageRemaining)
         mileageRemaining != null -> ScheduleDueInfo(
             DueStatus.OK,
             "Due in $mileageRemaining mi" + (dueDate?.let { " (or by ${formatDate(it)})" } ?: ""),
+            mileageRemaining,
         )
         dueDate != null -> ScheduleDueInfo(DueStatus.OK, "Due by ${formatDate(dueDate)}")
         schedule.intervalMiles == null && schedule.intervalMonths == null ->

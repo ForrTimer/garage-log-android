@@ -45,18 +45,21 @@ fun LogFormSheet(
     onDismiss: () -> Unit,
     onSave: (LogEntryEntity) -> Unit,
     onDelete: (String) -> Unit,
+    // Seeds a brand-new entry's fields (e.g. from "mark maintenance done") without treating it as
+    // an existing, editable/deletable entry the way a non-null `entry` would.
+    prefill: LogEntryEntity? = null,
 ) {
     var form by remember(entry?.id) {
         mutableStateOf(
             LogFormState(
-                vehicleId = entry?.vehicleId ?: defaultVehicleId ?: "",
-                date = entry?.date ?: todayIso(),
-                mileage = entry?.mileage?.toString() ?: "",
-                category = entry?.category ?: LogCategory.Routine.name,
-                task = entry?.task ?: "",
-                cost = entry?.cost?.toString() ?: "",
-                parts = entry?.parts ?: "",
-                notes = entry?.notes ?: "",
+                vehicleId = entry?.vehicleId ?: prefill?.vehicleId ?: defaultVehicleId ?: "",
+                date = entry?.date ?: prefill?.date ?: todayIso(),
+                mileage = entry?.mileage?.toString() ?: prefill?.mileage?.toString() ?: "",
+                category = entry?.category ?: prefill?.category ?: LogCategory.Routine.name,
+                task = entry?.task ?: prefill?.task ?: "",
+                cost = entry?.cost?.toString() ?: prefill?.cost?.toString() ?: "",
+                parts = entry?.parts ?: prefill?.parts ?: "",
+                notes = entry?.notes ?: prefill?.notes ?: "",
             ),
         )
     }

@@ -54,6 +54,13 @@ import com.garagelog.app.util.computeDueInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private fun statusRank(status: DueStatus): Int = when (status) {
+    DueStatus.OVERDUE -> 0
+    DueStatus.DUE_SOON -> 1
+    DueStatus.OK -> 2
+    DueStatus.UNKNOWN -> 3
+}
+
 @Composable
 fun ScheduleScreen(
     uiState: GarageLogUiState,
@@ -62,6 +69,10 @@ fun ScheduleScreen(
     onAddNew: () -> Unit,
     onMarkDone: (MaintenanceScheduleEntity) -> Unit,
     onCopySchedule: (sourceVehicleId: String, targetVehicleId: String) -> Unit,
+    // A completed maintenance item is, functionally, a routine log entry — confirming "mark
+    // done" opens the log form pre-filled with this schedule's task so the actual service
+    // (cost, notes, photos) can be recorded, not just the tracker's due date silently bumped.
+    onLogSchedule: (MaintenanceScheduleEntity) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
@@ -93,7 +104,17 @@ fun ScheduleScreen(
                 }
             }
             vehicles.forEach { v ->
+                // Most-urgent-first: grouped by status (overdue, then due soon, then on track,
+                // then untracked), and within a group by soonest-due mileage — falling back to
+                // the item's own interval length when there's no service history yet to compute
+                // an actual remaining-mileage figure from.
                 val schedules = uiState.schedules.filter { it.vehicleId == v.id }
+                    .sortedWith(
+                        compareBy(
+                            { statusRank(computeDueInfo(it, v.miles, v.isSevereDuty).status) },
+                            { computeDueInfo(it, v.miles, v.isSevereDuty).remainingMiles ?: it.intervalMiles ?: Int.MAX_VALUE },
+                        ),
+                    )
                 if (schedules.isNotEmpty()) {
                     item {
                         Row(
@@ -133,7 +154,11 @@ fun ScheduleScreen(
             message = "Mark \"${sched.taskName}\" as done today?",
             confirmLabel = "Mark done",
             confirmColor = garageColors.ok,
-            onConfirm = { onMarkDone(sched); justCompletedId = sched.id },
+            onConfirm = {
+                onMarkDone(sched)
+                justCompletedId = sched.id
+                onLogSchedule(sched)
+            },
             onDismiss = { confirmingSchedule = null },
         )
     }
