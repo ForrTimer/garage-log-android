@@ -52,8 +52,11 @@ class SyncRepository(
                 .getOrDefault(SyncSnapshot())
         } ?: SyncSnapshot()
 
+        val localVehicles = vehicleRepository.getAllForSync()
+        val localPhotoPathById = localVehicles.associate { it.id to it.photoPath }
+
         val localSnapshot = SyncSnapshot(
-            vehicles = vehicleRepository.getAllForSync().map { it.toSync() },
+            vehicles = localVehicles.map { it.toSync() },
             logs = logRepository.getAllForSync().map { it.toSync() },
             issues = issueRepository.getAllForSync().map { it.toSync() },
             buildPhases = buildPhaseRepository.getAllForSync().map { it.toSync() },
@@ -68,7 +71,15 @@ class SyncRepository(
             schedules = mergeById(localSnapshot.schedules, remoteSnapshot.schedules),
         )
 
-        merged.vehicles.forEach { vehicleRepository.upsert(it.toEntity()) }
+        // photoPath isn't part of SyncVehicle at all (this device's own display photo isn't
+        // synced across devices, same as PhotoEntity attachments per the class doc above) — so
+        // SyncVehicle.toEntity() always defaults it to null. Without restoring it here, every
+        // single sync (fired after nearly every write in the app) silently wiped the vehicle's
+        // photo back to null a few seconds after it was picked, since the DB row itself really
+        // was overwritten with photoPath = null on each merge. This was the actual root cause of
+        // the "photo disappears" bug — the picker/copy-timing fixes before this were all correct
+        // but couldn't have worked, since the very next sync undid them regardless.
+        merged.vehicles.forEach { vehicleRepository.upsert(it.toEntity().copy(photoPath = localPhotoPathById[it.id])) }
         merged.logs.forEach { logRepository.upsert(it.toEntity()) }
         merged.issues.forEach { issueRepository.upsert(it.toEntity()) }
         merged.buildPhases.forEach { buildPhaseRepository.upsert(it.toEntity()) }

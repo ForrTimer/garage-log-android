@@ -6,7 +6,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -263,21 +263,39 @@ private fun VehicleDashboardCard(
             }
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             if (showDragHandle) {
-                Icon(
-                    Icons.Filled.DragHandle,
-                    contentDescription = "Drag to reorder",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Two compounding real-touch-only problems here, both confirmed by driving the
+                // physical device directly (an adb tap always lands dead-center and never exposed
+                // either one): (1) the icon itself is only 24dp, well under Android's 48dp minimum
+                // touch target, so a real thumb often missed its hit-test bounds entirely; (2) this
+                // used detectDragGesturesAfterLongPress, which silently cancels the whole gesture
+                // if the finger drifts past touch slop *during* the hold — i.e. it demands a stop-
+                // then-go two-phase press (hold dead still, wait, only then slide) rather than the
+                // one fluid press-and-slide motion most people actually do. Proved this by driving
+                // the device with adb: a held-still-then-moved gesture reordered the list, an
+                // otherwise-identical continuous press-and-slide from time zero did not. Since this
+                // handle is a small dedicated icon nothing else uses, there's no ambiguity with the
+                // list's own scroll gesture to guard against — switched to plain detectDragGestures
+                // (no long-press gate) so a single natural motion starts the drag immediately.
+                Box(
                     modifier = Modifier
-                        .padding(end = 8.dp)
+                        .padding(end = 4.dp)
+                        .size(48.dp)
                         .pointerInput(v.id) {
-                            detectDragGesturesAfterLongPress(
+                            detectDragGestures(
                                 onDragStart = { onDragStart() },
                                 onDragEnd = { onDragEnd() },
                                 onDragCancel = { onDragEnd() },
                                 onDrag = { change, dragAmount -> change.consume(); onDrag(dragAmount.y) },
                             )
                         },
-                )
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.DragHandle,
+                        contentDescription = "Drag to reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             ActionLink("Edit", onClick = { onEditVehicle(v) })
         }
