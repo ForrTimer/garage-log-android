@@ -1,6 +1,8 @@
 package com.garagelog.app.data.sync
 
+import androidx.room.withTransaction
 import com.garagelog.app.data.auth.AuthManager
+import com.garagelog.app.data.db.AppDatabase
 import com.garagelog.app.data.entity.PhotoEntity
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.BuildPhaseRepository
@@ -18,6 +20,7 @@ private const val PHOTO_KIND_KEY = "kind"
 private const val PHOTO_KIND_VALUE = "photo"
 
 class SyncRepository(
+    private val database: AppDatabase,
     private val authManager: AuthManager,
     private val driveApi: DriveApiClient,
     private val vehicleRepository: VehicleRepository,
@@ -71,19 +74,30 @@ class SyncRepository(
             schedules = mergeById(localSnapshot.schedules, remoteSnapshot.schedules),
         )
 
-        // photoPath isn't part of SyncVehicle at all (this device's own display photo isn't
-        // synced across devices, same as PhotoEntity attachments per the class doc above) — so
-        // SyncVehicle.toEntity() always defaults it to null. Without restoring it here, every
-        // single sync (fired after nearly every write in the app) silently wiped the vehicle's
-        // photo back to null a few seconds after it was picked, since the DB row itself really
-        // was overwritten with photoPath = null on each merge. This was the actual root cause of
-        // the "photo disappears" bug — the picker/copy-timing fixes before this were all correct
-        // but couldn't have worked, since the very next sync undid them regardless.
-        merged.vehicles.forEach { vehicleRepository.upsert(it.toEntity().copy(photoPath = localPhotoPathById[it.id])) }
-        merged.logs.forEach { logRepository.upsert(it.toEntity()) }
-        merged.issues.forEach { issueRepository.upsert(it.toEntity()) }
-        merged.buildPhases.forEach { buildPhaseRepository.upsert(it.toEntity()) }
-        merged.schedules.forEach { scheduleRepository.upsert(it.toEntity()) }
+        // Applying the merge one row at a time meant one Room write per entity — each of which
+        // individually invalidates and re-triggers every observing Flow, which cascades into a
+        // full GarageLogUiState recompute+recomposition via the ViewModel's combine(). For a
+        // vehicle with years of log history that's dozens of writes firing in a tight sequential
+        // loop on every single sync (which runs after nearly every mutation in the app), which is
+        // what read as the whole app "freezing" for a second or two after any save. Wrapping the
+        // whole merge in one transaction makes it one write, one invalidation, one recompute —
+        // and is more correct besides: a mid-sync process death used to leave some entity types
+        // merged and others not.
+        database.withTransaction {
+            // photoPath isn't part of SyncVehicle at all (this device's own display photo isn't
+            // synced across devices, same as PhotoEntity attachments per the class doc above) — so
+            // SyncVehicle.toEntity() always defaults it to null. Without restoring it here, every
+            // single sync (fired after nearly every write in the app) silently wiped the vehicle's
+            // photo back to null a few seconds after it was picked, since the DB row itself really
+            // was overwritten with photoPath = null on each merge. This was the actual root cause of
+            // the "photo disappears" bug — the picker/copy-timing fixes before this were all correct
+            // but couldn't have worked, since the very next sync undid them regardless.
+            merged.vehicles.forEach { vehicleRepository.upsert(it.toEntity().copy(photoPath = localPhotoPathById[it.id])) }
+            merged.logs.forEach { logRepository.upsert(it.toEntity()) }
+            merged.issues.forEach { issueRepository.upsert(it.toEntity()) }
+            merged.buildPhases.forEach { buildPhaseRepository.upsert(it.toEntity()) }
+            merged.schedules.forEach { scheduleRepository.upsert(it.toEntity()) }
+        }
 
         val mergedJson = json.encodeToString(SyncSnapshot.serializer(), merged)
         if (existingFile != null) {
