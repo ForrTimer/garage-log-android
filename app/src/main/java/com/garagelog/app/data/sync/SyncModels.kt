@@ -62,6 +62,7 @@ data class SyncLog(
     val cost: Double?,
     val parts: String,
     val notes: String,
+    val fulfillsScheduleId: String? = null,
     override val updatedAt: Long,
     override val deleted: Boolean,
 ) : Syncable
@@ -119,12 +120,12 @@ fun SyncVehicle.toEntity() = VehicleEntity(
 
 fun LogEntryEntity.toSync() = SyncLog(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage, category = category, task = task,
-    cost = cost, parts = parts, notes = notes, updatedAt = updatedAt, deleted = deleted,
+    cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun SyncLog.toEntity() = LogEntryEntity(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage, category = category, task = task,
-    cost = cost, parts = parts, notes = notes, updatedAt = updatedAt, deleted = deleted,
+    cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun IssueEntity.toSync() = SyncIssue(

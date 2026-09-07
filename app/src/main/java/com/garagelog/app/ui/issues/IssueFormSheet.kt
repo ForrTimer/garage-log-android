@@ -1,8 +1,10 @@
 package com.garagelog.app.ui.issues
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +47,10 @@ fun IssueFormSheet(
     onDismiss: () -> Unit,
     onSave: (IssueEntity) -> Unit,
     onDelete: (String) -> Unit,
+    // Called instead of onSave when the user opts to log how a newly-Resolved issue was fixed —
+    // saves the issue AND opens a pre-filled log entry for it, mirroring how marking a
+    // maintenance schedule done opens a pre-filled log entry for that.
+    onResolvedWithLog: (IssueEntity) -> Unit,
 ) {
     var form by remember(issue?.id) {
         mutableStateOf(
@@ -60,6 +66,12 @@ fun IssueFormSheet(
         )
     }
 
+    // The issue was already Resolved coming in (editing an already-fixed issue) vs. this save is
+    // the moment it's *becoming* Resolved — only the latter is worth prompting about, since the
+    // former already has whatever log entry it was going to get.
+    val wasAlreadyResolved = issue?.status == IssueStatus.Resolved.label
+    var pendingResolvedIssue by remember { mutableStateOf<IssueEntity?>(null) }
+
     FormSheetScaffold(
         title = if (issue == null) "New issue" else "Edit issue",
         onDismiss = onDismiss,
@@ -67,18 +79,21 @@ fun IssueFormSheet(
         deleteTitle = "Delete issue?",
         onDelete = { issue?.let { onDelete(it.id) } },
         onSave = {
-            onSave(
-                IssueEntity(
-                    id = issue?.id ?: UUID.randomUUID().toString(),
-                    vehicleId = form.vehicleId,
-                    title = form.title.trim().ifBlank { "Untitled issue" },
-                    status = form.status,
-                    priority = form.priority,
-                    dateOpened = form.dateOpened.ifBlank { todayIso() },
-                    dateResolved = form.dateResolved,
-                    description = form.description.trim(),
-                ),
+            val entity = IssueEntity(
+                id = issue?.id ?: UUID.randomUUID().toString(),
+                vehicleId = form.vehicleId,
+                title = form.title.trim().ifBlank { "Untitled issue" },
+                status = form.status,
+                priority = form.priority,
+                dateOpened = form.dateOpened.ifBlank { todayIso() },
+                dateResolved = form.dateResolved,
+                description = form.description.trim(),
             )
+            if (!wasAlreadyResolved && form.status == IssueStatus.Resolved.label) {
+                pendingResolvedIssue = entity
+            } else {
+                onSave(entity)
+            }
         },
     ) {
         VehicleDropdown("Vehicle", vehicles, form.vehicleId) { form = form.copy(vehicleId = it) }
@@ -110,5 +125,26 @@ fun IssueFormSheet(
         if (issue != null) {
             PhotoGridSection(viewModel = viewModel, ownerType = PhotoOwnerType.ISSUE, ownerId = issue.id)
         }
+    }
+
+    // A plain AlertDialog rather than the shared ConfirmDialog — that component always fires
+    // its onDismiss right after onConfirm (harmless when onDismiss is just "close the dialog",
+    // which is all its other callers use it for), but here the two outcomes are genuinely
+    // different real actions (save-only vs. save-and-open-a-log), so onConfirm firing onDismiss
+    // too would save twice.
+    pendingResolvedIssue?.let { resolved ->
+        AlertDialog(
+            onDismissRequest = { onSave(resolved); pendingResolvedIssue = null },
+            title = { Text("Log how this was fixed?") },
+            text = { Text("\"${resolved.title}\" is being marked resolved. Log the repair that fixed it?") },
+            confirmButton = {
+                TextButton(onClick = { onResolvedWithLog(resolved); pendingResolvedIssue = null }) {
+                    Text("Log it", color = garageColors.ok)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { onSave(resolved); pendingResolvedIssue = null }) { Text("Just save") }
+            },
+        )
     }
 }

@@ -2,6 +2,12 @@ package com.garagelog.app.ui.dashboard
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -26,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -89,92 +96,29 @@ fun DashboardScreen(
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onOpenVehicleCostTrend: (String) -> Unit,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
-    onReorderVehicles: (List<String>) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
-    val canReorder = uiState.activeVehicleId == null && vehicles.size > 1
-    val baseOrderIds = vehicles.map { it.id }
-    val haptics = LocalHapticFeedback.current
-
-    // While the user is actively dragging (or waiting for the reorder to round-trip through the
-    // database), the dragged arrangement lives here instead of being derived from `vehicles` —
-    // otherwise the live-reordered list would fight the not-yet-updated upstream order. Once the
-    // database confirms the same order, this drops back to null so `vehicles` is the sole source
-    // of truth again.
-    var liveOrderIds by remember { mutableStateOf<List<String>?>(null) }
-    LaunchedEffect(baseOrderIds) {
-        if (liveOrderIds != null && liveOrderIds == baseOrderIds) liveOrderIds = null
-    }
-    val orderIds = liveOrderIds ?: baseOrderIds
-
-    val listState = rememberLazyListState()
-    var draggingId by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-
-    val orderedVehicles = orderIds.mapNotNull { id -> vehicles.find { it.id == id } }
 
     PullToRefreshBox(isRefreshing = syncStatus.isSyncing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(state = listState, modifier = Modifier.weight(1f), contentPadding = GarageDimens.listContentPadding) {
+        LazyColumn(modifier = Modifier.weight(1f), contentPadding = GarageDimens.listContentPadding) {
             if (vehicles.isEmpty()) {
                 item {
                     EmptyState("No vehicles yet.", icon = Icons.Filled.DirectionsCar)
                     OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth()) { Text("Add a vehicle") }
                 }
             }
-            items(orderedVehicles, key = { it.id }) { v ->
-                Box(
-                    modifier = Modifier
-                        .zIndex(if (v.id == draggingId) 1f else 0f)
-                        .graphicsLayer { translationY = if (v.id == draggingId) dragOffset else 0f },
-                ) {
-                    VehicleDashboardCard(
-                        uiState = uiState,
-                        v = v,
-                        onEditVehicle = onEditVehicle,
-                        onOpenSchedule = onOpenSchedule,
-                        onUpdateMileage = onUpdateMileage,
-                        onOpenVehicleTab = onOpenVehicleTab,
-                        onOpenVehicleCostTrend = onOpenVehicleCostTrend,
-                        onSetVehiclePhoto = onSetVehiclePhoto,
-                        showDragHandle = canReorder,
-                        onDragStart = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            draggingId = v.id
-                            dragOffset = 0f
-                            liveOrderIds = baseOrderIds
-                        },
-                        onDrag = onDrag@{ delta ->
-                            dragOffset += delta
-                            val id = draggingId ?: return@onDrag
-                            val current = liveOrderIds ?: return@onDrag
-                            val itemsInfo = listState.layoutInfo.visibleItemsInfo
-                            val dragged = itemsInfo.firstOrNull { it.key == id } ?: return@onDrag
-                            val draggedCenter = dragged.offset + dragOffset + dragged.size / 2
-                            val target = itemsInfo.firstOrNull { other ->
-                                other.key != id && draggedCenter > other.offset && draggedCenter < other.offset + other.size
-                            }
-                            if (target != null) {
-                                val from = current.indexOf(id)
-                                val to = current.indexOf(target.key as String)
-                                if (from != -1 && to != -1 && from != to) {
-                                    dragOffset += dragged.offset - target.offset
-                                    liveOrderIds = current.toMutableList().apply { add(to, removeAt(from)) }
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                            }
-                        },
-                        onDragEnd = {
-                            // Was animated back to rest via a coroutine on release, but that
-                            // coroutine could get cancelled (e.g. mid-flight recomposition) before
-                            // it ever reached `draggingId = null`, leaving the drag handle stuck
-                            // and reordering looking broken. Reset synchronously instead.
-                            draggingId = null
-                            dragOffset = 0f
-                            liveOrderIds?.let { onReorderVehicles(it) }
-                        },
-                    )
-                }
+            items(vehicles, key = { it.id }) { v ->
+                VehicleDashboardCard(
+                    uiState = uiState,
+                    v = v,
+                    onEditVehicle = onEditVehicle,
+                    onOpenSchedule = onOpenSchedule,
+                    onUpdateMileage = onUpdateMileage,
+                    onOpenVehicleTab = onOpenVehicleTab,
+                    onOpenVehicleCostTrend = onOpenVehicleCostTrend,
+                    onSetVehiclePhoto = onSetVehiclePhoto,
+                )
                 Spacer(Modifier.padding(bottom = 12.dp))
             }
         }
@@ -201,10 +145,6 @@ private fun VehicleDashboardCard(
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onOpenVehicleCostTrend: (String) -> Unit,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
-    showDragHandle: Boolean,
-    onDragStart: () -> Unit,
-    onDrag: (Float) -> Unit,
-    onDragEnd: () -> Unit,
 ) {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
     val openIssues = uiState.issues.filter { it.vehicleId == v.id && it.status != IssueStatus.Resolved.label }
@@ -262,41 +202,6 @@ private fun VehicleDashboardCard(
                 listOfNotNull(v.year?.toString(), v.model.ifBlank { null }).joinToString(" ")
             }
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (showDragHandle) {
-                // Two compounding real-touch-only problems here, both confirmed by driving the
-                // physical device directly (an adb tap always lands dead-center and never exposed
-                // either one): (1) the icon itself is only 24dp, well under Android's 48dp minimum
-                // touch target, so a real thumb often missed its hit-test bounds entirely; (2) this
-                // used detectDragGesturesAfterLongPress, which silently cancels the whole gesture
-                // if the finger drifts past touch slop *during* the hold — i.e. it demands a stop-
-                // then-go two-phase press (hold dead still, wait, only then slide) rather than the
-                // one fluid press-and-slide motion most people actually do. Proved this by driving
-                // the device with adb: a held-still-then-moved gesture reordered the list, an
-                // otherwise-identical continuous press-and-slide from time zero did not. Since this
-                // handle is a small dedicated icon nothing else uses, there's no ambiguity with the
-                // list's own scroll gesture to guard against — switched to plain detectDragGestures
-                // (no long-press gate) so a single natural motion starts the drag immediately.
-                Box(
-                    modifier = Modifier
-                        .padding(end = 4.dp)
-                        .size(48.dp)
-                        .pointerInput(v.id) {
-                            detectDragGestures(
-                                onDragStart = { onDragStart() },
-                                onDragEnd = { onDragEnd() },
-                                onDragCancel = { onDragEnd() },
-                                onDrag = { change, dragAmount -> change.consume(); onDrag(dragAmount.y) },
-                            )
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Filled.DragHandle,
-                        contentDescription = "Drag to reorder",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
             ActionLink("Edit", onClick = { onEditVehicle(v) })
         }
 
@@ -406,4 +311,140 @@ private fun UpdateMileageDialog(currentMiles: Int?, onConfirm: (Int) -> Unit, on
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/**
+ * A dedicated reorder mode, entered from More → "Reorder vehicles" rather than living as an
+ * always-on drag handle on every Home tile — the handle made ordinary browsing feel like it was
+ * always halfway into an edit mode. Tiles here are deliberately stripped down to just a photo
+ * and name (no stats/buttons) so there's nothing to mis-tap while dragging, and jiggle
+ * continuously (offset per-tile so they don't all sync) as the "these are draggable" cue, the
+ * same visual language as iOS/Android launcher icon rearranging.
+ */
+@Composable
+fun VehicleReorderScreen(vehicles: List<VehicleEntity>, onReorderVehicles: (List<String>) -> Unit, onDone: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    var liveOrderIds by remember(vehicles.map { it.id }) { mutableStateOf(vehicles.map { it.id }) }
+    val listState = rememberLazyListState()
+    var draggingId by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val orderedVehicles = liveOrderIds.mapNotNull { id -> vehicles.find { it.id == id } }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = GarageDimens.screenHorizontal, vertical = 12.dp),
+        ) {
+            Text("Drag tiles to reorder", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Button(onClick = { onReorderVehicles(liveOrderIds); onDone() }) { Text("Done") }
+        }
+
+        LazyColumn(state = listState, modifier = Modifier.weight(1f), contentPadding = GarageDimens.listContentPadding) {
+            items(orderedVehicles, key = { it.id }) { v ->
+                val jiggle = rememberJiggleAngle(v.id)
+                Box(
+                    modifier = Modifier
+                        .zIndex(if (v.id == draggingId) 1f else 0f)
+                        .graphicsLayer {
+                            translationY = if (v.id == draggingId) dragOffset else 0f
+                            rotationZ = if (v.id == draggingId) 0f else jiggle
+                        },
+                ) {
+                    ReorderTile(
+                        vehicle = v,
+                        onDragStart = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            draggingId = v.id
+                            dragOffset = 0f
+                        },
+                        onDrag = onDrag@{ delta ->
+                            dragOffset += delta
+                            val id = draggingId ?: return@onDrag
+                            val itemsInfo = listState.layoutInfo.visibleItemsInfo
+                            val dragged = itemsInfo.firstOrNull { it.key == id } ?: return@onDrag
+                            val draggedCenter = dragged.offset + dragOffset + dragged.size / 2
+                            val target = itemsInfo.firstOrNull { other ->
+                                other.key != id && draggedCenter > other.offset && draggedCenter < other.offset + other.size
+                            }
+                            if (target != null) {
+                                val from = liveOrderIds.indexOf(id)
+                                val to = liveOrderIds.indexOf(target.key as String)
+                                if (from != -1 && to != -1 && from != to) {
+                                    dragOffset += dragged.offset - target.offset
+                                    liveOrderIds = liveOrderIds.toMutableList().apply { add(to, removeAt(from)) }
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            draggingId = null
+                            dragOffset = 0f
+                        },
+                    )
+                }
+                Spacer(Modifier.padding(bottom = 12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReorderTile(vehicle: VehicleEntity, onDragStart: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit) {
+    GarageCard {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (vehicle.photoPath != null) {
+                    AsyncImage(
+                        model = File(vehicle.photoPath),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(48.dp),
+                    )
+                } else {
+                    Icon(Icons.Filled.DirectionsCar, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(vehicle.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            // Same 48dp-hit-box + no-long-press-gate combination proven this session on the Home
+            // dashboard's own drag handle — see the DashboardScreen git history for why: the icon
+            // alone is under Android's minimum touch target, and detectDragGesturesAfterLongPress
+            // cancels on any movement during its hold-still window, which a natural press-and-slide
+            // motion doesn't respect.
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .pointerInput(vehicle.id) {
+                        detectDragGestures(
+                            onDragStart = { onDragStart() },
+                            onDragEnd = { onDragEnd() },
+                            onDragCancel = { onDragEnd() },
+                            onDrag = { change, dragAmount -> change.consume(); onDrag(dragAmount.y) },
+                        )
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.DragHandle, contentDescription = "Drag to reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberJiggleAngle(seed: String): Float {
+    val transition = rememberInfiniteTransition(label = "jiggle")
+    val delay = seed.hashCode().mod(150)
+    val angle by transition.animateFloat(
+        initialValue = -1.5f,
+        targetValue = 1.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 140, delayMillis = delay, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "angle",
+    )
+    return angle
 }

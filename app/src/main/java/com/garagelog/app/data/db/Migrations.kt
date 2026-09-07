@@ -78,3 +78,10 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE vehicles ADD COLUMN photoPath TEXT DEFAULT NULL")
     }
 }
+
+/** Links a Routine log entry to the maintenance schedule item it fulfills, so saving it can reset that item's due mileage/date. */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE log_entries ADD COLUMN fulfillsScheduleId TEXT DEFAULT NULL")
+    }
+}

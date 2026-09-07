@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.garagelog.app.data.entity.BuildPhaseEntity
 import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.IssueEntity
+import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.NotificationPrefsEntity
@@ -291,6 +292,22 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         if (mileage != null) {
             locator.vehicleRepository.bumpMileageIfHigher(entry.vehicleId, mileage, entry.date)
         }
+        // A Routine entry linked to a schedule item (via the "Fulfills schedule" picker) is the
+        // maintenance actually happening — use the log's own date/mileage (which may be backfilled
+        // for a past service, not necessarily "today"/"current miles") rather than duplicating the
+        // separate "mark done today" quick-action's today-and-current-mileage assumption.
+        val scheduleId = entry.fulfillsScheduleId
+        if (entry.category == LogCategory.Routine.name && scheduleId != null) {
+            locator.scheduleRepository.getAll().find { it.id == scheduleId }?.let { schedule ->
+                locator.scheduleRepository.upsert(
+                    schedule.copy(
+                        lastDoneMileage = entry.mileage ?: schedule.lastDoneMileage,
+                        lastDoneDate = entry.date,
+                        updatedAt = System.currentTimeMillis(),
+                    ),
+                )
+            }
+        }
         requestSync()
     }
 
@@ -446,6 +463,18 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     fun deletePhoto(photo: PhotoEntity) = viewModelScope.launch {
         locator.photoStore.delete(photo.filePath)
         locator.photoRepository.softDelete(photo.id)
+        requestSync()
+    }
+
+    /**
+     * Cleans up photos attached to an owner that's about to be discarded without ever being
+     * saved — e.g. a new log entry the user picked photos onto (photos need a real id to attach
+     * to, so a not-yet-saved entry's id is provisional) and then backed out of instead of saving.
+     * Same soft-delete + file-delete pattern as an existing entry's own delete path.
+     */
+    fun discardPhotosForOwner(ownerType: PhotoOwnerType, ownerId: String) = viewModelScope.launch {
+        locator.photoRepository.getForOwner(ownerType.name, ownerId).forEach { locator.photoStore.delete(it.filePath) }
+        locator.photoRepository.softDeleteForOwner(ownerType.name, ownerId)
         requestSync()
     }
 

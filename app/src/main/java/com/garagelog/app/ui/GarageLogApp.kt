@@ -66,6 +66,7 @@ import com.garagelog.app.ui.build.StepFormSheet
 import com.garagelog.app.ui.components.VehiclePickerRow
 import com.garagelog.app.ui.costtrend.CostTrendScreen
 import com.garagelog.app.ui.dashboard.DashboardScreen
+import com.garagelog.app.ui.dashboard.VehicleReorderScreen
 import com.garagelog.app.ui.issues.IssueFormSheet
 import com.garagelog.app.ui.issues.IssuesScreen
 import com.garagelog.app.ui.log.LogFormSheet
@@ -78,6 +79,10 @@ import com.garagelog.app.util.todayIso
 import kotlinx.coroutines.flow.collectLatest
 
 private val mainTabs = listOf(AppTab.Dashboard, AppTab.Log, AppTab.Issues, AppTab.Build, AppTab.Settings)
+
+// A quick round-trip through a system picker (photo, backup file) stops and restarts this
+// activity in well under this long; a genuine "put the phone down" gap runs much longer.
+private const val HOME_RESET_AWAY_THRESHOLD_MS = 30_000L
 
 private fun AppTab.label(): String = when (this) {
     AppTab.Dashboard -> "Home"
@@ -110,7 +115,15 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
+    var reorderMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    // Navigating away (tapping another bottom-nav tab) bails out of reorder mode rather than
+    // leaving it stuck active on a tab that has nothing to do with vehicle order — any drag not
+    // yet confirmed via "Done" is simply discarded, same as dismissing any other in-progress edit.
+    LaunchedEffect(uiState.currentTab) {
+        if (uiState.currentTab != AppTab.Dashboard) reorderMode = false
+    }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collectLatest { msg ->
@@ -119,18 +132,45 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     }
 
     // Always land on Home (and clear the vehicle filter) whenever the app comes to the
-    // foreground — cold start or returning from the background — not wherever it was left.
+    // foreground after genuinely being put down for a while — cold start, or picked back up
+    // later — but NOT wherever it was left for every ON_START, since picking a photo (or
+    // exporting/importing a backup file) launches a separate system activity that stops and
+    // restarts this one for the few seconds it's on screen. Resetting unconditionally on every
+    // ON_START meant finishing an ordinary in-app action that happened to involve a system
+    // picker silently dumped you back on Home instead of wherever you were working. Only reset
+    // if this activity was actually stopped for longer than a real "put the phone down" gap.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
+        var stoppedAtMillis: Long? = null
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) viewModel.resetToHome()
+            when (event) {
+                Lifecycle.Event.ON_STOP -> stoppedAtMillis = System.currentTimeMillis()
+                Lifecycle.Event.ON_START -> {
+                    val stoppedAt = stoppedAtMillis
+                    if (stoppedAt == null || System.currentTimeMillis() - stoppedAt > HOME_RESET_AWAY_THRESHOLD_MS) {
+                        viewModel.resetToHome()
+                    }
+                }
+                else -> Unit
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val pagerState = rememberPagerState(initialPage = mainTabs.indexOf(uiState.currentTab).coerceAtLeast(0)) { mainTabs.size }
+    // Reorder mode replaces the pager entirely (same pattern as the schedule/cost-trend
+    // sub-screens below) rather than being one of its pages — but unlike those sub-screens,
+    // entering it does change uiState.currentTab (via resetToHome(), so "Done" lands back on
+    // Home). That's what makes this pair of effects dangerous here: pagerState.animateScrollToPage
+    // needs a mounted HorizontalPager to actually scroll against, and calling it while the pager
+    // isn't composed (because we're showing VehicleReorderScreen instead) left it in a corrupted
+    // state — settledPage would land on the wrong page once observed, which fed back into
+    // viewModel.selectTab with the WRONG tab, silently cancelling reorder mode via the "navigated
+    // away" effect above. Guarding both effects while reorderMode is true avoids ever touching
+    // pagerState while it has nothing real to scroll.
     LaunchedEffect(uiState.currentTab) {
+        if (reorderMode) return@LaunchedEffect
         val target = mainTabs.indexOf(uiState.currentTab)
         if (target >= 0 && pagerState.currentPage != target) pagerState.animateScrollToPage(target)
     }
@@ -139,8 +179,20 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     // causing the pager to stall fighting itself.
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collectLatest { page ->
+            if (reorderMode) return@collectLatest
             mainTabs.getOrNull(page)?.let { tab -> if (tab != uiState.currentTab) viewModel.selectTab(tab) }
         }
+    }
+    // The guard above means the pager can silently drift out of sync with currentTab for the
+    // whole time reorder mode is active (it was on "Settings" when we left it, currentTab is now
+    // "Dashboard") — the two effects above won't naturally re-fire to fix that on their own once
+    // reorder mode ends, since currentTab itself doesn't change again on exit. Explicitly resync
+    // (instantly, not animated — there's nothing on screen for an animation to be visible against
+    // until this frame anyway) the moment reorder mode closes.
+    LaunchedEffect(reorderMode) {
+        if (reorderMode) return@LaunchedEffect
+        val target = mainTabs.indexOf(uiState.currentTab)
+        if (target >= 0) pagerState.scrollToPage(target)
     }
     val liveTab = mainTabs.getOrNull(pagerState.currentPage) ?: uiState.currentTab
 
@@ -171,18 +223,25 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 )
                 Surface(color = garageColors.chrome, modifier = Modifier.fillMaxWidth()) {
                     Column {
+                        // liveTab is derived from pagerState.currentPage, which reorder mode
+                        // deliberately leaves un-resynced until it closes (see the pager-guard
+                        // comment above) — so it can't be trusted for the header while reorder
+                        // mode is active, same as it isn't trusted for the schedule/cost-trend
+                        // sub-screens below.
                         val headerTitle = when {
+                            reorderMode -> "Home"
                             uiState.showScheduleScreen -> "Maintenance"
                             uiState.showCostTrendScreen -> "Cost trend"
                             else -> liveTab.label()
                         }
+                        val headerIcon = if (reorderMode) Icons.Filled.Home else liveTab.icon()
                         // A large, low-opacity watermark of the current tab's icon behind the
                         // title — sized off the header's own width so it scales with the phone,
                         // and clipped to the fixed-height box so it crops top/bottom instead of
                         // pushing the header taller.
                         BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(64.dp).clipToBounds()) {
                             Icon(
-                                imageVector = liveTab.icon(),
+                                imageVector = headerIcon,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
                                 modifier = Modifier.size(maxWidth * 0.9f).align(Alignment.Center),
@@ -194,11 +253,16 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                 modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp),
                             )
                         }
-                        VehiclePickerRow(
-                            vehicles = uiState.vehicles,
-                            activeVehicleId = uiState.activeVehicleId,
-                            onSelect = viewModel::selectVehicle,
-                        )
+                        // The filter row doesn't do anything useful here — VehicleReorderScreen
+                        // always shows every vehicle regardless of this filter — so hiding it
+                        // avoids implying a selection that reorder mode would just ignore.
+                        if (!reorderMode) {
+                            VehiclePickerRow(
+                                vehicles = uiState.vehicles,
+                                activeVehicleId = uiState.activeVehicleId,
+                                onSelect = viewModel::selectVehicle,
+                            )
+                        }
                         Spacer(Modifier.height(10.dp))
                     }
                 }
@@ -273,6 +337,11 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues)) {
             when {
+                reorderMode -> VehicleReorderScreen(
+                    vehicles = uiState.vehicles,
+                    onReorderVehicles = viewModel::reorderVehicles,
+                    onDone = { reorderMode = false },
+                )
                 uiState.showScheduleScreen -> ScheduleScreen(
                     uiState = uiState,
                     onBack = viewModel::closeSubScreen,
@@ -294,6 +363,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                 cost = null,
                                 parts = "",
                                 notes = "",
+                                fulfillsScheduleId = sched.id,
                             ),
                         )
                     },
@@ -316,7 +386,6 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onOpenVehicleTab = viewModel::openVehicleTab,
                             onOpenVehicleCostTrend = viewModel::openVehicleCostTrend,
                             onSetVehiclePhoto = viewModel::setVehiclePhoto,
-                            onReorderVehicles = viewModel::reorderVehicles,
                         )
                         AppTab.Log -> LogScreen(
                             uiState = uiState,
@@ -342,6 +411,10 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                             onOpenSchedule = viewModel::openSchedule,
                             onOpenCostTrend = viewModel::openCostTrend,
+                            onReorderVehicles = {
+                                viewModel.resetToHome()
+                                reorderMode = true
+                            },
                         )
                     }
                 }
@@ -366,6 +439,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             entry = sheet.entry,
             prefill = sheet.prefill,
             vehicles = uiState.vehicles,
+            schedules = uiState.schedules,
             defaultVehicleId = uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id,
             viewModel = viewModel,
             onDismiss = { activeSheet = Sheet.None },
@@ -380,6 +454,23 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             onDismiss = { activeSheet = Sheet.None },
             onSave = { viewModel.saveIssue(it); activeSheet = Sheet.None },
             onDelete = { viewModel.deleteIssue(it); activeSheet = Sheet.None },
+            onResolvedWithLog = { resolved ->
+                viewModel.saveIssue(resolved)
+                activeSheet = Sheet.LogForm(
+                    entry = null,
+                    prefill = LogEntryEntity(
+                        id = "",
+                        vehicleId = resolved.vehicleId,
+                        date = todayIso(),
+                        mileage = uiState.vehicles.find { it.id == resolved.vehicleId }?.miles,
+                        category = LogCategory.Repair.name,
+                        task = resolved.title,
+                        cost = null,
+                        parts = "",
+                        notes = "",
+                    ),
+                )
+            },
         )
         is Sheet.PhaseForm -> PhaseFormSheet(
             phase = sheet.phase,

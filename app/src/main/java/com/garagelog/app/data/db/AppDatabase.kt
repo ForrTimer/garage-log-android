@@ -30,7 +30,7 @@ import com.garagelog.app.data.entity.VehicleEntity
         PhotoEntity::class,
         NotificationPrefsEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

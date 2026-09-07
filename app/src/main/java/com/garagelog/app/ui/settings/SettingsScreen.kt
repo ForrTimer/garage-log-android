@@ -56,6 +56,7 @@ fun SettingsScreen(
     onEditVehicle: (VehicleEntity) -> Unit,
     onOpenSchedule: () -> Unit,
     onOpenCostTrend: () -> Unit,
+    onReorderVehicles: () -> Unit,
 ) {
     val context = LocalContext.current
     var showResetConfirm by remember { mutableStateOf(false) }
@@ -124,8 +125,11 @@ fun SettingsScreen(
                     }
                     if (index != uiState.vehicles.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
-                OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                    Text("+ Add vehicle")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                    OutlinedButton(onClick = onAddVehicle, modifier = Modifier.weight(1f)) { Text("+ Add vehicle") }
+                    if (uiState.vehicles.size > 1) {
+                        OutlinedButton(onClick = onReorderVehicles, modifier = Modifier.weight(1f)) { Text("Reorder vehicles") }
+                    }
                 }
             }
         }
