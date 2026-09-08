@@ -17,10 +17,10 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,18 +53,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.garagelog.app.ui.theme.GarageFabShape
 import com.garagelog.app.ui.theme.garageColors
-import com.garagelog.app.data.entity.BuildPhaseEntity
-import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
-import com.garagelog.app.ui.build.BuildScreen
-import com.garagelog.app.ui.build.PhaseFormSheet
-import com.garagelog.app.ui.build.StepFormSheet
 import com.garagelog.app.ui.components.VehiclePickerRow
-import com.garagelog.app.ui.costtrend.CostTrendScreen
 import com.garagelog.app.ui.dashboard.DashboardScreen
 import com.garagelog.app.ui.dashboard.VehicleReorderScreen
 import com.garagelog.app.ui.issues.IssueFormSheet
@@ -75,10 +69,11 @@ import com.garagelog.app.ui.schedule.ScheduleFormSheet
 import com.garagelog.app.ui.schedule.ScheduleScreen
 import com.garagelog.app.ui.settings.SettingsScreen
 import com.garagelog.app.ui.settings.VehicleFormSheet
+import com.garagelog.app.ui.trends.TrendsScreen
 import com.garagelog.app.util.todayIso
 import kotlinx.coroutines.flow.collectLatest
 
-private val mainTabs = listOf(AppTab.Dashboard, AppTab.Log, AppTab.Issues, AppTab.Build, AppTab.Settings)
+private val mainTabs = listOf(AppTab.Dashboard, AppTab.Log, AppTab.Issues, AppTab.Trends, AppTab.Settings)
 
 // A quick round-trip through a system picker (photo, backup file) stops and restarts this
 // activity in well under this long; a genuine "put the phone down" gap runs much longer.
@@ -88,7 +83,7 @@ private fun AppTab.label(): String = when (this) {
     AppTab.Dashboard -> "Home"
     AppTab.Log -> "Log"
     AppTab.Issues -> "Issues"
-    AppTab.Build -> "Build"
+    AppTab.Trends -> "Trends"
     AppTab.Settings -> "More"
 }
 
@@ -96,7 +91,7 @@ private fun AppTab.icon(): ImageVector = when (this) {
     AppTab.Dashboard -> Icons.Filled.Home
     AppTab.Log -> Icons.Filled.MenuBook
     AppTab.Issues -> Icons.Filled.Warning
-    AppTab.Build -> Icons.Filled.Build
+    AppTab.Trends -> Icons.Filled.ShowChart
     AppTab.Settings -> Icons.Filled.MoreHoriz
 }
 
@@ -105,8 +100,6 @@ private sealed class Sheet {
     data class VehicleForm(val vehicle: VehicleEntity?) : Sheet()
     data class LogForm(val entry: LogEntryEntity?, val prefill: LogEntryEntity? = null) : Sheet()
     data class IssueForm(val issue: IssueEntity?) : Sheet()
-    data class PhaseForm(val phase: BuildPhaseEntity?, val vehicleId: String? = null) : Sheet()
-    data class StepForm(val step: BuildStepEntity?, val vehicleId: String? = null) : Sheet()
     data class ScheduleForm(val schedule: MaintenanceScheduleEntity?) : Sheet()
 }
 
@@ -196,8 +189,9 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     }
     val liveTab = mainTabs.getOrNull(pagerState.currentPage) ?: uiState.currentTab
 
-    val showingSubScreen = uiState.showScheduleScreen || uiState.showCostTrendScreen
-    val showFab = !showingSubScreen && uiState.currentTab != AppTab.Settings && uiState.currentTab != AppTab.Dashboard
+    val showingSubScreen = uiState.showScheduleScreen
+    val showFab = !showingSubScreen && uiState.currentTab != AppTab.Settings &&
+        uiState.currentTab != AppTab.Dashboard && uiState.currentTab != AppTab.Trends
 
     // Deliberately not garageColors.alarm here — that red is reserved for genuine urgency
     // (overdue maintenance, safety-critical issues). Reusing it for "this is the selected tab"
@@ -231,7 +225,6 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         val headerTitle = when {
                             reorderMode -> "Home"
                             uiState.showScheduleScreen -> "Maintenance"
-                            uiState.showCostTrendScreen -> "Cost trend"
                             else -> liveTab.label()
                         }
                         val headerIcon = if (reorderMode) Icons.Filled.Home else liveTab.icon()
@@ -295,10 +288,10 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         colors = itemColors,
                     )
                     NavigationBarItem(
-                        selected = uiState.currentTab == AppTab.Build && !showingSubScreen,
-                        onClick = { viewModel.selectTab(AppTab.Build) },
-                        icon = { Icon(Icons.Filled.Build, contentDescription = null) },
-                        label = { Text("Build") },
+                        selected = uiState.currentTab == AppTab.Trends && !showingSubScreen,
+                        onClick = { viewModel.selectTab(AppTab.Trends) },
+                        icon = { Icon(Icons.Filled.ShowChart, contentDescription = null) },
+                        label = { Text("Trends") },
                         colors = itemColors,
                     )
                     NavigationBarItem(
@@ -324,7 +317,6 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             when (uiState.currentTab) {
                                 AppTab.Log -> Sheet.LogForm(null)
                                 AppTab.Issues -> Sheet.IssueForm(null)
-                                AppTab.Build -> Sheet.StepForm(null)
                                 else -> Sheet.LogForm(null)
                             }
                         }
@@ -368,10 +360,6 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         )
                     },
                 )
-                uiState.showCostTrendScreen -> CostTrendScreen(
-                    uiState = uiState,
-                    onBack = viewModel::closeSubScreen,
-                )
                 else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     when (mainTabs[page]) {
                         AppTab.Dashboard -> DashboardScreen(
@@ -381,10 +369,25 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                             onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
                             onOpenSchedule = viewModel::openSchedule,
-                            onOpenCostTrend = viewModel::openCostTrend,
+                            onOpenTrends = { viewModel.selectTab(AppTab.Trends) },
                             onUpdateMileage = viewModel::updateMileage,
                             onOpenVehicleTab = viewModel::openVehicleTab,
-                            onOpenVehicleCostTrend = viewModel::openVehicleCostTrend,
+                            onAddFueling = { vehicle ->
+                                activeSheet = Sheet.LogForm(
+                                    entry = null,
+                                    prefill = LogEntryEntity(
+                                        id = "",
+                                        vehicleId = vehicle.id,
+                                        date = todayIso(),
+                                        mileage = vehicle.miles,
+                                        category = LogCategory.Fuel.name,
+                                        task = "Fuel",
+                                        cost = null,
+                                        parts = "",
+                                        notes = "",
+                                    ),
+                                )
+                            },
                             onSetVehiclePhoto = viewModel::setVehiclePhoto,
                         )
                         AppTab.Log -> LogScreen(
@@ -397,20 +400,14 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onItemClick = { activeSheet = Sheet.IssueForm(it) },
                             onDelete = { viewModel.deleteIssue(it.id) },
                         )
-                        AppTab.Build -> BuildScreen(
-                            uiState = uiState,
-                            onPhaseClick = { activeSheet = Sheet.PhaseForm(it) },
-                            onStepClick = { activeSheet = Sheet.StepForm(it) },
-                            onAddPhase = { vehicleId -> activeSheet = Sheet.PhaseForm(null, vehicleId) },
-                            onImportStepsFromNotes = viewModel::importStepsFromPhaseNotes,
-                        )
+                        AppTab.Trends -> TrendsScreen(uiState = uiState)
                         AppTab.Settings -> SettingsScreen(
                             uiState = uiState,
                             viewModel = viewModel,
                             onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
                             onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                             onOpenSchedule = viewModel::openSchedule,
-                            onOpenCostTrend = viewModel::openCostTrend,
+                            onOpenTrends = { viewModel.selectTab(AppTab.Trends) },
                             onReorderVehicles = {
                                 viewModel.resetToHome()
                                 reorderMode = true
@@ -472,30 +469,6 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 )
             },
         )
-        is Sheet.PhaseForm -> PhaseFormSheet(
-            phase = sheet.phase,
-            vehicles = uiState.vehicles,
-            defaultVehicleId = sheet.phase?.vehicleId ?: sheet.vehicleId ?: uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id,
-            nextOrder = uiState.buildPhases.size + 1,
-            onDismiss = { activeSheet = Sheet.None },
-            onSave = { viewModel.saveBuildPhase(it); activeSheet = Sheet.None },
-            onDelete = { viewModel.deleteBuildPhase(it); activeSheet = Sheet.None },
-        )
-        is Sheet.StepForm -> {
-            val vehicleId = sheet.step?.vehicleId ?: sheet.vehicleId ?: uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id
-            if (vehicleId != null) {
-                StepFormSheet(
-                    step = sheet.step,
-                    vehicleId = vehicleId,
-                    phases = uiState.buildPhases.filter { it.vehicleId == vehicleId },
-                    nextOrder = uiState.buildSteps.count { it.vehicleId == vehicleId } + 1,
-                    viewModel = viewModel,
-                    onDismiss = { activeSheet = Sheet.None },
-                    onSave = { viewModel.saveBuildStep(it); activeSheet = Sheet.None },
-                    onDelete = { viewModel.deleteBuildStep(it); activeSheet = Sheet.None },
-                )
-            }
-        }
         is Sheet.ScheduleForm -> ScheduleFormSheet(
             schedule = sheet.schedule,
             vehicles = uiState.vehicles,

@@ -55,7 +55,7 @@ fun SettingsScreen(
     onAddVehicle: () -> Unit,
     onEditVehicle: (VehicleEntity) -> Unit,
     onOpenSchedule: () -> Unit,
-    onOpenCostTrend: () -> Unit,
+    onOpenTrends: () -> Unit,
     onReorderVehicles: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -104,7 +104,7 @@ fun SettingsScreen(
                 Text("Insights", style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
                     OutlinedButton(onClick = onOpenSchedule, modifier = Modifier.weight(1f)) { Text("Maintenance schedule") }
-                    OutlinedButton(onClick = onOpenCostTrend, modifier = Modifier.weight(1f)) { Text("Cost trend") }
+                    OutlinedButton(onClick = onOpenTrends, modifier = Modifier.weight(1f)) { Text("Trends") }
                 }
             }
         }

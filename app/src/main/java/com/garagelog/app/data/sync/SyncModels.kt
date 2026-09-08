@@ -1,6 +1,5 @@
 package com.garagelog.app.data.sync
 
-import com.garagelog.app.data.entity.BuildPhaseEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
@@ -21,7 +20,6 @@ data class SyncSnapshot(
     val vehicles: List<SyncVehicle> = emptyList(),
     val logs: List<SyncLog> = emptyList(),
     val issues: List<SyncIssue> = emptyList(),
-    val buildPhases: List<SyncPhase> = emptyList(),
     val schedules: List<SyncSchedule> = emptyList(),
 )
 
@@ -63,6 +61,8 @@ data class SyncLog(
     val parts: String,
     val notes: String,
     val fulfillsScheduleId: String? = null,
+    val gallons: Double? = null,
+    val fullTank: Boolean = false,
     override val updatedAt: Long,
     override val deleted: Boolean,
 ) : Syncable
@@ -77,18 +77,6 @@ data class SyncIssue(
     val dateOpened: String,
     val dateResolved: String,
     val description: String,
-    override val updatedAt: Long,
-    override val deleted: Boolean,
-) : Syncable
-
-@Serializable
-data class SyncPhase(
-    override val id: String,
-    val vehicleId: String,
-    val phase: String,
-    val status: String,
-    val order: Int,
-    val notes: String,
     override val updatedAt: Long,
     override val deleted: Boolean,
 ) : Syncable
@@ -120,12 +108,14 @@ fun SyncVehicle.toEntity() = VehicleEntity(
 
 fun LogEntryEntity.toSync() = SyncLog(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage, category = category, task = task,
-    cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId, updatedAt = updatedAt, deleted = deleted,
+    cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId,
+    gallons = gallons, fullTank = fullTank, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun SyncLog.toEntity() = LogEntryEntity(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage, category = category, task = task,
-    cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId, updatedAt = updatedAt, deleted = deleted,
+    cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId,
+    gallons = gallons, fullTank = fullTank, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun IssueEntity.toSync() = SyncIssue(
@@ -137,16 +127,6 @@ fun IssueEntity.toSync() = SyncIssue(
 fun SyncIssue.toEntity() = IssueEntity(
     id = id, vehicleId = vehicleId, title = title, status = status, priority = priority,
     dateOpened = dateOpened, dateResolved = dateResolved, description = description,
-    updatedAt = updatedAt, deleted = deleted,
-)
-
-fun BuildPhaseEntity.toSync() = SyncPhase(
-    id = id, vehicleId = vehicleId, phase = phase, status = status, order = order, notes = notes,
-    updatedAt = updatedAt, deleted = deleted,
-)
-
-fun SyncPhase.toEntity() = BuildPhaseEntity(
-    id = id, vehicleId = vehicleId, phase = phase, status = status, order = order, notes = notes,
     updatedAt = updatedAt, deleted = deleted,
 )
 

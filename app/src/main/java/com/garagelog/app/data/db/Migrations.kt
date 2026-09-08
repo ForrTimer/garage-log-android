@@ -85,3 +85,18 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("ALTER TABLE log_entries ADD COLUMN fulfillsScheduleId TEXT DEFAULT NULL")
     }
 }
+
+/**
+ * Adds Fuel/Mileage log-entry support (gallons + full-tank flag, for the Trends tab's MPG chart)
+ * and drops the Build tab entirely — retired in favor of that same Trends tab, which absorbs
+ * cost-over-mileage in its place. Build data isn't migrated anywhere; it's just gone.
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE log_entries ADD COLUMN gallons REAL DEFAULT NULL")
+        db.execSQL("ALTER TABLE log_entries ADD COLUMN fullTank INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("DROP TABLE IF EXISTS build_phases")
+        db.execSQL("DROP TABLE IF EXISTS build_steps")
+        db.execSQL("DELETE FROM photos WHERE ownerType = 'BUILD_STEP'")
+    }
+}

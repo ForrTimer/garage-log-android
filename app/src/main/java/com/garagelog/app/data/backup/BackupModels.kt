@@ -3,14 +3,14 @@ package com.garagelog.app.data.backup
 import com.garagelog.app.data.entity.IssuePriority
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.LogCategory
-import com.garagelog.app.data.entity.PhaseStatus
-import com.garagelog.app.data.entity.StepPriority
 import kotlinx.serialization.Serializable
 
 /**
- * Mirrors the PWA's flat backup JSON shape ({vehicles, logs, issues, buildPhases})
+ * Mirrors the PWA's flat backup JSON shape ({vehicles, logs, issues})
  * so an export from the old web app can still be imported here — extended with
  * maintenanceSchedules, additively, so older exports (missing that key) still parse.
+ * `ignoreUnknownKeys` means an older export's buildPhases/buildSteps keys (from before the
+ * Build tab was retired) are simply skipped on import rather than rejected.
  *
  * Numeric-looking fields are kept as String? rather than Int/Double because the PWA
  * itself stores them inconsistently (raw numbers in the original seed, but strings
@@ -22,8 +22,6 @@ data class BackupData(
     val vehicles: List<BackupVehicle> = emptyList(),
     val logs: List<BackupLog> = emptyList(),
     val issues: List<BackupIssue> = emptyList(),
-    val buildPhases: List<BackupPhase> = emptyList(),
-    val buildSteps: List<BackupStep> = emptyList(),
     val maintenanceSchedules: List<BackupSchedule> = emptyList(),
 )
 
@@ -63,6 +61,8 @@ data class BackupLog(
     val cost: String? = null,
     val parts: String = "",
     val notes: String = "",
+    val gallons: String? = null,
+    val fullTank: Boolean = false,
 )
 
 @Serializable
@@ -75,33 +75,6 @@ data class BackupIssue(
     val dateOpened: String = "",
     val dateResolved: String = "",
     val description: String = "",
-)
-
-@Serializable
-data class BackupPhase(
-    val id: String,
-    val vehicleId: String,
-    val phase: String = "",
-    val status: String = PhaseStatus.NotStarted.label,
-    val order: String? = "0",
-    val notes: String = "",
-    val priorityFilter: String? = null,
-    val budgetCap: String? = null,
-)
-
-@Serializable
-data class BackupStep(
-    val id: String,
-    val vehicleId: String,
-    val phaseId: String? = null,
-    val title: String = "",
-    val notes: String = "",
-    val priority: String = StepPriority.Medium.name,
-    val status: String = PhaseStatus.NotStarted.label,
-    val estimatedCost: String? = null,
-    val actualCost: String? = null,
-    val order: String? = "0",
-    val manualPhaseOverride: Boolean = false,
 )
 
 @Serializable

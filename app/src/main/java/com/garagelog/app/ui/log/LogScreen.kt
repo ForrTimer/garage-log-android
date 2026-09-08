@@ -50,6 +50,13 @@ fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit, 
     var query by remember { mutableStateOf("") }
     val logs = uiState.logsFor(uiState.activeVehicleId)
         .filter { categoryFilter == null || it.category == categoryFilter }
+        // Fuel/Mileage entries are logged for the Trends charts, not for browsing here — showing
+        // them by default would bury the maintenance history under routine fill-ups and odometer
+        // bumps. Selecting their chip explicitly still reveals them, same as any other category.
+        .filter {
+            categoryFilter != null ||
+                (it.category != LogCategory.Fuel.name && it.category != LogCategory.Mileage.name)
+        }
         .filter { entry ->
             query.isBlank() ||
                 entry.task.contains(query, ignoreCase = true) ||

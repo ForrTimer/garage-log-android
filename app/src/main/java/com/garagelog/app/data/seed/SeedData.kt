@@ -1,15 +1,11 @@
 package com.garagelog.app.data.seed
 
-import com.garagelog.app.data.entity.BuildPhaseEntity
-import com.garagelog.app.data.entity.BuildStepEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.IssuePriority
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
-import com.garagelog.app.data.entity.PhaseStatus
-import com.garagelog.app.data.entity.StepPriority
 import com.garagelog.app.data.entity.VehicleEntity
 
 /**
@@ -141,82 +137,6 @@ object SeedData {
             status = IssueStatus.Open.label, priority = IssuePriority.Normal.label,
             dateOpened = "2026-08-04", dateResolved = "",
             description = "Doesn't work on med-high/low — classic blower motor resistor symptom. Folded into Year 1.",
-        ),
-    )
-
-    fun buildPhases(): List<BuildPhaseEntity> = listOf(
-        BuildPhaseEntity(
-            id = "tuna-phase-1", vehicleId = BLUE_TUNA_ID,
-            phase = "Year 1 — Engine (6.5L + Quadstar Super 54 turbo)",
-            status = PhaseStatus.InProgress.label, order = 1,
-            notes = "Reliability-first supporting mods: ARP fasteners, Fluidampr balancer, FASS lift pump, Flowkooler water pump, coolant filter kit, new injector lines, Harland Sharp rockers if heads come off. Super 54 currently out of stock at Quadstar (\$1,250) — need to contact for restock timing.",
-        ),
-        BuildPhaseEntity(
-            id = "tuna-phase-2", vehicleId = BLUE_TUNA_ID, phase = "Year 1 — Exhaust/Cooling",
-            status = PhaseStatus.NotStarted.label, order = 2,
-            notes = "Custom Vibrant mandrel-bent exhaust per WMF reference build (stepped 4\"/oval-to-3\", not straight-pipe). Sizing/routing decision still needed before this phase starts — interacts with turbo spool/backpressure.",
-        ),
-        BuildPhaseEntity(
-            id = "tuna-phase-3", vehicleId = BLUE_TUNA_ID, phase = "Year 1 — PMD / A/C / Electrical fixes",
-            status = PhaseStatus.NotStarted.label, order = 3,
-            notes = "PMD shield (location is thermally correct per GMT400 consensus) + dielectric grease. A/C leak diagnosis. Blower resistor.",
-        ),
-        BuildPhaseEntity(
-            id = "tuna-phase-4", vehicleId = BLUE_TUNA_ID, phase = "Year 2 — Drivetrain / Off-road",
-            status = PhaseStatus.NotStarted.label, order = 4,
-            notes = "Re-gear for 35–37\" tires, locking diff decision, 3\" lift, tire/wheel selection, DIY front bumper + winch build, steering box/linkage upgrades.",
-        ),
-        BuildPhaseEntity(
-            id = "tuna-phase-5", vehicleId = BLUE_TUNA_ID, phase = "Year 3 — Interior / Corrosion / Electrical",
-            status = PhaseStatus.NotStarted.label, order = 5,
-            notes = "Cargo liner, dash/door plastics, GMT900 seat swap research, amp + inverter install, connector weatherproofing (Deutsch DT/DTM leaning), CB/UHF/VHF radio, interior overhead rack.",
-        ),
-    )
-
-    /** Steps under tuna-phase-1, imported from that phase's notes via the Build tab's "Import steps from notes" link. */
-    fun buildSteps(): List<BuildStepEntity> = listOf(
-        BuildStepEntity(
-            id = "tuna-step-1", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
-            title = "ARP Fasteners", notes = "", priority = StepPriority.Medium.name,
-            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
-            order = 1, manualPhaseOverride = true,
-        ),
-        BuildStepEntity(
-            id = "tuna-step-2", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
-            title = "Fluidampr balancer", notes = "", priority = StepPriority.Medium.name,
-            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
-            order = 2, manualPhaseOverride = true,
-        ),
-        BuildStepEntity(
-            id = "tuna-step-3", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
-            title = "FASS lift pump", notes = "", priority = StepPriority.Medium.name,
-            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
-            order = 3, manualPhaseOverride = true,
-        ),
-        BuildStepEntity(
-            id = "tuna-step-4", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
-            title = "Flowkooler water pump", notes = "", priority = StepPriority.Medium.name,
-            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
-            order = 4, manualPhaseOverride = true,
-        ),
-        BuildStepEntity(
-            id = "tuna-step-5", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
-            title = "coolant filter kit", notes = "", priority = StepPriority.Medium.name,
-            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
-            order = 5, manualPhaseOverride = true,
-        ),
-        BuildStepEntity(
-            id = "tuna-step-6", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
-            title = "new injector lines", notes = "", priority = StepPriority.Medium.name,
-            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
-            order = 6, manualPhaseOverride = true,
-        ),
-        BuildStepEntity(
-            id = "tuna-step-7", vehicleId = BLUE_TUNA_ID, phaseId = "tuna-phase-1",
-            title = "Harland Sharp rockers if heads come off. Super 54 currently out of stock at Quadstar (\$1,250) — need to contact for restock timing",
-            notes = "", priority = StepPriority.Medium.name,
-            status = PhaseStatus.NotStarted.label, estimatedCost = null, actualCost = null,
-            order = 7, manualPhaseOverride = true,
         ),
     )
 

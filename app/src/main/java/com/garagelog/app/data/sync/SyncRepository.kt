@@ -5,7 +5,6 @@ import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.db.AppDatabase
 import com.garagelog.app.data.entity.PhotoEntity
 import com.garagelog.app.data.photo.PhotoStore
-import com.garagelog.app.data.repository.BuildPhaseRepository
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.PhotoRepository
@@ -26,7 +25,6 @@ class SyncRepository(
     private val vehicleRepository: VehicleRepository,
     private val logRepository: LogRepository,
     private val issueRepository: IssueRepository,
-    private val buildPhaseRepository: BuildPhaseRepository,
     private val scheduleRepository: ScheduleRepository,
     private val photoRepository: PhotoRepository,
     private val photoStore: PhotoStore,
@@ -62,7 +60,6 @@ class SyncRepository(
             vehicles = localVehicles.map { it.toSync() },
             logs = logRepository.getAllForSync().map { it.toSync() },
             issues = issueRepository.getAllForSync().map { it.toSync() },
-            buildPhases = buildPhaseRepository.getAllForSync().map { it.toSync() },
             schedules = scheduleRepository.getAllForSync().map { it.toSync() },
         )
 
@@ -70,7 +67,6 @@ class SyncRepository(
             vehicles = mergeById(localSnapshot.vehicles, remoteSnapshot.vehicles),
             logs = mergeById(localSnapshot.logs, remoteSnapshot.logs),
             issues = mergeById(localSnapshot.issues, remoteSnapshot.issues),
-            buildPhases = mergeById(localSnapshot.buildPhases, remoteSnapshot.buildPhases),
             schedules = mergeById(localSnapshot.schedules, remoteSnapshot.schedules),
         )
 
@@ -95,7 +91,6 @@ class SyncRepository(
             merged.vehicles.forEach { vehicleRepository.upsert(it.toEntity().copy(photoPath = localPhotoPathById[it.id])) }
             merged.logs.forEach { logRepository.upsert(it.toEntity()) }
             merged.issues.forEach { issueRepository.upsert(it.toEntity()) }
-            merged.buildPhases.forEach { buildPhaseRepository.upsert(it.toEntity()) }
             merged.schedules.forEach { scheduleRepository.upsert(it.toEntity()) }
         }
 

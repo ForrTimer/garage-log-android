@@ -19,15 +19,18 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 
@@ -50,7 +53,7 @@ fun FormSheetScaffold(
     deleteMessage: String = "This can't be undone.",
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberHardToDismissSheetState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
@@ -100,6 +103,37 @@ fun FormSheetScaffold(
             message = deleteMessage,
             onConfirm = onDelete,
             onDismiss = { showDeleteConfirm = false },
+        )
+    }
+}
+
+/**
+ * A [SheetState] built directly (rather than via `rememberModalBottomSheetState`) so the drag
+ * thresholds can be raised above Material3's defaults (56dp positional / 125dp-per-second
+ * velocity) — the stock thresholds made it too easy to close a form sheet with an accidental
+ * downward drag while scrolling or reaching for a field, losing whatever had been filled in.
+ * Roughly 2x both thresholds means a swipe now needs real, deliberate travel (or a genuinely
+ * fast flick) to dismiss, while a normal scroll/tap still passes through untouched.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun rememberHardToDismissSheetState(): SheetState {
+    val density = LocalDensity.current
+    val positionalThresholdPx = { with(density) { 120.dp.toPx() } }
+    val velocityThresholdPx = { with(density) { 260.dp.toPx() } }
+    return rememberSaveable(
+        saver = SheetState.Saver(
+            skipPartiallyExpanded = true,
+            positionalThreshold = positionalThresholdPx,
+            velocityThreshold = velocityThresholdPx,
+            confirmValueChange = { true },
+            skipHiddenState = false,
+        ),
+    ) {
+        SheetState(
+            skipPartiallyExpanded = true,
+            positionalThreshold = positionalThresholdPx,
+            velocityThreshold = velocityThresholdPx,
         )
     }
 }

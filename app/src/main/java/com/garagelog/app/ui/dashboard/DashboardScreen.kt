@@ -91,10 +91,10 @@ fun DashboardScreen(
     onEditVehicle: (VehicleEntity) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenSchedule: () -> Unit,
-    onOpenCostTrend: () -> Unit,
+    onOpenTrends: () -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
-    onOpenVehicleCostTrend: (String) -> Unit,
+    onAddFueling: (VehicleEntity) -> Unit,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
@@ -116,7 +116,7 @@ fun DashboardScreen(
                     onOpenSchedule = onOpenSchedule,
                     onUpdateMileage = onUpdateMileage,
                     onOpenVehicleTab = onOpenVehicleTab,
-                    onOpenVehicleCostTrend = onOpenVehicleCostTrend,
+                    onAddFueling = onAddFueling,
                     onSetVehiclePhoto = onSetVehiclePhoto,
                 )
                 Spacer(Modifier.padding(bottom = 12.dp))
@@ -128,7 +128,7 @@ fun DashboardScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = GarageDimens.screenHorizontal, vertical = 12.dp),
             ) {
                 OutlinedButton(onClick = onOpenSchedule, modifier = Modifier.weight(1f)) { Text("Maintenance") }
-                OutlinedButton(onClick = onOpenCostTrend, modifier = Modifier.weight(1f)) { Text("Cost trend") }
+                OutlinedButton(onClick = onOpenTrends, modifier = Modifier.weight(1f)) { Text("Trends") }
             }
         }
     }
@@ -143,7 +143,7 @@ private fun VehicleDashboardCard(
     onOpenSchedule: () -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
-    onOpenVehicleCostTrend: (String) -> Unit,
+    onAddFueling: (VehicleEntity) -> Unit,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
 ) {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
@@ -247,12 +247,16 @@ private fun VehicleDashboardCard(
                 when (index) {
                     0 -> showMileageDialog = true
                     1 -> onOpenVehicleTab(v.id, AppTab.Issues)
-                    2 -> onOpenVehicleCostTrend(v.id)
+                    2 -> onOpenVehicleTab(v.id, AppTab.Trends)
                 }
             },
         )
 
-        ActionLink("Update mileage", onClick = { showMileageDialog = true }, modifier = Modifier.padding(top = 8.dp))
+        Row(modifier = Modifier.padding(top = 8.dp)) {
+            ActionLink("Update mileage", onClick = { showMileageDialog = true })
+            Spacer(Modifier.width(8.dp))
+            ActionLink("Add fueling", onClick = { onAddFueling(v) })
+        }
 
         Text(
             text = lastLog?.let { "Last logged: ${formatDate(it.date)} — ${it.task}" } ?: "No log entries yet.",

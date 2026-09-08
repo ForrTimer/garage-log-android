@@ -9,15 +9,12 @@ import com.garagelog.app.data.db.MIGRATION_1_2
 import com.garagelog.app.data.db.MIGRATION_2_3
 import com.garagelog.app.data.db.MIGRATION_3_4
 import com.garagelog.app.data.db.MIGRATION_4_5
+import com.garagelog.app.data.db.MIGRATION_5_6
 import com.garagelog.app.data.photo.PhotoStore
-import com.garagelog.app.data.repository.BuildPhaseRepository
-import com.garagelog.app.data.repository.BuildStepRepository
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.NotificationPrefsRepository
 import com.garagelog.app.data.repository.PhotoRepository
-import com.garagelog.app.data.repository.RoomBuildPhaseRepository
-import com.garagelog.app.data.repository.RoomBuildStepRepository
 import com.garagelog.app.data.repository.RoomIssueRepository
 import com.garagelog.app.data.repository.RoomLogRepository
 import com.garagelog.app.data.repository.RoomNotificationPrefsRepository
@@ -46,13 +43,11 @@ class ServiceLocator(context: Context) {
         appContext,
         AppDatabase::class.java,
         AppDatabase.DATABASE_NAME,
-    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
+    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
 
     val vehicleRepository: VehicleRepository = RoomVehicleRepository(database.vehicleDao())
     val logRepository: LogRepository = RoomLogRepository(database.logEntryDao())
     val issueRepository: IssueRepository = RoomIssueRepository(database.issueDao())
-    val buildPhaseRepository: BuildPhaseRepository = RoomBuildPhaseRepository(database.buildPhaseDao())
-    val buildStepRepository: BuildStepRepository = RoomBuildStepRepository(database.buildStepDao())
     val scheduleRepository: ScheduleRepository = RoomScheduleRepository(database.maintenanceScheduleDao())
     val photoRepository: PhotoRepository = RoomPhotoRepository(database.photoDao())
     val notificationPrefsRepository: NotificationPrefsRepository = RoomNotificationPrefsRepository(database.notificationPrefsDao())
@@ -63,8 +58,6 @@ class ServiceLocator(context: Context) {
         vehicleRepository = vehicleRepository,
         logRepository = logRepository,
         issueRepository = issueRepository,
-        buildPhaseRepository = buildPhaseRepository,
-        buildStepRepository = buildStepRepository,
         scheduleRepository = scheduleRepository,
         photoRepository = photoRepository,
         photoStore = photoStore,
@@ -81,7 +74,6 @@ class ServiceLocator(context: Context) {
         vehicleRepository = vehicleRepository,
         logRepository = logRepository,
         issueRepository = issueRepository,
-        buildPhaseRepository = buildPhaseRepository,
         scheduleRepository = scheduleRepository,
         photoRepository = photoRepository,
         photoStore = photoStore,
@@ -102,8 +94,6 @@ class ServiceLocator(context: Context) {
         SeedData.vehicles().forEach { vehicleRepository.upsert(it) }
         SeedData.logEntries().forEach { logRepository.upsert(it) }
         SeedData.issues().forEach { issueRepository.upsert(it) }
-        SeedData.buildPhases().forEach { buildPhaseRepository.upsert(it) }
-        SeedData.buildSteps().forEach { buildStepRepository.upsert(it) }
         SeedData.maintenanceSchedules().forEach { scheduleRepository.upsert(it) }
     }
 }
