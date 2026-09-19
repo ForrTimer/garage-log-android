@@ -2,12 +2,16 @@ package com.garagelog.app.data.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import com.garagelog.app.data.dao.AiChatDao
+import com.garagelog.app.data.dao.AiDiagnosisDao
 import com.garagelog.app.data.dao.IssueDao
 import com.garagelog.app.data.dao.LogEntryDao
 import com.garagelog.app.data.dao.MaintenanceScheduleDao
 import com.garagelog.app.data.dao.NotificationPrefsDao
 import com.garagelog.app.data.dao.PhotoDao
 import com.garagelog.app.data.dao.VehicleDao
+import com.garagelog.app.data.entity.AiChatMessageEntity
+import com.garagelog.app.data.entity.AiDiagnosisEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
@@ -23,8 +27,10 @@ import com.garagelog.app.data.entity.VehicleEntity
         MaintenanceScheduleEntity::class,
         PhotoEntity::class,
         NotificationPrefsEntity::class,
+        AiDiagnosisEntity::class,
+        AiChatMessageEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +40,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun maintenanceScheduleDao(): MaintenanceScheduleDao
     abstract fun photoDao(): PhotoDao
     abstract fun notificationPrefsDao(): NotificationPrefsDao
+    abstract fun aiDiagnosisDao(): AiDiagnosisDao
+    abstract fun aiChatDao(): AiChatDao
 
     companion object {
         const val DATABASE_NAME = "garage_log.db"

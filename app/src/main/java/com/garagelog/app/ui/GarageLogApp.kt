@@ -59,6 +59,9 @@ import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.components.VehiclePickerRow
+import androidx.activity.compose.BackHandler
+import com.garagelog.app.ui.ai.AiChatScreen
+import com.garagelog.app.ui.ai.AiDiagnosisScreen
 import com.garagelog.app.ui.dashboard.DashboardScreen
 import com.garagelog.app.ui.dashboard.VehicleReorderScreen
 import com.garagelog.app.ui.issues.IssueFormSheet
@@ -107,6 +110,11 @@ private sealed class Sheet {
 fun GarageLogApp(viewModel: GarageLogViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
+    val diagnoses by viewModel.diagnoses.collectAsState()
+    val chatMessages by viewModel.chatMessages.collectAsState()
+    val hasAiKey by viewModel.hasAiKey.collectAsState()
+    // Local val so the `is AiScreen.Diagnosis` checks below smart-cast to the concrete type.
+    val aiScreen = uiState.aiScreen
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
     var reorderMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -189,9 +197,15 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     }
     val liveTab = mainTabs.getOrNull(pagerState.currentPage) ?: uiState.currentTab
 
-    val showingSubScreen = uiState.showScheduleScreen
+    val showingSubScreen = uiState.showScheduleScreen || aiScreen != null
     val showFab = !showingSubScreen && uiState.currentTab != AppTab.Settings &&
         uiState.currentTab != AppTab.Dashboard && uiState.currentTab != AppTab.Trends
+
+    // Without this, the system back gesture leaves the app entirely from a sub-screen rather than
+    // returning to the tab underneath — the same thing the screen's own back arrow does.
+    BackHandler(enabled = showingSubScreen || reorderMode) {
+        if (reorderMode) reorderMode = false else viewModel.closeSubScreen()
+    }
 
     // Deliberately not garageColors.alarm here — that red is reserved for genuine urgency
     // (overdue maintenance, safety-critical issues). Reusing it for "this is the selected tab"
@@ -334,6 +348,52 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     onReorderVehicles = viewModel::reorderVehicles,
                     onDone = { reorderMode = false },
                 )
+                aiScreen is AiScreen.Diagnosis -> {
+                    val issue = uiState.issues.find { it.id == aiScreen.issueId }
+                    // The issue can vanish underneath this screen (deleted from another tab, or a
+                    // sync merge), so fall back to closing rather than rendering a half-empty page.
+                    if (issue == null) {
+                        LaunchedEffect(Unit) { viewModel.closeAiScreen() }
+                    } else {
+                        AiDiagnosisScreen(
+                            issue = issue,
+                            vehicleName = uiState.vehicleName(issue.vehicleId),
+                            diagnosis = diagnoses[issue.id],
+                            streamFlow = viewModel.aiStream,
+                            hasApiKey = hasAiKey,
+                            sourcesFor = viewModel::decodeAiSources,
+                            onBack = viewModel::closeAiScreen,
+                            onRun = { viewModel.runDiagnosis(issue) },
+                            onStop = viewModel::cancelAiRun,
+                            onOpenSettings = {
+                                viewModel.closeAiScreen()
+                                viewModel.selectTab(AppTab.Settings)
+                            },
+                        )
+                    }
+                }
+                aiScreen is AiScreen.Chat -> {
+                    val vehicle = uiState.vehicles.find { it.id == aiScreen.vehicleId }
+                    if (vehicle == null) {
+                        LaunchedEffect(Unit) { viewModel.closeAiScreen() }
+                    } else {
+                        AiChatScreen(
+                            vehicleLabel = vehicle.name,
+                            messages = chatMessages.filter { it.vehicleId == vehicle.id },
+                            streamFlow = viewModel.aiStream,
+                            hasApiKey = hasAiKey,
+                            sourcesFor = viewModel::decodeAiSources,
+                            onBack = viewModel::closeAiScreen,
+                            onSend = { viewModel.sendChatMessage(vehicle.id, it) },
+                            onStop = viewModel::cancelAiRun,
+                            onClear = { viewModel.clearChat(vehicle.id) },
+                            onOpenSettings = {
+                                viewModel.closeAiScreen()
+                                viewModel.selectTab(AppTab.Settings)
+                            },
+                        )
+                    }
+                }
                 uiState.showScheduleScreen -> ScheduleScreen(
                     uiState = uiState,
                     onBack = viewModel::closeSubScreen,
@@ -389,6 +449,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                 )
                             },
                             onSetVehiclePhoto = viewModel::setVehiclePhoto,
+                            onAskClaude = { viewModel.openChat(it.id) },
                         )
                         AppTab.Log -> LogScreen(
                             uiState = uiState,
@@ -397,7 +458,9 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         )
                         AppTab.Issues -> IssuesScreen(
                             uiState = uiState,
+                            diagnosedIssueIds = diagnoses.keys,
                             onItemClick = { activeSheet = Sheet.IssueForm(it) },
+                            onDiagnose = { viewModel.openDiagnosis(it.id) },
                             onDelete = { viewModel.deleteIssue(it.id) },
                         )
                         AppTab.Trends -> TrendsScreen(uiState = uiState)

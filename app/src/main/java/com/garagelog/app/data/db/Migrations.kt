@@ -100,3 +100,41 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         db.execSQL("DELETE FROM photos WHERE ownerType = 'BUILD_STEP'")
     }
 }
+
+/**
+ * Adds local storage for the Claude AI features: one saved diagnosis per issue, and the
+ * ask-anything chat history per vehicle. Purely additive — no existing table is touched.
+ *
+ * Neither table carries updatedAt/deleted because neither is synced to Drive or included in the
+ * JSON backup: both are regenerable from data that already syncs, and chat history in particular
+ * would bloat every snapshot for little benefit.
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS ai_diagnoses (
+                issueId TEXT NOT NULL PRIMARY KEY,
+                vehicleId TEXT NOT NULL,
+                content TEXT NOT NULL,
+                sourcesJson TEXT NOT NULL,
+                model TEXT NOT NULL,
+                createdAt INTEGER NOT NULL,
+                milesAtRun INTEGER
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS ai_chat_messages (
+                id TEXT NOT NULL PRIMARY KEY,
+                vehicleId TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                sourcesJson TEXT NOT NULL,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+}

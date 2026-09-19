@@ -95,6 +95,7 @@ fun DashboardScreen(
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onAddFueling: (VehicleEntity) -> Unit,
+    onAskClaude: (VehicleEntity) -> Unit,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
@@ -117,6 +118,7 @@ fun DashboardScreen(
                     onUpdateMileage = onUpdateMileage,
                     onOpenVehicleTab = onOpenVehicleTab,
                     onAddFueling = onAddFueling,
+                    onAskClaude = onAskClaude,
                     onSetVehiclePhoto = onSetVehiclePhoto,
                 )
                 Spacer(Modifier.padding(bottom = 12.dp))
@@ -144,6 +146,7 @@ private fun VehicleDashboardCard(
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onAddFueling: (VehicleEntity) -> Unit,
+    onAskClaude: (VehicleEntity) -> Unit,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
 ) {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
@@ -256,6 +259,8 @@ private fun VehicleDashboardCard(
             ActionLink("Update mileage", onClick = { showMileageDialog = true })
             Spacer(Modifier.width(8.dp))
             ActionLink("Add fueling", onClick = { onAddFueling(v) })
+            Spacer(Modifier.width(8.dp))
+            ActionLink("Ask Claude", onClick = { onAskClaude(v) })
         }
 
         Text(

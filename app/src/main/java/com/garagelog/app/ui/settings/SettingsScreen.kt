@@ -96,6 +96,10 @@ fun SettingsScreen(
         }
 
         item {
+            ClaudeAiSection(viewModel = viewModel, modifier = Modifier.padding(bottom = 12.dp))
+        }
+
+        item {
             MileageReminderCard(uiState.notificationPrefs, viewModel, modifier = Modifier.padding(bottom = 12.dp))
         }
 

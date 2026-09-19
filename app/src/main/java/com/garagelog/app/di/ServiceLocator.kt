@@ -2,6 +2,9 @@ package com.garagelog.app.di
 
 import android.content.Context
 import androidx.room.Room
+import com.garagelog.app.data.ai.AiKeyStore
+import com.garagelog.app.data.ai.AiRepository
+import com.garagelog.app.data.ai.DirectClaudeClient
 import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.backup.BackupManager
 import com.garagelog.app.data.db.AppDatabase
@@ -10,6 +13,7 @@ import com.garagelog.app.data.db.MIGRATION_2_3
 import com.garagelog.app.data.db.MIGRATION_3_4
 import com.garagelog.app.data.db.MIGRATION_4_5
 import com.garagelog.app.data.db.MIGRATION_5_6
+import com.garagelog.app.data.db.MIGRATION_6_7
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
@@ -43,7 +47,9 @@ class ServiceLocator(context: Context) {
         appContext,
         AppDatabase::class.java,
         AppDatabase.DATABASE_NAME,
-    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
+    ).addMigrations(
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+    ).build()
 
     val vehicleRepository: VehicleRepository = RoomVehicleRepository(database.vehicleDao())
     val logRepository: LogRepository = RoomLogRepository(database.logEntryDao())
@@ -61,6 +67,13 @@ class ServiceLocator(context: Context) {
         scheduleRepository = scheduleRepository,
         photoRepository = photoRepository,
         photoStore = photoStore,
+    )
+
+    val aiKeyStore = AiKeyStore(appContext)
+    val aiRepository = AiRepository(
+        client = DirectClaudeClient(aiKeyStore),
+        diagnosisDao = database.aiDiagnosisDao(),
+        chatDao = database.aiChatDao(),
     )
 
     val authManager = AuthManager(appContext)

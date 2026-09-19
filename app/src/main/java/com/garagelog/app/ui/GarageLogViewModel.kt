@@ -8,6 +8,9 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.garagelog.app.data.ai.ClaudeException
+import com.garagelog.app.data.entity.AiChatMessageEntity
+import com.garagelog.app.data.entity.AiDiagnosisEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
@@ -25,6 +28,7 @@ import com.garagelog.app.util.todayIso
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,9 +38,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class AppTab { Dashboard, Log, Issues, Trends, Settings }
+
+/** The AI sub-screens, routed the same way [GarageLogUiState.showScheduleScreen] routes Maintenance. */
+sealed interface AiScreen {
+    data class Diagnosis(val issueId: String) : AiScreen
+    data class Chat(val vehicleId: String) : AiScreen
+}
+
+/**
+ * Live state of an in-flight Claude call. Deliberately its own StateFlow rather than a field on
+ * [GarageLogUiState]: text arrives token by token, and routing that through the big `combine()`
+ * would recompute and re-emit every screen's state dozens of times per answer.
+ */
+data class AiStreamState(
+    val running: Boolean = false,
+    val searching: Boolean = false,
+    val partialText: String = "",
+    val error: String? = null,
+)
 
 data class GarageLogUiState(
     val vehicles: List<VehicleEntity> = emptyList(),
@@ -47,6 +70,7 @@ data class GarageLogUiState(
     val activeVehicleId: String? = null,
     val currentTab: AppTab = AppTab.Dashboard,
     val showScheduleScreen: Boolean = false,
+    val aiScreen: AiScreen? = null,
 ) {
     val activeVehicle: VehicleEntity? get() = vehicles.find { it.id == activeVehicleId }
     fun vehicleName(id: String): String = vehicles.find { it.id == id }?.name ?: "Unknown"
@@ -69,6 +93,21 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     private val activeVehicleId = MutableStateFlow<String?>(null)
     private val currentTab = MutableStateFlow(AppTab.Dashboard)
     private val showScheduleScreen = MutableStateFlow(false)
+    private val aiScreen = MutableStateFlow<AiScreen?>(null)
+
+    private val _aiStream = MutableStateFlow(AiStreamState())
+    val aiStream: StateFlow<AiStreamState> = _aiStream
+    private var aiJob: Job? = null
+
+    val hasAiKey: StateFlow<Boolean> = locator.aiKeyStore.hasKey
+
+    val diagnoses: StateFlow<Map<String, AiDiagnosisEntity>> =
+        locator.aiRepository.observeDiagnoses()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val chatMessages: StateFlow<List<AiChatMessageEntity>> =
+        locator.aiRepository.observeChat()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _messages = MutableSharedFlow<String>()
     val messages: SharedFlow<String> = _messages
@@ -102,14 +141,15 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         }
     }
 
-    private val uiFlags = combine(activeVehicleId, currentTab, showScheduleScreen) { a, b, c ->
-        UiFlags(a, b, c)
+    private val uiFlags = combine(activeVehicleId, currentTab, showScheduleScreen, aiScreen) { a, b, c, d ->
+        UiFlags(a, b, c, d)
     }
 
     private data class UiFlags(
         val activeVehicleId: String?,
         val currentTab: AppTab,
         val showScheduleScreen: Boolean,
+        val aiScreen: AiScreen?,
     )
 
     val uiState: StateFlow<GarageLogUiState> = combine(repoBundle, uiFlags) { bundle, flags ->
@@ -122,6 +162,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
             activeVehicleId = flags.activeVehicleId,
             currentTab = flags.currentTab,
             showScheduleScreen = flags.showScheduleScreen,
+            aiScreen = flags.aiScreen,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GarageLogUiState())
 
@@ -129,9 +170,13 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     fun selectTab(tab: AppTab) {
         currentTab.value = tab
         showScheduleScreen.value = false
+        closeAiScreen()
     }
     fun openSchedule() { showScheduleScreen.value = true }
-    fun closeSubScreen() { showScheduleScreen.value = false }
+    fun closeSubScreen() {
+        showScheduleScreen.value = false
+        closeAiScreen()
+    }
 
     /** Filters to [vehicleId] and switches to [tab] — e.g. tapping a dashboard stat. */
     fun openVehicleTab(vehicleId: String, tab: AppTab) {
@@ -159,6 +204,9 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         locator.issueRepository.softDeleteForVehicle(id)
         locator.scheduleRepository.softDeleteForVehicle(id)
         locator.vehicleRepository.softDelete(id)
+        // AI data is hard-deleted, not soft-deleted — it never syncs, so there's no peer that
+        // needs to learn the row is gone.
+        locator.aiRepository.deleteForVehicle(id)
         if (activeVehicleId.value == id) activeVehicleId.value = null
         requestSync()
     }
@@ -328,6 +376,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         locator.photoRepository.getForOwner(PhotoOwnerType.ISSUE.name, id).forEach { locator.photoStore.delete(it.filePath) }
         locator.photoRepository.softDeleteForOwner(PhotoOwnerType.ISSUE.name, id)
         locator.issueRepository.softDelete(id)
+        locator.aiRepository.deleteDiagnosisForIssue(id)
         requestSync()
     }
 
@@ -394,6 +443,101 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         requestSync()
     }
 
+    fun openDiagnosis(issueId: String) {
+        _aiStream.value = AiStreamState()
+        aiScreen.value = AiScreen.Diagnosis(issueId)
+    }
+
+    fun openChat(vehicleId: String) {
+        _aiStream.value = AiStreamState()
+        aiScreen.value = AiScreen.Chat(vehicleId)
+    }
+
+    /**
+     * Leaves any in-flight call running on purpose. A diagnosis costs real money and can take a
+     * minute with web search; backing out of the screen shouldn't throw that away, since the
+     * result is persisted when it lands either way.
+     */
+    fun closeAiScreen() { aiScreen.value = null }
+
+    fun cancelAiRun() {
+        aiJob?.cancel()
+        aiJob = null
+        _aiStream.value = AiStreamState()
+    }
+
+    fun runDiagnosis(issue: IssueEntity) {
+        if (aiJob?.isActive == true) return
+        aiJob = viewModelScope.launch {
+            _aiStream.value = AiStreamState(running = true)
+            runCatching {
+                val vehicle = locator.vehicleRepository.getAll().find { it.id == issue.vehicleId }
+                    ?: error("That issue's vehicle no longer exists.")
+                locator.aiRepository.diagnose(
+                    issue = issue,
+                    vehicle = vehicle,
+                    schedules = locator.scheduleRepository.getAll().filter { it.vehicleId == vehicle.id },
+                    logs = locator.logRepository.getAll().filter { it.vehicleId == vehicle.id },
+                    issues = locator.issueRepository.getAll().filter { it.vehicleId == vehicle.id },
+                    onDelta = { delta -> _aiStream.update { it.copy(partialText = it.partialText + delta, searching = false) } },
+                    onSearching = { _aiStream.update { it.copy(searching = true) } },
+                )
+            }.onSuccess {
+                _aiStream.value = AiStreamState()
+            }.onFailure { error ->
+                _aiStream.value = AiStreamState(error = error.toUserMessage())
+            }
+            aiJob = null
+        }
+    }
+
+    fun sendChatMessage(vehicleId: String, question: String) {
+        if (question.isBlank() || aiJob?.isActive == true) return
+        aiJob = viewModelScope.launch {
+            _aiStream.value = AiStreamState(running = true)
+            runCatching {
+                val vehicle = locator.vehicleRepository.getAll().find { it.id == vehicleId }
+                    ?: error("That vehicle no longer exists.")
+                locator.aiRepository.sendChatMessage(
+                    vehicle = vehicle,
+                    schedules = locator.scheduleRepository.getAll().filter { it.vehicleId == vehicleId },
+                    logs = locator.logRepository.getAll().filter { it.vehicleId == vehicleId },
+                    issues = locator.issueRepository.getAll().filter { it.vehicleId == vehicleId },
+                    history = chatMessages.value.filter { it.vehicleId == vehicleId },
+                    question = question.trim(),
+                    onDelta = { delta -> _aiStream.update { it.copy(partialText = it.partialText + delta, searching = false) } },
+                    onSearching = { _aiStream.update { it.copy(searching = true) } },
+                )
+            }.onSuccess {
+                _aiStream.value = AiStreamState()
+            }.onFailure { error ->
+                _aiStream.value = AiStreamState(error = error.toUserMessage())
+            }
+            aiJob = null
+        }
+    }
+
+    fun clearChat(vehicleId: String) = viewModelScope.launch {
+        locator.aiRepository.clearChat(vehicleId)
+    }
+
+    fun setAiApiKey(key: String) {
+        locator.aiKeyStore.setApiKey(key)
+        viewModelScope.launch { _messages.emit("Claude API key saved.") }
+    }
+
+    fun clearAiApiKey() {
+        locator.aiKeyStore.clear()
+        viewModelScope.launch { _messages.emit("Claude API key removed.") }
+    }
+
+    fun aiKeyHint(): String? = locator.aiKeyStore.keyHint()
+
+    fun decodeAiSources(sourcesJson: String) = locator.aiRepository.decodeSources(sourcesJson)
+
+    private fun Throwable.toUserMessage(): String =
+        (this as? ClaudeException)?.userMessage ?: message ?: "Something went wrong."
+
     fun exportBackup(output: OutputStream) = viewModelScope.launch {
         runCatching { locator.backupManager.exportToStream(output) }
             .onSuccess { _messages.emit("Backup exported.") }
@@ -410,6 +554,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
 
     fun resetToSeed() = viewModelScope.launch {
         locator.backupManager.resetToSeed()
+        locator.aiRepository.deleteAll()
         activeVehicleId.value = null
         _messages.emit("Reset to seed data.")
         requestSync()

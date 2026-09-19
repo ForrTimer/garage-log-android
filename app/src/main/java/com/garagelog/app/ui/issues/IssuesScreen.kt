@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,7 +54,13 @@ private fun statusRank(status: String): Int = when (status) {
 }
 
 @Composable
-fun IssuesScreen(uiState: GarageLogUiState, onItemClick: (IssueEntity) -> Unit, onDelete: (IssueEntity) -> Unit) {
+fun IssuesScreen(
+    uiState: GarageLogUiState,
+    diagnosedIssueIds: Set<String>,
+    onItemClick: (IssueEntity) -> Unit,
+    onDiagnose: (IssueEntity) -> Unit,
+    onDelete: (IssueEntity) -> Unit,
+) {
     var statusFilter by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     val issues = uiState.issuesFor(uiState.activeVehicleId)
@@ -84,7 +94,14 @@ fun IssuesScreen(uiState: GarageLogUiState, onItemClick: (IssueEntity) -> Unit, 
                     )
                 } else {
                     issues.forEachIndexed { index, issue ->
-                        IssueRow(issue, uiState, onClick = { onItemClick(issue) }, onDelete = { onDelete(issue) })
+                        IssueRow(
+                            issue = issue,
+                            uiState = uiState,
+                            hasDiagnosis = issue.id in diagnosedIssueIds,
+                            onClick = { onItemClick(issue) },
+                            onDiagnose = { onDiagnose(issue) },
+                            onDelete = { onDelete(issue) },
+                        )
                         if (index != issues.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
@@ -94,10 +111,20 @@ fun IssuesScreen(uiState: GarageLogUiState, onItemClick: (IssueEntity) -> Unit, 
 }
 
 @Composable
-private fun IssueRow(issue: IssueEntity, uiState: GarageLogUiState, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun IssueRow(
+    issue: IssueEntity,
+    uiState: GarageLogUiState,
+    hasDiagnosis: Boolean,
+    onClick: () -> Unit,
+    onDiagnose: () -> Unit,
+    onDelete: () -> Unit,
+) {
     SwipeToDeleteRow(deleteTitle = "Delete this issue?", onDelete = onDelete) {
-        Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 11.dp)) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f).clickable(onClick = onClick).padding(vertical = 8.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(issue.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -112,6 +139,17 @@ private fun IssueRow(issue: IssueEntity, uiState: GarageLogUiState, onClick: () 
                     add("opened ${formatDate(issue.dateOpened)}")
                 }
                 Text(subtitleParts.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            IconButton(onClick = onDiagnose) {
+                Icon(
+                    imageVector = Icons.Filled.AutoAwesome,
+                    contentDescription = if (hasDiagnosis) "View diagnosis" else "Diagnose with Claude",
+                    tint = if (hasDiagnosis) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
             }
         }
     }
