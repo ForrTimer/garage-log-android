@@ -3,7 +3,7 @@ package com.garagelog.app.data.entity
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-enum class LogCategory { Routine, Repair, Upgrade, Diagnostic, Fuel, Mileage }
+enum class LogCategory { Routine, Repair, Upgrade, Fuel, Mileage }
 
 @Entity(tableName = "log_entries")
 data class LogEntryEntity(

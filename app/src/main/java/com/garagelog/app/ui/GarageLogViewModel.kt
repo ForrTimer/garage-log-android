@@ -283,16 +283,30 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         // maintenance actually happening — use the log's own date/mileage (which may be backfilled
         // for a past service, not necessarily "today"/"current miles") rather than duplicating the
         // separate "mark done today" quick-action's today-and-current-mileage assumption.
+        //
+        // Only ever ADVANCE the schedule's lastDoneDate, never regress it. Without this guard,
+        // retroactively linking several existing entries to the same schedule (editing/saving
+        // them one at a time) let whichever one happened to be saved *last* silently overwrite a
+        // more recent entry's already-correct due date — e.g. linking an April oil-change entry
+        // after a September one was already linked reverted the schedule to "overdue since April"
+        // even though the real last oil change was in September. ISO yyyy-MM-dd strings compare
+        // correctly with plain string comparison. The one trade-off: correcting the *date itself*
+        // on the entry that currently defines the schedule's due date (a typo fix, say) won't take
+        // effect this way — use the "Last done" fields on the schedule directly (Maintenance →
+        // edit) for that rarer case.
         val scheduleId = entry.fulfillsScheduleId
         if (entry.category == LogCategory.Routine.name && scheduleId != null) {
             locator.scheduleRepository.getAll().find { it.id == scheduleId }?.let { schedule ->
-                locator.scheduleRepository.upsert(
-                    schedule.copy(
-                        lastDoneMileage = entry.mileage ?: schedule.lastDoneMileage,
-                        lastDoneDate = entry.date,
-                        updatedAt = System.currentTimeMillis(),
-                    ),
-                )
+                val currentLastDone = schedule.lastDoneDate
+                if (currentLastDone == null || entry.date >= currentLastDone) {
+                    locator.scheduleRepository.upsert(
+                        schedule.copy(
+                            lastDoneMileage = entry.mileage ?: schedule.lastDoneMileage,
+                            lastDoneDate = entry.date,
+                            updatedAt = System.currentTimeMillis(),
+                        ),
+                    )
+                }
             }
         }
         requestSync()
