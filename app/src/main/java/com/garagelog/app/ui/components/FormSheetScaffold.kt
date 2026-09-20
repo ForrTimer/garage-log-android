@@ -4,11 +4,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -22,7 +20,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,7 +38,7 @@ import com.garagelog.app.ui.theme.garageColors
  * factored out here so a change to that shared shape (button spacing, the confirm-dialog
  * wording pattern, etc.) only needs to happen once.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FormSheetScaffold(
     title: String,
@@ -59,33 +56,31 @@ fun FormSheetScaffold(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
-    // imePadding() + verticalScroll() on the same Column means the keyboard closing shrinks the
-    // content's own height (the padding it was contributing goes away), but the scroll position
-    // doesn't reliably re-settle on its own — the Save row (the last thing in the Column) was
-    // landing above the visible viewport, requiring a manual scroll down to reach it every time.
-    // Explicitly re-settling to the bottom on the closing edge fixes that without guessing at why
-    // Compose's own re-layout isn't enough here.
-    val imeVisible = WindowInsets.isImeVisible
-    var imeHasBeenVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(imeVisible) {
-        // Only react to a genuine open-then-close of the keyboard — imeVisible starts false when
-        // the sheet first appears too, and that first frame must not itself trigger a jump to
-        // the bottom before the user's even seen the top of the form.
-        if (imeVisible) {
-            imeHasBeenVisible = true
-        } else if (imeHasBeenVisible) {
-            scrollState.animateScrollTo(scrollState.maxValue)
-        }
-    }
-
+    // The sheet is a fixed full height with the form scrolling inside it, rather than a single
+    // scrolling Column sized to its own content.
+    //
+    // That's deliberate, and it's what stops the keyboard breaking the layout. With imePadding()
+    // inside a content-sized scrolling Column, the sheet's own height changed every time the
+    // keyboard opened or closed, so ModalBottomSheet had to re-derive its anchors mid-inset-
+    // animation — and when that raced (which depends on the device's IME, hence "works on the
+    // emulator, not on the phone") the sheet settled at its keyboard-open height and never grew
+    // back. Here imePadding only ever shrinks the scroll viewport; the sheet's height is never a
+    // function of the keyboard, so there is nothing to re-derive and nothing to lose the race.
+    //
+    // Pinning the button row below the scroll area falls out of the same change, and means Save
+    // is always reachable without the scroll-to-bottom-on-IME-close workaround this used to need.
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)
+            // A fraction rather than the whole screen: still reads as a sheet with the tab
+            // underneath showing, but it's a fixed fraction, so it stays keyboard-independent.
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f)
                 .padding(horizontal = GarageDimens.sheetHorizontalPadding).imePadding().navigationBarsPadding(),
         ) {
             Text(title, style = MaterialTheme.typography.titleLarge)
 
-            content()
+            Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(scrollState)) {
+                content()
+            }
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = GarageDimens.sheetButtonRowTop, bottom = GarageDimens.sheetButtonRowBottom)) {
                 if (showDelete) {
