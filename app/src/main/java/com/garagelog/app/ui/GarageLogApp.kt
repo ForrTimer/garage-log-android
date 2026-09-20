@@ -439,7 +439,10 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                         id = "",
                                         vehicleId = vehicle.id,
                                         date = todayIso(),
-                                        mileage = vehicle.miles,
+                                        // Deliberately not the vehicle's current miles: a fill-up
+                                        // is a fresh odometer reading, and prefilling the last one
+                                        // made it too easy to save a stale number without noticing.
+                                        mileage = null,
                                         category = LogCategory.Fuel.name,
                                         task = "Fuel",
                                         cost = null,

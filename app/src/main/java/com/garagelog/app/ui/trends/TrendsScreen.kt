@@ -110,12 +110,32 @@ private fun FuelEconomyCard(logs: List<LogEntryEntity>) {
 @Composable
 private fun CostTrendCard(logs: List<LogEntryEntity>) {
     val costed = logs.filter { it.cost != null }
+    // Fuel is charted on its own rather than folded into the monthly total: it recurs on a
+    // completely different cadence to maintenance, and averaging the two together hides both.
+    val (fuelCosted, serviceCosted) = costed.partition { it.category == LogCategory.Fuel.name }
     GarageCard {
         Text("Cost", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (costed.isEmpty()) {
             EmptyState("No costed log entries yet.", icon = Icons.Filled.ShowChart)
         } else {
-            MonthlySpendChart(costed)
+            if (serviceCosted.isNotEmpty()) {
+                Text(
+                    "Service — ${formatMoney(serviceCosted.sumOf { it.cost ?: 0.0 })} total",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                MonthlySpendChart(serviceCosted)
+            }
+            if (fuelCosted.isNotEmpty()) {
+                Text(
+                    "Fuel — ${formatMoney(fuelCosted.sumOf { it.cost ?: 0.0 })} total",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                MonthlySpendChart(fuelCosted)
+            }
             Text(
                 "By category",
                 style = MaterialTheme.typography.labelMedium,

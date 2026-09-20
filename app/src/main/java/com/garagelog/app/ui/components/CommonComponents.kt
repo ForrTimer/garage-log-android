@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -157,20 +158,34 @@ fun GarageCard(modifier: Modifier = Modifier, accentColor: Color? = null, conten
 @Composable
 fun StatGrid(stats: List<Pair<String, String>>, onItemClick: ((Int) -> Unit)? = null) {
     if (onItemClick != null) {
-        // Each stat reads as its own tappable tile, so all three need identical, symmetric
-        // spacing on every side — a shared divider between plain-text columns (below) would
-        // sit at an inconsistent distance from each tile's box edge.
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            stats.forEachIndexed { index, (value, label) ->
-                Column(
-                    modifier = Modifier.weight(1f)
-                        .clip(GarageChipShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = garageColors.pillTintAlpha))
-                        .clickable { onItemClick(index) }
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+        // Each stat reads as its own tappable tile, so they need identical, symmetric spacing on
+        // every side — a shared divider between plain-text columns (below) would sit at an
+        // inconsistent distance from each tile's box edge.
+        //
+        // Past three tiles a single row squeezes six-figure odometer values onto two lines, so
+        // they wrap into rows of two instead of getting narrower.
+        val perRow = if (stats.size > 3) 2 else stats.size
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            stats.chunked(perRow).forEachIndexed { rowIndex, rowStats ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = if (rowIndex == 0) 0.dp else 8.dp),
                 ) {
-                    Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+                    rowStats.forEachIndexed { columnIndex, (value, label) ->
+                        val index = rowIndex * perRow + columnIndex
+                        Column(
+                            modifier = Modifier.weight(1f)
+                                .clip(GarageChipShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = garageColors.pillTintAlpha))
+                                .clickable { onItemClick(index) }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+                        }
+                    }
+                    // Keeps a trailing odd tile the same width as the ones above it.
+                    repeat(perRow - rowStats.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }

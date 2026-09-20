@@ -101,6 +101,12 @@ fun LogFormSheet(
     val vehicleSchedules = schedules.filter { it.vehicleId == form.vehicleId }
     val linkedSchedule = vehicleSchedules.find { it.id == form.fulfillsScheduleId }
 
+    // A fill-up's odometer reading is what every MPG calculation is built on, and unlike other
+    // categories there's no way to infer it later — so it's the one field the form won't save
+    // without. Other categories stay optional.
+    val mileageRequired = form.category == LogCategory.Fuel.name
+    val hasMileage = form.mileage.trim().toIntOrNull() != null
+
     FormSheetScaffold(
         title = if (entry == null) "New log entry" else "Edit log entry",
         onDismiss = {
@@ -111,6 +117,7 @@ fun LogFormSheet(
             onDismiss()
         },
         showDelete = entry != null,
+        saveEnabled = !mileageRequired || hasMileage,
         deleteTitle = "Delete log entry?",
         onDelete = { entry?.let { onDelete(it.id) } },
         onSave = {
@@ -143,7 +150,12 @@ fun LogFormSheet(
             form = form.copy(vehicleId = it, fulfillsScheduleId = null)
         }
         DateField("Date", form.date) { form = form.copy(date = it) }
-        LabeledTextField("Mileage", form.mileage, { form = form.copy(mileage = it) }, keyboardType = KeyboardType.Number)
+        LabeledTextField(
+            if (mileageRequired) "Mileage (required)" else "Mileage",
+            form.mileage,
+            { form = form.copy(mileage = it) },
+            keyboardType = KeyboardType.Number,
+        )
 
         Text("Category", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 14.dp))
         SegmentedControl(

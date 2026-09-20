@@ -60,6 +60,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
+import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
@@ -151,7 +152,11 @@ private fun VehicleDashboardCard(
 ) {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
     val openIssues = uiState.issues.filter { it.vehicleId == v.id && it.status != IssueStatus.Resolved.label }
-    val totalSpent = logs.sumOf { it.cost ?: 0.0 }
+    // Fuel is an ongoing running cost, not money spent on the vehicle's condition — mixing the two
+    // made "logged spend" drift upward with every fill-up and hid what maintenance actually cost.
+    val (fuelLogs, serviceLogs) = logs.partition { it.category == LogCategory.Fuel.name }
+    val serviceSpent = serviceLogs.sumOf { it.cost ?: 0.0 }
+    val fuelSpent = fuelLogs.sumOf { it.cost ?: 0.0 }
     val lastLog = logs.maxByOrNull { it.date }
     val schedulesForVehicle = uiState.schedules.filter { it.vehicleId == v.id }
     val dueItems = schedulesForVehicle
@@ -244,13 +249,14 @@ private fun VehicleDashboardCard(
                 // already says what the unit is.
                 formatMiles(v.miles).removeSuffix(" mi") to "current miles",
                 openIssues.size.toString() to "open issues",
-                formatMoney(totalSpent) to "logged spend",
+                formatMoney(serviceSpent) to "service spend",
+                formatMoney(fuelSpent) to "fuel spend",
             ),
             onItemClick = { index ->
                 when (index) {
                     0 -> showMileageDialog = true
                     1 -> onOpenVehicleTab(v.id, AppTab.Issues)
-                    2 -> onOpenVehicleTab(v.id, AppTab.Trends)
+                    else -> onOpenVehicleTab(v.id, AppTab.Trends)
                 }
             },
         )

@@ -51,6 +51,8 @@ fun FormSheetScaffold(
     deleteTitle: String,
     onDelete: () -> Unit,
     deleteMessage: String = "This can't be undone.",
+    /** Gates Save on the form's own validity; defaults to always-enabled for forms with no rule. */
+    saveEnabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sheetState = rememberHardToDismissSheetState()
@@ -92,7 +94,7 @@ fun FormSheetScaffold(
                     }
                     Spacer(Modifier.width(GarageDimens.sheetButtonSpacing))
                 }
-                Button(onClick = onSave, modifier = Modifier.weight(1f)) { Text("Save") }
+                Button(onClick = onSave, enabled = saveEnabled, modifier = Modifier.weight(1f)) { Text("Save") }
             }
         }
     }
