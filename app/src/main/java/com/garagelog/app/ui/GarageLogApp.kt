@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
@@ -74,20 +73,51 @@ import com.garagelog.app.ui.settings.SettingsScreen
 import com.garagelog.app.ui.settings.VehicleFormSheet
 import com.garagelog.app.ui.trends.TrendsScreen
 import com.garagelog.app.util.todayIso
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.garagelog.app.data.ai.ASSISTANT_NAME
+import com.garagelog.app.ui.components.GarageDrawer
+import com.garagelog.app.ui.settings.ManageVehiclesScreen
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 
-private val mainTabs = listOf(AppTab.Dashboard, AppTab.Log, AppTab.Issues, AppTab.Trends, AppTab.Settings)
+private val mainTabs = listOf(AppTab.Dashboard, AppTab.Log, AppTab.Issues, AppTab.Trends)
 
-// A quick round-trip through a system picker (photo, backup file) stops and restarts this
-// activity in well under this long; a genuine "put the phone down" gap runs much longer.
-private const val HOME_RESET_AWAY_THRESHOLD_MS = 30_000L
+// Long enough to take a call, look something up, or go read a part number off the shelf and come
+// back to the screen you were working on. Only a genuine "put the phone down and moved on" gap
+// should land you back on Home.
+private const val HOME_RESET_AWAY_THRESHOLD_MS = 10 * 60 * 1000L
 
 private fun AppTab.label(): String = when (this) {
     AppTab.Dashboard -> "Home"
     AppTab.Log -> "Log"
     AppTab.Issues -> "Issues"
     AppTab.Trends -> "Trends"
-    AppTab.Settings -> "More"
+}
+
+private fun SubScreen.label(): String = when (this) {
+    SubScreen.Schedule -> "Maintenance"
+    SubScreen.Settings -> "Settings"
+    SubScreen.ManageVehicles -> "Vehicles"
+    is SubScreen.Diagnosis -> "Diagnosis"
+    is SubScreen.Chat -> "Ask $ASSISTANT_NAME"
+}
+
+private fun SubScreen.icon(): ImageVector = when (this) {
+    SubScreen.Schedule -> Icons.Filled.Build
+    SubScreen.Settings -> Icons.Filled.Settings
+    SubScreen.ManageVehicles -> Icons.Filled.DirectionsCar
+    is SubScreen.Diagnosis, is SubScreen.Chat -> Icons.Filled.AutoAwesome
 }
 
 private fun AppTab.icon(): ImageVector = when (this) {
@@ -95,7 +125,6 @@ private fun AppTab.icon(): ImageVector = when (this) {
     AppTab.Log -> Icons.Filled.MenuBook
     AppTab.Issues -> Icons.Filled.Warning
     AppTab.Trends -> Icons.Filled.ShowChart
-    AppTab.Settings -> Icons.Filled.MoreHoriz
 }
 
 private sealed class Sheet {
@@ -113,8 +142,6 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     val diagnoses by viewModel.diagnoses.collectAsState()
     val chatMessages by viewModel.chatMessages.collectAsState()
     val hasAiKey by viewModel.hasAiKey.collectAsState()
-    // Local val so the `is AiScreen.Diagnosis` checks below smart-cast to the concrete type.
-    val aiScreen = uiState.aiScreen
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
     var reorderMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -197,14 +224,23 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     }
     val liveTab = mainTabs.getOrNull(pagerState.currentPage) ?: uiState.currentTab
 
-    val showingSubScreen = uiState.showScheduleScreen || aiScreen != null
-    val showFab = !showingSubScreen && uiState.currentTab != AppTab.Settings &&
+    // Local val so the `is SubScreen.X` checks below smart-cast to the concrete type.
+    val subScreen = uiState.subScreen
+    val showingSubScreen = subScreen != null
+    val showFab = !showingSubScreen &&
         uiState.currentTab != AppTab.Dashboard && uiState.currentTab != AppTab.Trends
 
-    // Without this, the system back gesture leaves the app entirely from a sub-screen rather than
-    // returning to the tab underneath — the same thing the screen's own back arrow does.
-    BackHandler(enabled = showingSubScreen || reorderMode) {
-        if (reorderMode) reorderMode = false else viewModel.closeSubScreen()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    // Without this, the system back gesture leaves the app entirely from a sub-screen or an open
+    // drawer rather than backing out of it — the same thing the on-screen affordance does.
+    BackHandler(enabled = showingSubScreen || reorderMode || drawerState.isOpen) {
+        when {
+            drawerState.isOpen -> scope.launch { drawerState.close() }
+            reorderMode -> reorderMode = false
+            else -> viewModel.closeSubScreen()
+        }
     }
 
     // Deliberately not garageColors.alarm here — that red is reserved for genuine urgency
@@ -218,6 +254,20 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         indicatorColor = Color.Transparent,
     )
 
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        // Only from the drawer's own button: an edge-swipe would fight the tab pager's swipe,
+        // which is the primary way this app is navigated.
+        gesturesEnabled = drawerState.isOpen,
+        drawerContent = {
+            GarageDrawer(
+                onOpenSchedule = { viewModel.openSchedule() },
+                onOpenManageVehicles = { viewModel.openManageVehicles() },
+                onOpenSettings = { viewModel.openSettings() },
+                onClose = { scope.launch { drawerState.close() } },
+            )
+        },
+    ) {
     Scaffold(
         topBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -238,10 +288,14 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         // sub-screens below.
                         val headerTitle = when {
                             reorderMode -> "Home"
-                            uiState.showScheduleScreen -> "Maintenance"
+                            subScreen != null -> subScreen.label()
                             else -> liveTab.label()
                         }
-                        val headerIcon = if (reorderMode) Icons.Filled.Home else liveTab.icon()
+                        val headerIcon = when {
+                            reorderMode -> Icons.Filled.Home
+                            subScreen != null -> subScreen.icon()
+                            else -> liveTab.icon()
+                        }
                         // A large, low-opacity watermark of the current tab's icon behind the
                         // title — sized off the header's own width so it scales with the phone,
                         // and clipped to the fixed-height box so it crops top/bottom instead of
@@ -253,17 +307,36 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
                                 modifier = Modifier.size(maxWidth * 0.9f).align(Alignment.Center),
                             )
-                            Text(
-                                text = headerTitle,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp),
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
+                            ) {
+                                // One slot that flips between "open the menu" and "back out of
+                                // here", so a sub-screen never offers a menu button where the
+                                // way back belongs.
+                                if (showingSubScreen || reorderMode) {
+                                    IconButton(onClick = {
+                                        if (reorderMode) reorderMode = false else viewModel.closeSubScreen()
+                                    }) {
+                                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                                    }
+                                } else {
+                                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                        Icon(Icons.Filled.Menu, contentDescription = "Open menu")
+                                    }
+                                }
+                                Text(
+                                    text = headerTitle,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                         }
-                        // The filter row doesn't do anything useful here — VehicleReorderScreen
-                        // always shows every vehicle regardless of this filter — so hiding it
-                        // avoids implying a selection that reorder mode would just ignore.
-                        if (!reorderMode) {
+                        // The filter row doesn't do anything useful on every screen —
+                        // VehicleReorderScreen always shows every vehicle regardless of it, and
+                        // Settings/Vehicles aren't per-vehicle at all — so hiding it there avoids
+                        // implying a selection those screens would just ignore.
+                        if (!reorderMode && (subScreen?.usesVehicleFilter != false)) {
                             VehiclePickerRow(
                                 vehicles = uiState.vehicles,
                                 activeVehicleId = uiState.activeVehicleId,
@@ -308,13 +381,6 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         label = { Text("Trends") },
                         colors = itemColors,
                     )
-                    NavigationBarItem(
-                        selected = uiState.currentTab == AppTab.Settings && !showingSubScreen,
-                        onClick = { viewModel.selectTab(AppTab.Settings) },
-                        icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
-                        label = { Text("More") },
-                        colors = itemColors,
-                    )
                 }
             }
         },
@@ -348,12 +414,22 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     onReorderVehicles = viewModel::reorderVehicles,
                     onDone = { reorderMode = false },
                 )
-                aiScreen is AiScreen.Diagnosis -> {
-                    val issue = uiState.issues.find { it.id == aiScreen.issueId }
+                subScreen is SubScreen.Settings -> SettingsScreen(uiState = uiState, viewModel = viewModel)
+                subScreen is SubScreen.ManageVehicles -> ManageVehiclesScreen(
+                    vehicles = uiState.vehicles,
+                    onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
+                    onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
+                    onReorderVehicles = {
+                        viewModel.resetToHome()
+                        reorderMode = true
+                    },
+                )
+                subScreen is SubScreen.Diagnosis -> {
+                    val issue = uiState.issues.find { it.id == subScreen.issueId }
                     // The issue can vanish underneath this screen (deleted from another tab, or a
                     // sync merge), so fall back to closing rather than rendering a half-empty page.
                     if (issue == null) {
-                        LaunchedEffect(Unit) { viewModel.closeAiScreen() }
+                        LaunchedEffect(Unit) { viewModel.closeSubScreen() }
                     } else {
                         AiDiagnosisScreen(
                             issue = issue,
@@ -362,20 +438,17 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             streamFlow = viewModel.aiStream,
                             hasApiKey = hasAiKey,
                             sourcesFor = viewModel::decodeAiSources,
-                            onBack = viewModel::closeAiScreen,
+                            onBack = viewModel::closeSubScreen,
                             onRun = { viewModel.runDiagnosis(issue) },
                             onStop = viewModel::cancelAiRun,
-                            onOpenSettings = {
-                                viewModel.closeAiScreen()
-                                viewModel.selectTab(AppTab.Settings)
-                            },
+                            onOpenSettings = viewModel::openSettings,
                         )
                     }
                 }
-                aiScreen is AiScreen.Chat -> {
-                    val vehicle = uiState.vehicles.find { it.id == aiScreen.vehicleId }
+                subScreen is SubScreen.Chat -> {
+                    val vehicle = uiState.vehicles.find { it.id == subScreen.vehicleId }
                     if (vehicle == null) {
-                        LaunchedEffect(Unit) { viewModel.closeAiScreen() }
+                        LaunchedEffect(Unit) { viewModel.closeSubScreen() }
                     } else {
                         AiChatScreen(
                             vehicleLabel = vehicle.name,
@@ -383,18 +456,15 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             streamFlow = viewModel.aiStream,
                             hasApiKey = hasAiKey,
                             sourcesFor = viewModel::decodeAiSources,
-                            onBack = viewModel::closeAiScreen,
+                            onBack = viewModel::closeSubScreen,
                             onSend = { viewModel.sendChatMessage(vehicle.id, it) },
                             onStop = viewModel::cancelAiRun,
                             onClear = { viewModel.clearChat(vehicle.id) },
-                            onOpenSettings = {
-                                viewModel.closeAiScreen()
-                                viewModel.selectTab(AppTab.Settings)
-                            },
+                            onOpenSettings = viewModel::openSettings,
                         )
                     }
                 }
-                uiState.showScheduleScreen -> ScheduleScreen(
+                subScreen is SubScreen.Schedule -> ScheduleScreen(
                     uiState = uiState,
                     onBack = viewModel::closeSubScreen,
                     onEdit = { activeSheet = Sheet.ScheduleForm(it) },
@@ -429,7 +499,6 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                             onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
                             onOpenSchedule = viewModel::openSchedule,
-                            onOpenTrends = { viewModel.selectTab(AppTab.Trends) },
                             onUpdateMileage = viewModel::updateMileage,
                             onOpenVehicleTab = viewModel::openVehicleTab,
                             onAddFueling = { vehicle ->
@@ -467,22 +536,11 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onDelete = { viewModel.deleteIssue(it.id) },
                         )
                         AppTab.Trends -> TrendsScreen(uiState = uiState)
-                        AppTab.Settings -> SettingsScreen(
-                            uiState = uiState,
-                            viewModel = viewModel,
-                            onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
-                            onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
-                            onOpenSchedule = viewModel::openSchedule,
-                            onOpenTrends = { viewModel.selectTab(AppTab.Trends) },
-                            onReorderVehicles = {
-                                viewModel.resetToHome()
-                                reorderMode = true
-                            },
-                        )
                     }
                 }
             }
         }
+    }
     }
 
     when (val sheet = activeSheet) {

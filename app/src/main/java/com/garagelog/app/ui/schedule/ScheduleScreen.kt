@@ -88,9 +88,10 @@ fun ScheduleScreen(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp)) {
-            IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
-            Text("Maintenance schedule", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        Row(
+            horizontalArrangement = Arrangement.End,
+            modifier = Modifier.fillMaxWidth().padding(end = 8.dp, top = 4.dp),
+        ) {
             IconButton(onClick = onAddNew) { Icon(Icons.Filled.Add, contentDescription = "Add schedule") }
         }
 

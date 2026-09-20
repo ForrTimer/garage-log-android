@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.ai.ClaudeSource
 import com.garagelog.app.data.entity.AiDiagnosisEntity
 import com.garagelog.app.data.entity.IssueEntity
@@ -68,13 +69,13 @@ fun AiDiagnosisScreen(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp),
-        ) {
-            IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
-            Text("Diagnosis", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (stream.running) ActionLink(text = "Stop", onClick = onStop)
+        if (stream.running) {
+            Row(
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth().padding(end = 16.dp, top = 8.dp),
+            ) {
+                ActionLink(text = "Stop", onClick = onStop)
+            }
         }
 
         Column(
@@ -94,14 +95,14 @@ fun AiDiagnosisScreen(
 
             when {
                 !hasApiKey -> GarageCard(modifier = Modifier.padding(vertical = 8.dp)) {
-                    Text("Claude isn't set up yet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text("$ASSISTANT_NAME isn't set up yet", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Add an Anthropic API key to have Claude work through this issue using this " +
+                        "Add an Anthropic API key to have $ASSISTANT_NAME work through this issue using this " +
                             "vehicle's service history and research whether it's a known problem.",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
                     )
-                    ActionLink(text = "Set up Claude", onClick = onOpenSettings)
+                    ActionLink(text = "Set up $ASSISTANT_NAME", onClick = onOpenSettings)
                 }
 
                 error != null -> GarageCard(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -134,7 +135,7 @@ fun AiDiagnosisScreen(
 
                 else -> Column {
                     EmptyState(
-                        "Claude will work through this issue using this vehicle's real service " +
+                        "$ASSISTANT_NAME will work through this issue using this vehicle's real service " +
                             "history and search the web for whether it's a known problem on this " +
                             "year, make and model.",
                         icon = Icons.Filled.AutoAwesome,

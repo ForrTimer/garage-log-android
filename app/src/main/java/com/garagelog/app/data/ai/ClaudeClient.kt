@@ -46,12 +46,12 @@ class ClaudeException(val kind: ClaudeErrorKind, message: String) : Exception(me
     /** Phrased for a person looking at their truck, not a stack trace. */
     val userMessage: String
         get() = when (kind) {
-            ClaudeErrorKind.NoApiKey -> "No Claude API key set. Add one in More → Claude AI."
-            ClaudeErrorKind.Auth -> "That API key was rejected. Check it in More → Claude AI."
+            ClaudeErrorKind.NoApiKey -> "No API key set. Add one in Settings → $ASSISTANT_NAME."
+            ClaudeErrorKind.Auth -> "That API key was rejected. Check it in Settings → $ASSISTANT_NAME."
             ClaudeErrorKind.RateLimit -> "Rate limited by the API. Wait a moment and try again."
-            ClaudeErrorKind.Overloaded -> "Claude is overloaded right now. Try again shortly."
-            ClaudeErrorKind.Network -> "Couldn't reach Claude. Check your connection."
-            ClaudeErrorKind.Other -> message ?: "Something went wrong talking to Claude."
+            ClaudeErrorKind.Overloaded -> "$ASSISTANT_NAME is overloaded right now. Try again shortly."
+            ClaudeErrorKind.Network -> "Couldn't reach $ASSISTANT_NAME. Check your connection."
+            ClaudeErrorKind.Other -> message ?: "Something went wrong talking to $ASSISTANT_NAME."
         }
 }
 

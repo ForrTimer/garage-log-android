@@ -60,6 +60,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
+import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
@@ -92,7 +93,6 @@ fun DashboardScreen(
     onEditVehicle: (VehicleEntity) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenSchedule: () -> Unit,
-    onOpenTrends: () -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onAddFueling: (VehicleEntity) -> Unit,
@@ -123,15 +123,6 @@ fun DashboardScreen(
                     onSetVehiclePhoto = onSetVehiclePhoto,
                 )
                 Spacer(Modifier.padding(bottom = 12.dp))
-            }
-        }
-        if (vehicles.isNotEmpty()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = GarageDimens.screenHorizontal, vertical = 12.dp),
-            ) {
-                OutlinedButton(onClick = onOpenSchedule, modifier = Modifier.weight(1f)) { Text("Maintenance") }
-                OutlinedButton(onClick = onOpenTrends, modifier = Modifier.weight(1f)) { Text("Trends") }
             }
         }
     }
@@ -266,7 +257,7 @@ private fun VehicleDashboardCard(
             Spacer(Modifier.width(8.dp))
             ActionLink("Add fueling", onClick = { onAddFueling(v) })
             Spacer(Modifier.width(8.dp))
-            ActionLink("Ask Claude", onClick = { onAskClaude(v) })
+            ActionLink("Ask $ASSISTANT_NAME", onClick = { onAskClaude(v) })
         }
 
         Text(

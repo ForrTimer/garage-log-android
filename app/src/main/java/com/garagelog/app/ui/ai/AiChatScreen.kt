@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.ai.ClaudeSource
 import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.ui.AiStreamState
@@ -82,15 +83,12 @@ fun AiChatScreen(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp),
         ) {
-            IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Ask Claude", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    vehicleLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                vehicleLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f).padding(start = 12.dp),
+            )
             when {
                 stream.running -> ActionLink(text = "Stop", onClick = onStop)
                 messages.isNotEmpty() -> ActionLink(text = "Clear", onClick = { confirmingClear = true })
@@ -108,7 +106,7 @@ fun AiChatScreen(
                     EmptyState(
                         if (hasApiKey) {
                             "Ask anything about $vehicleLabel — fluid specs, torque values, what a " +
-                                "noise might be, whether a service is worth doing. Claude can see this " +
+                                "noise might be, whether a service is worth doing. $ASSISTANT_NAME can see this " +
                                 "vehicle's full service history."
                         } else {
                             "Add an Anthropic API key to start asking questions about your vehicles."
@@ -117,7 +115,7 @@ fun AiChatScreen(
                     )
                     if (!hasApiKey) {
                         Row(modifier = Modifier.padding(top = 8.dp)) {
-                            ActionLink(text = "Set up Claude", onClick = onOpenSettings)
+                            ActionLink(text = "Set up $ASSISTANT_NAME", onClick = onOpenSettings)
                         }
                     }
                 }

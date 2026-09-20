@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.GarageCard
@@ -43,7 +44,7 @@ fun ClaudeAiSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier
     }
 
     GarageCard(modifier = modifier) {
-        Text("Claude AI", style = MaterialTheme.typography.titleMedium)
+        Text(ASSISTANT_NAME, style = MaterialTheme.typography.titleMedium)
 
         if (hasKey) {
             Text(

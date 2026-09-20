@@ -4,7 +4,6 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -25,12 +23,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.NotificationPrefsEntity
 import com.garagelog.app.data.entity.ReminderCadence
-import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.ConfirmDialog
@@ -46,18 +42,14 @@ import com.garagelog.app.ui.theme.garageSwitchColors
 import com.garagelog.app.util.dayOfWeekName
 import com.garagelog.app.util.monthName
 import com.garagelog.app.util.todayIso
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import java.util.Calendar
 
 @Composable
-fun SettingsScreen(
-    uiState: GarageLogUiState,
-    viewModel: GarageLogViewModel,
-    onAddVehicle: () -> Unit,
-    onEditVehicle: (VehicleEntity) -> Unit,
-    onOpenSchedule: () -> Unit,
-    onOpenTrends: () -> Unit,
-    onReorderVehicles: () -> Unit,
-) {
+fun SettingsScreen(uiState: GarageLogUiState, viewModel: GarageLogViewModel) {
     val context = LocalContext.current
     var showResetConfirm by remember { mutableStateOf(false) }
 
@@ -72,9 +64,9 @@ fun SettingsScreen(
         }
     }
 
-    LazyColumn(contentPadding = GarageDimens.listContentPadding) {
+    LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
         item {
-            AccountSection(viewModel = viewModel, modifier = Modifier.padding(bottom = 12.dp))
+            AccountSection(viewModel = viewModel, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
         }
 
         item {
@@ -101,41 +93,6 @@ fun SettingsScreen(
 
         item {
             MileageReminderCard(uiState.notificationPrefs, viewModel, modifier = Modifier.padding(bottom = 12.dp))
-        }
-
-        item {
-            GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
-                Text("Insights", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                    OutlinedButton(onClick = onOpenSchedule, modifier = Modifier.weight(1f)) { Text("Maintenance schedule") }
-                    OutlinedButton(onClick = onOpenTrends, modifier = Modifier.weight(1f)) { Text("Trends") }
-                }
-            }
-        }
-
-        item {
-            GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
-                Text("Manage vehicles", style = MaterialTheme.typography.titleMedium)
-                uiState.vehicles.forEachIndexed { index, v ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth().clickable { onEditVehicle(v) }.padding(vertical = 10.dp),
-                    ) {
-                        Text(v.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            listOfNotNull(v.year?.toString(), v.make.ifBlank { null }, v.model.ifBlank { null }).joinToString(" "),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    if (index != uiState.vehicles.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                    OutlinedButton(onClick = onAddVehicle, modifier = Modifier.weight(1f)) { Text("+ Add vehicle") }
-                    if (uiState.vehicles.size > 1) {
-                        OutlinedButton(onClick = onReorderVehicles, modifier = Modifier.weight(1f)) { Text("Reorder vehicles") }
-                    }
-                }
-            }
         }
 
         item {

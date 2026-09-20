@@ -41,12 +41,22 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class AppTab { Dashboard, Log, Issues, Trends, Settings }
+enum class AppTab { Dashboard, Log, Issues, Trends }
 
-/** The AI sub-screens, routed the same way [GarageLogUiState.showScheduleScreen] routes Maintenance. */
-sealed interface AiScreen {
-    data class Diagnosis(val issueId: String) : AiScreen
-    data class Chat(val vehicleId: String) : AiScreen
+/**
+ * Full-screen destinations that sit on top of the tab pager rather than being tabs themselves —
+ * reached from the drawer or from a row on a tab. One sealed type rather than a flag per screen:
+ * they're mutually exclusive by nature, and a bool each drifted out of sync as they multiplied.
+ */
+sealed interface SubScreen {
+    data object Schedule : SubScreen
+    data object Settings : SubScreen
+    data object ManageVehicles : SubScreen
+    data class Diagnosis(val issueId: String) : SubScreen
+    data class Chat(val vehicleId: String) : SubScreen
+
+    /** The vehicle filter in the header means nothing on these, so it's hidden for them. */
+    val usesVehicleFilter: Boolean get() = this !is Settings && this !is ManageVehicles
 }
 
 /**
@@ -69,8 +79,7 @@ data class GarageLogUiState(
     val notificationPrefs: NotificationPrefsEntity = NotificationPrefsEntity(),
     val activeVehicleId: String? = null,
     val currentTab: AppTab = AppTab.Dashboard,
-    val showScheduleScreen: Boolean = false,
-    val aiScreen: AiScreen? = null,
+    val subScreen: SubScreen? = null,
 ) {
     val activeVehicle: VehicleEntity? get() = vehicles.find { it.id == activeVehicleId }
     fun vehicleName(id: String): String = vehicles.find { it.id == id }?.name ?: "Unknown"
@@ -92,8 +101,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
 
     private val activeVehicleId = MutableStateFlow<String?>(null)
     private val currentTab = MutableStateFlow(AppTab.Dashboard)
-    private val showScheduleScreen = MutableStateFlow(false)
-    private val aiScreen = MutableStateFlow<AiScreen?>(null)
+    private val subScreen = MutableStateFlow<SubScreen?>(null)
 
     private val _aiStream = MutableStateFlow(AiStreamState())
     val aiStream: StateFlow<AiStreamState> = _aiStream
@@ -141,15 +149,14 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         }
     }
 
-    private val uiFlags = combine(activeVehicleId, currentTab, showScheduleScreen, aiScreen) { a, b, c, d ->
-        UiFlags(a, b, c, d)
+    private val uiFlags = combine(activeVehicleId, currentTab, subScreen) { a, b, c ->
+        UiFlags(a, b, c)
     }
 
     private data class UiFlags(
         val activeVehicleId: String?,
         val currentTab: AppTab,
-        val showScheduleScreen: Boolean,
-        val aiScreen: AiScreen?,
+        val subScreen: SubScreen?,
     )
 
     val uiState: StateFlow<GarageLogUiState> = combine(repoBundle, uiFlags) { bundle, flags ->
@@ -161,22 +168,19 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
             notificationPrefs = bundle.notificationPrefs,
             activeVehicleId = flags.activeVehicleId,
             currentTab = flags.currentTab,
-            showScheduleScreen = flags.showScheduleScreen,
-            aiScreen = flags.aiScreen,
+            subScreen = flags.subScreen,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GarageLogUiState())
 
     fun selectVehicle(id: String?) { activeVehicleId.value = id }
     fun selectTab(tab: AppTab) {
         currentTab.value = tab
-        showScheduleScreen.value = false
-        closeAiScreen()
+        subScreen.value = null
     }
-    fun openSchedule() { showScheduleScreen.value = true }
-    fun closeSubScreen() {
-        showScheduleScreen.value = false
-        closeAiScreen()
-    }
+    fun openSchedule() { subScreen.value = SubScreen.Schedule }
+    fun openSettings() { subScreen.value = SubScreen.Settings }
+    fun openManageVehicles() { subScreen.value = SubScreen.ManageVehicles }
+    fun closeSubScreen() { subScreen.value = null }
 
     /** Filters to [vehicleId] and switches to [tab] — e.g. tapping a dashboard stat. */
     fun openVehicleTab(vehicleId: String, tab: AppTab) {
@@ -443,22 +447,9 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         requestSync()
     }
 
-    fun openDiagnosis(issueId: String) {
-        _aiStream.value = AiStreamState()
-        aiScreen.value = AiScreen.Diagnosis(issueId)
-    }
+    fun openDiagnosis(issueId: String) { subScreen.value = SubScreen.Diagnosis(issueId) }
 
-    fun openChat(vehicleId: String) {
-        _aiStream.value = AiStreamState()
-        aiScreen.value = AiScreen.Chat(vehicleId)
-    }
-
-    /**
-     * Leaves any in-flight call running on purpose. A diagnosis costs real money and can take a
-     * minute with web search; backing out of the screen shouldn't throw that away, since the
-     * result is persisted when it lands either way.
-     */
-    fun closeAiScreen() { aiScreen.value = null }
+    fun openChat(vehicleId: String) { subScreen.value = SubScreen.Chat(vehicleId) }
 
     fun cancelAiRun() {
         aiJob?.cancel()
@@ -523,12 +514,12 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
 
     fun setAiApiKey(key: String) {
         locator.aiKeyStore.setApiKey(key)
-        viewModelScope.launch { _messages.emit("Claude API key saved.") }
+        viewModelScope.launch { _messages.emit("API key saved.") }
     }
 
     fun clearAiApiKey() {
         locator.aiKeyStore.clear()
-        viewModelScope.launch { _messages.emit("Claude API key removed.") }
+        viewModelScope.launch { _messages.emit("API key removed.") }
     }
 
     fun aiKeyHint(): String? = locator.aiKeyStore.keyHint()

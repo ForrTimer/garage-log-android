@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.IssuePriority
 import com.garagelog.app.data.entity.IssueStatus
@@ -143,7 +144,7 @@ private fun IssueRow(
             IconButton(onClick = onDiagnose) {
                 Icon(
                     imageVector = Icons.Filled.AutoAwesome,
-                    contentDescription = if (hasDiagnosis) "View diagnosis" else "Diagnose with Claude",
+                    contentDescription = if (hasDiagnosis) "View diagnosis" else "Diagnose with $ASSISTANT_NAME",
                     tint = if (hasDiagnosis) {
                         MaterialTheme.colorScheme.primary
                     } else {
