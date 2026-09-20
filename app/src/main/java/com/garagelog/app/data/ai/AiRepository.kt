@@ -4,10 +4,10 @@ import com.garagelog.app.data.dao.AiChatDao
 import com.garagelog.app.data.dao.AiDiagnosisDao
 import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.AiDiagnosisEntity
-import com.garagelog.app.data.entity.IssueEntity
-import com.garagelog.app.data.entity.LogEntryEntity
-import com.garagelog.app.data.entity.MaintenanceScheduleEntity
-import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.data.repository.IssueRepository
+import com.garagelog.app.data.repository.LogRepository
+import com.garagelog.app.data.repository.ScheduleRepository
+import com.garagelog.app.data.repository.VehicleRepository
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -15,15 +15,21 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /**
- * Owns every Claude-backed operation: assembles the vehicle context, streams the answer, and
- * persists the result. Callers pass a delta callback so the UI can render tokens as they land,
- * but they never see the transport — swapping [ClaudeClient] for a proxy-backed one changes
- * nothing here or above.
+ * Owns every assistant-backed operation end to end: given only an id, it gathers the vehicle's
+ * context itself, streams the answer, reports progress to [AiRunHolder], and persists the result.
+ *
+ * Self-sufficient on purpose — the caller is a background worker that may outlive the screen that
+ * started it, so it can't depend on UI state being around to hand it a vehicle and its history.
  */
 class AiRepository(
     private val client: ClaudeClient,
     private val diagnosisDao: AiDiagnosisDao,
     private val chatDao: AiChatDao,
+    private val vehicleRepository: VehicleRepository,
+    private val logRepository: LogRepository,
+    private val issueRepository: IssueRepository,
+    private val scheduleRepository: ScheduleRepository,
+    private val runHolder: AiRunHolder,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val sourceListSerializer = ListSerializer(ClaudeSource.serializer())
@@ -33,63 +39,74 @@ class AiRepository(
 
     fun observeChat(): Flow<List<AiChatMessageEntity>> = chatDao.observeAll()
 
-    suspend fun diagnose(
-        issue: IssueEntity,
-        vehicle: VehicleEntity,
-        schedules: List<MaintenanceScheduleEntity>,
-        logs: List<LogEntryEntity>,
-        issues: List<IssueEntity>,
-        onDelta: (String) -> Unit,
-        onSearching: () -> Unit,
-    ): AiDiagnosisEntity {
+    /** Throws [ClaudeException] on failure, after recording it against [issueId] for the UI. */
+    suspend fun runDiagnosis(issueId: String) {
+        val issue = issueRepository.getAll().find { it.id == issueId }
+            ?: error("That issue no longer exists.")
+        val vehicle = vehicleRepository.getAll().find { it.id == issue.vehicleId }
+            ?: error("That issue's vehicle no longer exists.")
+
         val prompt = buildString {
-            appendLine(GarageContext.vehicleProfile(vehicle, schedules, logs, issues))
+            appendLine(profileFor(vehicle.id))
             appendLine()
             appendLine(GarageContext.issueDetail(issue))
         }
+
         val result = collect(
-            ClaudeRequest(
+            key = issueId,
+            request = ClaudeRequest(
                 system = AiPrompts.DIAGNOSIS_SYSTEM,
                 messages = listOf(ClaudeMessage("user", prompt)),
             ),
-            onDelta,
-            onSearching,
         )
-        val diagnosis = AiDiagnosisEntity(
-            issueId = issue.id,
-            vehicleId = issue.vehicleId,
-            content = result.text,
-            sourcesJson = encodeSources(result.sources),
-            model = DirectClaudeClient.MODEL,
-            createdAt = System.currentTimeMillis(),
-            milesAtRun = vehicle.miles,
+        diagnosisDao.upsert(
+            AiDiagnosisEntity(
+                issueId = issue.id,
+                vehicleId = issue.vehicleId,
+                content = result.text,
+                sourcesJson = encodeSources(result.sources),
+                model = DirectClaudeClient.MODEL,
+                createdAt = System.currentTimeMillis(),
+                milesAtRun = vehicle.miles,
+            ),
         )
-        diagnosisDao.upsert(diagnosis)
-        return diagnosis
     }
 
     /**
-     * [history] is the conversation *before* this question. The vehicle profile is prepended to
-     * the conversation's first user message rather than put in the system prompt, so the system
-     * prompt stays byte-identical across every request and keeps its cache hit, while the profile
-     * still sits ahead of everything the model reads.
+     * [issueId] non-null makes this a follow-up on that issue's diagnosis: the thread is seeded
+     * with the issue and the diagnosis already given, so the first question can just be "why?"
+     * without the owner restating any of it.
      */
-    suspend fun sendChatMessage(
-        vehicle: VehicleEntity,
-        schedules: List<MaintenanceScheduleEntity>,
-        logs: List<LogEntryEntity>,
-        issues: List<IssueEntity>,
-        history: List<AiChatMessageEntity>,
-        question: String,
-        onDelta: (String) -> Unit,
-        onSearching: () -> Unit,
-    ): AiChatMessageEntity {
-        // Persisted before the call so the question shows in the thread immediately; if the call
-        // then fails, the question stays put and the owner can retry without retyping it.
+    suspend fun runChat(vehicleId: String, issueId: String?, question: String) {
+        val vehicle = vehicleRepository.getAll().find { it.id == vehicleId }
+            ?: error("That vehicle no longer exists.")
+        val key = AiChatMessageEntity.threadKey(vehicleId, issueId)
+        val history = chatDao.getAll().filter { it.vehicleId == vehicleId && it.issueId == issueId }
+            .sortedBy { it.createdAt }
+
+        val opening = buildString {
+            appendLine(profileFor(vehicleId))
+            if (issueId != null) {
+                val issue = issueRepository.getAll().find { it.id == issueId }
+                if (issue != null) {
+                    appendLine()
+                    appendLine(GarageContext.issueDetail(issue))
+                }
+                diagnosisDao.getForIssue(issueId)?.let { diagnosis ->
+                    appendLine()
+                    appendLine("## The diagnosis you already gave for this issue")
+                    appendLine(diagnosis.content)
+                }
+                appendLine()
+                appendLine("The owner is following up on that diagnosis. Don't repeat it back to them.")
+            }
+        }
+
         chatDao.upsert(
             AiChatMessageEntity(
                 id = UUID.randomUUID().toString(),
-                vehicleId = vehicle.id,
+                vehicleId = vehicleId,
+                issueId = issueId,
                 role = "user",
                 content = question,
                 sourcesJson = "",
@@ -97,35 +114,32 @@ class AiRepository(
             ),
         )
 
-        val profile = GarageContext.vehicleProfile(vehicle, schedules, logs, issues)
         val messages = if (history.isEmpty()) {
-            listOf(ClaudeMessage("user", "$profile\n\n---\n\n$question"))
+            listOf(ClaudeMessage("user", "$opening\n\n---\n\n$question"))
         } else {
             buildList {
-                add(ClaudeMessage("user", "$profile\n\n---\n\n${history.first().content}"))
+                add(ClaudeMessage("user", "$opening\n\n---\n\n${history.first().content}"))
                 history.drop(1).forEach { add(ClaudeMessage(it.role, it.content)) }
                 add(ClaudeMessage("user", question))
             }
         }
 
-        val result = collect(
-            ClaudeRequest(system = AiPrompts.CHAT_SYSTEM, messages = messages),
-            onDelta,
-            onSearching,
+        val result = collect(key, ClaudeRequest(system = AiPrompts.CHAT_SYSTEM, messages = messages))
+        chatDao.upsert(
+            AiChatMessageEntity(
+                id = UUID.randomUUID().toString(),
+                vehicleId = vehicleId,
+                issueId = issueId,
+                role = "assistant",
+                content = result.text,
+                sourcesJson = encodeSources(result.sources),
+                createdAt = System.currentTimeMillis(),
+            ),
         )
-        val reply = AiChatMessageEntity(
-            id = UUID.randomUUID().toString(),
-            vehicleId = vehicle.id,
-            role = "assistant",
-            content = result.text,
-            sourcesJson = encodeSources(result.sources),
-            createdAt = System.currentTimeMillis(),
-        )
-        chatDao.upsert(reply)
-        return reply
     }
 
-    suspend fun clearChat(vehicleId: String) = chatDao.deleteForVehicle(vehicleId)
+    suspend fun clearThread(vehicleId: String, issueId: String?) =
+        chatDao.deleteForThread(vehicleId, issueId)
 
     suspend fun deleteDiagnosisForIssue(issueId: String) = diagnosisDao.deleteForIssue(issueId)
 
@@ -143,30 +157,43 @@ class AiRepository(
         if (raw.isBlank()) emptyList()
         else runCatching { json.decodeFromString(sourceListSerializer, raw) }.getOrDefault(emptyList())
 
+    private suspend fun profileFor(vehicleId: String): String {
+        val vehicle = vehicleRepository.getAll().find { it.id == vehicleId } ?: error("Unknown vehicle")
+        return GarageContext.vehicleProfile(
+            vehicle = vehicle,
+            schedules = scheduleRepository.getAll().filter { it.vehicleId == vehicleId },
+            logs = logRepository.getAll().filter { it.vehicleId == vehicleId },
+            issues = issueRepository.getAll().filter { it.vehicleId == vehicleId },
+        )
+    }
+
     private fun encodeSources(sources: List<ClaudeSource>): String =
         if (sources.isEmpty()) "" else json.encodeToString(sourceListSerializer, sources)
 
     private data class StreamResult(val text: String, val sources: List<ClaudeSource>)
 
-    private suspend fun collect(
-        request: ClaudeRequest,
-        onDelta: (String) -> Unit,
-        onSearching: () -> Unit,
-    ): StreamResult {
+    private suspend fun collect(key: String, request: ClaudeRequest): StreamResult {
+        runHolder.start(key)
         val text = StringBuilder()
         // Several searches can run in one answer and the same page can come back twice; keyed by
-        // URL so the source list the owner sees is deduplicated but keeps first-seen order.
+        // URL so the source list stays deduplicated but keeps first-seen order.
         val sources = LinkedHashMap<String, ClaudeSource>()
-        client.stream(request).collect { event ->
-            when (event) {
-                is ClaudeEvent.TextDelta -> {
-                    text.append(event.text)
-                    onDelta(event.text)
+        try {
+            client.stream(request).collect { event ->
+                when (event) {
+                    is ClaudeEvent.TextDelta -> {
+                        text.append(event.text)
+                        runHolder.appendDelta(key, event.text)
+                    }
+                    is ClaudeEvent.Searching -> runHolder.markSearching(key)
+                    is ClaudeEvent.SourcesFound -> event.sources.forEach { sources.putIfAbsent(it.url, it) }
                 }
-                is ClaudeEvent.Searching -> onSearching()
-                is ClaudeEvent.SourcesFound -> event.sources.forEach { sources.putIfAbsent(it.url, it) }
             }
+        } catch (e: Throwable) {
+            runHolder.fail(key, (e as? ClaudeException)?.userMessage ?: e.message ?: "Something went wrong.")
+            throw e
         }
+        runHolder.finish(key)
         return StreamResult(text.toString().trim(), sources.values.toList())
     }
 }

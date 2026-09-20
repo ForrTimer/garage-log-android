@@ -10,6 +10,9 @@ import java.util.Calendar
 
 const val NOTIFICATION_CHANNEL_ID = "mileage_reminders"
 
+/** Separate channel so answers arriving can be silenced without losing maintenance reminders. */
+const val AI_NOTIFICATION_CHANNEL_ID = "ai_answers"
+
 private const val REQUEST_CODE = 4200
 
 /**

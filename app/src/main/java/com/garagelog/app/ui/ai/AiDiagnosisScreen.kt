@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,10 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.ai.ASSISTANT_NAME
+import com.garagelog.app.data.ai.AiRunState
 import com.garagelog.app.data.ai.ClaudeSource
 import com.garagelog.app.data.entity.AiDiagnosisEntity
 import com.garagelog.app.data.entity.IssueEntity
-import com.garagelog.app.ui.AiStreamState
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
@@ -50,15 +49,16 @@ fun AiDiagnosisScreen(
      * Taken as a flow and collected here on purpose: it changes on every streamed token, so
      * collecting it in the caller would recompose the whole app tree dozens of times per answer.
      */
-    streamFlow: StateFlow<AiStreamState>,
+    runsFlow: StateFlow<Map<String, AiRunState>>,
     hasApiKey: Boolean,
     sourcesFor: (String) -> List<ClaudeSource>,
-    onBack: () -> Unit,
     onRun: () -> Unit,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit,
+    onAskFollowUp: () -> Unit,
 ) {
-    val stream by streamFlow.collectAsState()
+    val runs by runsFlow.collectAsState()
+    val stream = runs[issue.id] ?: AiRunState()
     val error = stream.error
     val scrollState = rememberScrollState()
 
@@ -128,7 +128,11 @@ fun AiDiagnosisScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 16.dp),
                     )
-                    Row(modifier = Modifier.padding(top = 10.dp, bottom = 24.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(top = 10.dp, bottom = 24.dp),
+                    ) {
+                        ActionLink(text = "Ask a follow-up", onClick = onAskFollowUp)
                         ActionLink(text = "Run again", onClick = onRun)
                     }
                 }

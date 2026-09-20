@@ -29,9 +29,23 @@ data class AiDiagnosisEntity(
 data class AiChatMessageEntity(
     @PrimaryKey val id: String,
     val vehicleId: String,
+    /**
+     * Non-null for a follow-up conversation hanging off one issue's diagnosis; null for the
+     * vehicle-wide "ask anything" thread. Kept alongside [vehicleId] rather than replacing it so
+     * deleting a vehicle still cascades to every thread about it, issue-scoped ones included.
+     */
+    val issueId: String? = null,
     /** "user" or "assistant" — matches the Messages API role wire values. */
     val role: String,
     val content: String,
     val sourcesJson: String,
     val createdAt: Long,
-)
+) {
+    companion object {
+        /** Identifies a conversation: one per issue, plus one per vehicle for general questions. */
+        fun threadKey(vehicleId: String, issueId: String?): String =
+            if (issueId != null) "issue:$issueId" else "vehicle:$vehicleId"
+    }
+
+    val threadKey: String get() = threadKey(vehicleId, issueId)
+}

@@ -8,7 +8,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.garagelog.app.data.ai.ClaudeException
+import com.garagelog.app.data.ai.AiRunState
 import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.AiDiagnosisEntity
 import com.garagelog.app.data.entity.IssueEntity
@@ -28,7 +28,6 @@ import com.garagelog.app.util.todayIso
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,23 +52,12 @@ sealed interface SubScreen {
     data object Settings : SubScreen
     data object ManageVehicles : SubScreen
     data class Diagnosis(val issueId: String) : SubScreen
-    data class Chat(val vehicleId: String) : SubScreen
+    /** [issueId] non-null = the follow-up thread on that issue's diagnosis. */
+    data class Chat(val vehicleId: String, val issueId: String? = null) : SubScreen
 
     /** The vehicle filter in the header means nothing on these, so it's hidden for them. */
     val usesVehicleFilter: Boolean get() = this !is Settings && this !is ManageVehicles
 }
-
-/**
- * Live state of an in-flight Claude call. Deliberately its own StateFlow rather than a field on
- * [GarageLogUiState]: text arrives token by token, and routing that through the big `combine()`
- * would recompute and re-emit every screen's state dozens of times per answer.
- */
-data class AiStreamState(
-    val running: Boolean = false,
-    val searching: Boolean = false,
-    val partialText: String = "",
-    val error: String? = null,
-)
 
 data class GarageLogUiState(
     val vehicles: List<VehicleEntity> = emptyList(),
@@ -103,9 +91,11 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     private val currentTab = MutableStateFlow(AppTab.Dashboard)
     private val subScreen = MutableStateFlow<SubScreen?>(null)
 
-    private val _aiStream = MutableStateFlow(AiStreamState())
-    val aiStream: StateFlow<AiStreamState> = _aiStream
-    private var aiJob: Job? = null
+    /**
+     * Keyed by what the request is for, and owned by a process-wide holder rather than this
+     * ViewModel, so an answer in flight survives the screen being closed or the app being left.
+     */
+    val aiRuns: StateFlow<Map<String, AiRunState>> = locator.aiRunHolder.runs
 
     val hasAiKey: StateFlow<Boolean> = locator.aiKeyStore.hasKey
 
@@ -449,67 +439,35 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
 
     fun openDiagnosis(issueId: String) { subScreen.value = SubScreen.Diagnosis(issueId) }
 
-    fun openChat(vehicleId: String) { subScreen.value = SubScreen.Chat(vehicleId) }
-
-    fun cancelAiRun() {
-        aiJob?.cancel()
-        aiJob = null
-        _aiStream.value = AiStreamState()
+    fun openChat(vehicleId: String, issueId: String? = null) {
+        subScreen.value = SubScreen.Chat(vehicleId, issueId)
     }
 
+    /** Both of these hand off to [com.garagelog.app.data.ai.AiWorker] rather than running here,
+     * so the request outlives this ViewModel and the answer is saved even if the app is closed. */
     fun runDiagnosis(issue: IssueEntity) {
-        if (aiJob?.isActive == true) return
-        aiJob = viewModelScope.launch {
-            _aiStream.value = AiStreamState(running = true)
-            runCatching {
-                val vehicle = locator.vehicleRepository.getAll().find { it.id == issue.vehicleId }
-                    ?: error("That issue's vehicle no longer exists.")
-                locator.aiRepository.diagnose(
-                    issue = issue,
-                    vehicle = vehicle,
-                    schedules = locator.scheduleRepository.getAll().filter { it.vehicleId == vehicle.id },
-                    logs = locator.logRepository.getAll().filter { it.vehicleId == vehicle.id },
-                    issues = locator.issueRepository.getAll().filter { it.vehicleId == vehicle.id },
-                    onDelta = { delta -> _aiStream.update { it.copy(partialText = it.partialText + delta, searching = false) } },
-                    onSearching = { _aiStream.update { it.copy(searching = true) } },
-                )
-            }.onSuccess {
-                _aiStream.value = AiStreamState()
-            }.onFailure { error ->
-                _aiStream.value = AiStreamState(error = error.toUserMessage())
-            }
-            aiJob = null
-        }
+        locator.aiRunHolder.clearError(issue.id)
+        locator.enqueueDiagnosis(issue.id, issue.title)
     }
 
-    fun sendChatMessage(vehicleId: String, question: String) {
-        if (question.isBlank() || aiJob?.isActive == true) return
-        aiJob = viewModelScope.launch {
-            _aiStream.value = AiStreamState(running = true)
-            runCatching {
-                val vehicle = locator.vehicleRepository.getAll().find { it.id == vehicleId }
-                    ?: error("That vehicle no longer exists.")
-                locator.aiRepository.sendChatMessage(
-                    vehicle = vehicle,
-                    schedules = locator.scheduleRepository.getAll().filter { it.vehicleId == vehicleId },
-                    logs = locator.logRepository.getAll().filter { it.vehicleId == vehicleId },
-                    issues = locator.issueRepository.getAll().filter { it.vehicleId == vehicleId },
-                    history = chatMessages.value.filter { it.vehicleId == vehicleId },
-                    question = question.trim(),
-                    onDelta = { delta -> _aiStream.update { it.copy(partialText = it.partialText + delta, searching = false) } },
-                    onSearching = { _aiStream.update { it.copy(searching = true) } },
-                )
-            }.onSuccess {
-                _aiStream.value = AiStreamState()
-            }.onFailure { error ->
-                _aiStream.value = AiStreamState(error = error.toUserMessage())
-            }
-            aiJob = null
-        }
+    fun sendChatMessage(vehicleId: String, issueId: String?, question: String, label: String) {
+        if (question.isBlank()) return
+        locator.aiRunHolder.clearError(AiChatMessageEntity.threadKey(vehicleId, issueId))
+        locator.enqueueChat(vehicleId, issueId, question.trim(), label)
     }
 
-    fun clearChat(vehicleId: String) = viewModelScope.launch {
-        locator.aiRepository.clearChat(vehicleId)
+    fun cancelDiagnosis(issueId: String) {
+        locator.cancelAiWork("ai-diagnosis-$issueId")
+        locator.aiRunHolder.finish(issueId)
+    }
+
+    fun cancelChat(vehicleId: String, issueId: String?) {
+        locator.cancelAiWork("ai-chat-${issueId ?: vehicleId}")
+        locator.aiRunHolder.finish(AiChatMessageEntity.threadKey(vehicleId, issueId))
+    }
+
+    fun clearChat(vehicleId: String, issueId: String?) = viewModelScope.launch {
+        locator.aiRepository.clearThread(vehicleId, issueId)
     }
 
     fun setAiApiKey(key: String) {
@@ -525,9 +483,6 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     fun aiKeyHint(): String? = locator.aiKeyStore.keyHint()
 
     fun decodeAiSources(sourcesJson: String) = locator.aiRepository.decodeSources(sourcesJson)
-
-    private fun Throwable.toUserMessage(): String =
-        (this as? ClaudeException)?.userMessage ?: message ?: "Something went wrong."
 
     fun exportBackup(output: OutputStream) = viewModelScope.launch {
         runCatching { locator.backupManager.exportToStream(output) }

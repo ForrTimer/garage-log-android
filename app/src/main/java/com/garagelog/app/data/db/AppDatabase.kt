@@ -30,7 +30,7 @@ import com.garagelog.app.data.entity.VehicleEntity
         AiDiagnosisEntity::class,
         AiChatMessageEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

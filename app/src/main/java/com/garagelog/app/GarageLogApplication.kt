@@ -5,10 +5,14 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import androidx.work.Configuration
+import androidx.work.DelegatingWorkerFactory
+import com.garagelog.app.data.ai.ASSISTANT_NAME
+import com.garagelog.app.data.ai.AiWorkerFactory
 import com.garagelog.app.data.sync.SyncWorker
 import com.garagelog.app.data.sync.SyncWorkerFactory
 import com.garagelog.app.di.ServiceLocator
 import com.garagelog.app.notifications.MileageReminderScheduler
+import com.garagelog.app.notifications.AI_NOTIFICATION_CHANNEL_ID
 import com.garagelog.app.notifications.NOTIFICATION_CHANNEL_ID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +28,12 @@ class GarageLogApplication : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
-            .setWorkerFactory(SyncWorkerFactory(serviceLocator.syncRepository))
+            .setWorkerFactory(
+                DelegatingWorkerFactory().apply {
+                    addFactory(SyncWorkerFactory(serviceLocator.syncRepository))
+                    addFactory(AiWorkerFactory(serviceLocator.aiRepository))
+                },
+            )
             .build()
 
     override fun onCreate() {
@@ -50,6 +59,15 @@ class GarageLogApplication : Application(), Configuration.Provider {
         ).apply {
             description = "Reminds you to log your vehicle's current mileage"
         }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val aiChannel = NotificationChannel(
+            AI_NOTIFICATION_CHANNEL_ID,
+            "$ASSISTANT_NAME's answers",
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = "Tells you when a diagnosis or reply has finished, if you've left the app"
+        }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+        manager.createNotificationChannel(aiChannel)
     }
 }

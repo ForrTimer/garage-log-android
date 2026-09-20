@@ -52,6 +52,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.garagelog.app.ui.theme.GarageFabShape
 import com.garagelog.app.ui.theme.garageColors
+import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
@@ -435,13 +436,13 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             issue = issue,
                             vehicleName = uiState.vehicleName(issue.vehicleId),
                             diagnosis = diagnoses[issue.id],
-                            streamFlow = viewModel.aiStream,
+                            runsFlow = viewModel.aiRuns,
                             hasApiKey = hasAiKey,
                             sourcesFor = viewModel::decodeAiSources,
-                            onBack = viewModel::closeSubScreen,
                             onRun = { viewModel.runDiagnosis(issue) },
-                            onStop = viewModel::cancelAiRun,
+                            onStop = { viewModel.cancelDiagnosis(issue.id) },
                             onOpenSettings = viewModel::openSettings,
+                            onAskFollowUp = { viewModel.openChat(issue.vehicleId, issue.id) },
                         )
                     }
                 }
@@ -450,16 +451,20 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     if (vehicle == null) {
                         LaunchedEffect(Unit) { viewModel.closeSubScreen() }
                     } else {
+                        val issueId = subScreen.issueId
+                        val followedIssue = issueId?.let { id -> uiState.issues.find { it.id == id } }
                         AiChatScreen(
-                            vehicleLabel = vehicle.name,
-                            messages = chatMessages.filter { it.vehicleId == vehicle.id },
-                            streamFlow = viewModel.aiStream,
+                            vehicleLabel = followedIssue?.let { "${vehicle.name} · ${it.title}" } ?: vehicle.name,
+                            messages = chatMessages.filter { it.vehicleId == vehicle.id && it.issueId == issueId },
+                            runsFlow = viewModel.aiRuns,
+                            runKey = AiChatMessageEntity.threadKey(vehicle.id, issueId),
                             hasApiKey = hasAiKey,
                             sourcesFor = viewModel::decodeAiSources,
-                            onBack = viewModel::closeSubScreen,
-                            onSend = { viewModel.sendChatMessage(vehicle.id, it) },
-                            onStop = viewModel::cancelAiRun,
-                            onClear = { viewModel.clearChat(vehicle.id) },
+                            onSend = {
+                                viewModel.sendChatMessage(vehicle.id, issueId, it, vehicle.name)
+                            },
+                            onStop = { viewModel.cancelChat(vehicle.id, issueId) },
+                            onClear = { viewModel.clearChat(vehicle.id, issueId) },
                             onOpenSettings = viewModel::openSettings,
                         )
                     }

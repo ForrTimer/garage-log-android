@@ -138,3 +138,13 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         )
     }
 }
+
+/**
+ * Lets a chat message belong to one issue's follow-up conversation rather than the vehicle-wide
+ * thread. Null (every existing row) keeps its current meaning: a general question about the vehicle.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE ai_chat_messages ADD COLUMN issueId TEXT DEFAULT NULL")
+    }
+}

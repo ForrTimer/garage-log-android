@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,9 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.ai.ASSISTANT_NAME
+import com.garagelog.app.data.ai.AiRunState
 import com.garagelog.app.data.ai.ClaudeSource
 import com.garagelog.app.data.entity.AiChatMessageEntity
-import com.garagelog.app.ui.AiStreamState
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.EmptyState
@@ -48,16 +47,17 @@ fun AiChatScreen(
     vehicleLabel: String,
     messages: List<AiChatMessageEntity>,
     /** Collected here, not by the caller — it changes on every streamed token. */
-    streamFlow: StateFlow<AiStreamState>,
+    runsFlow: StateFlow<Map<String, AiRunState>>,
+    runKey: String,
     hasApiKey: Boolean,
     sourcesFor: (String) -> List<ClaudeSource>,
-    onBack: () -> Unit,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
     onClear: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    val stream by streamFlow.collectAsState()
+    val runs by runsFlow.collectAsState()
+    val stream = runs[runKey] ?: AiRunState()
     var draft by rememberSaveable { mutableStateOf("") }
     var confirmingClear by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()

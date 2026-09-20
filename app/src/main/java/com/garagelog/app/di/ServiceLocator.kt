@@ -2,8 +2,11 @@ package com.garagelog.app.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.work.WorkManager
 import com.garagelog.app.data.ai.AiKeyStore
 import com.garagelog.app.data.ai.AiRepository
+import com.garagelog.app.data.ai.AiRunHolder
+import com.garagelog.app.data.ai.AiWorker
 import com.garagelog.app.data.ai.DirectClaudeClient
 import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.backup.BackupManager
@@ -14,6 +17,7 @@ import com.garagelog.app.data.db.MIGRATION_3_4
 import com.garagelog.app.data.db.MIGRATION_4_5
 import com.garagelog.app.data.db.MIGRATION_5_6
 import com.garagelog.app.data.db.MIGRATION_6_7
+import com.garagelog.app.data.db.MIGRATION_7_8
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
@@ -49,6 +53,7 @@ class ServiceLocator(context: Context) {
         AppDatabase.DATABASE_NAME,
     ).addMigrations(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+        MIGRATION_7_8,
     ).build()
 
     val vehicleRepository: VehicleRepository = RoomVehicleRepository(database.vehicleDao())
@@ -70,10 +75,16 @@ class ServiceLocator(context: Context) {
     )
 
     val aiKeyStore = AiKeyStore(appContext)
+    val aiRunHolder = AiRunHolder()
     val aiRepository = AiRepository(
         client = DirectClaudeClient(aiKeyStore),
         diagnosisDao = database.aiDiagnosisDao(),
         chatDao = database.aiChatDao(),
+        vehicleRepository = vehicleRepository,
+        logRepository = logRepository,
+        issueRepository = issueRepository,
+        scheduleRepository = scheduleRepository,
+        runHolder = aiRunHolder,
     )
 
     val authManager = AuthManager(appContext)
@@ -92,6 +103,15 @@ class ServiceLocator(context: Context) {
         photoStore = photoStore,
         statusHolder = syncStatusHolder,
     )
+
+    fun enqueueDiagnosis(issueId: String, label: String) =
+        AiWorker.enqueueDiagnosis(appContext, issueId, label)
+
+    fun enqueueChat(vehicleId: String, issueId: String?, question: String, label: String) =
+        AiWorker.enqueueChat(appContext, vehicleId, issueId, question, label)
+
+    fun cancelAiWork(uniqueName: String) =
+        WorkManager.getInstance(appContext).cancelUniqueWork(uniqueName)
 
     /** Fire-and-forget debounced sync request — safe to call after every mutation, signed in or not. */
     suspend fun requestSync() {
