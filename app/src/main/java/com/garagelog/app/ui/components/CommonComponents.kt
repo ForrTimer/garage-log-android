@@ -190,19 +190,32 @@ fun StatGrid(stats: List<Pair<String, String>>, onItemClick: ((Int) -> Unit)? = 
             }
         }
     } else {
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            stats.forEachIndexed { index, (value, label) ->
-                if (index != 0) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(1.dp)
-                            .background(MaterialTheme.colorScheme.outlineVariant),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f).padding(horizontal = if (index == 0) 0.dp else 14.dp)) {
-                    Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+        // Same wrap rule as the tappable variant above: past three, four columns are too narrow
+        // for a money value and it breaks mid-number ("$1,255" / ".36").
+        val perRow = if (stats.size > 3) 2 else stats.size
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            stats.chunked(perRow).forEachIndexed { rowIndex, rowStats ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
+                        .padding(top = if (rowIndex == 0) 0.dp else 12.dp),
+                ) {
+                    rowStats.forEachIndexed { index, (value, label) ->
+                        if (index != 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(1.dp)
+                                    .background(MaterialTheme.colorScheme.outlineVariant),
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f).padding(horizontal = if (index == 0) 0.dp else 14.dp)) {
+                            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(label, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+                        }
+                    }
+                    repeat(perRow - rowStats.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
