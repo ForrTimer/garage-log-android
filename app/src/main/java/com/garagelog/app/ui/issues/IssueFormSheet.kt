@@ -52,6 +52,10 @@ fun IssueFormSheet(
     // maintenance schedule done opens a pre-filled log entry for that.
     onResolvedWithLog: (IssueEntity) -> Unit,
 ) {
+    // Minted up front (not at Save) so photos can attach to a brand-new issue before its first
+    // save — same approach as LogFormSheet.
+    val stableId = remember(issue?.id) { issue?.id ?: UUID.randomUUID().toString() }
+
     var form by remember(issue?.id) {
         mutableStateOf(
             IssueFormState(
@@ -74,13 +78,17 @@ fun IssueFormSheet(
 
     FormSheetScaffold(
         title = if (issue == null) "New issue" else "Edit issue",
-        onDismiss = onDismiss,
+        onDismiss = {
+            // Closing a never-saved issue orphans any photos already attached to stableId.
+            if (issue == null) viewModel.discardPhotosForOwner(PhotoOwnerType.ISSUE, stableId)
+            onDismiss()
+        },
         showDelete = issue != null,
         deleteTitle = "Delete issue?",
         onDelete = { issue?.let { onDelete(it.id) } },
         onSave = {
             val entity = IssueEntity(
-                id = issue?.id ?: UUID.randomUUID().toString(),
+                id = stableId,
                 vehicleId = form.vehicleId,
                 title = form.title.trim().ifBlank { "Untitled issue" },
                 status = form.status,
@@ -122,9 +130,7 @@ fun IssueFormSheet(
         DateField("Date opened", form.dateOpened) { form = form.copy(dateOpened = it) }
         LabeledTextField("Description / diagnosis notes", form.description, { form = form.copy(description = it) }, singleLine = false, minLines = 3)
 
-        if (issue != null) {
-            PhotoGridSection(viewModel = viewModel, ownerType = PhotoOwnerType.ISSUE, ownerId = issue.id)
-        }
+        PhotoGridSection(viewModel = viewModel, ownerType = PhotoOwnerType.ISSUE, ownerId = stableId)
     }
 
     // A plain AlertDialog rather than the shared ConfirmDialog — that component always fires
