@@ -3,6 +3,7 @@ package com.garagelog.app.data.sync
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
+import com.garagelog.app.data.entity.NotificationPrefsEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import kotlinx.serialization.Serializable
 
@@ -21,6 +22,31 @@ data class SyncSnapshot(
     val logs: List<SyncLog> = emptyList(),
     val issues: List<SyncIssue> = emptyList(),
     val schedules: List<SyncSchedule> = emptyList(),
+    /** Null in snapshots written before reminder settings were synced; the local row then stands. */
+    val notificationPrefs: SyncNotificationPrefs? = null,
+)
+
+/** The single reminder-settings row. No id/tombstone: there's exactly one, and it's never deleted. */
+@Serializable
+data class SyncNotificationPrefs(
+    val enabled: Boolean,
+    val cadence: String,
+    val hour: Int,
+    val minute: Int,
+    val dayOfWeek: Int,
+    val dayOfMonth: Int,
+    val month: Int,
+    val updatedAt: Long,
+)
+
+fun NotificationPrefsEntity.toSync() = SyncNotificationPrefs(
+    enabled = enabled, cadence = cadence, hour = hour, minute = minute, dayOfWeek = dayOfWeek,
+    dayOfMonth = dayOfMonth, month = month, updatedAt = updatedAt,
+)
+
+fun SyncNotificationPrefs.toEntity() = NotificationPrefsEntity(
+    enabled = enabled, cadence = cadence, hour = hour, minute = minute, dayOfWeek = dayOfWeek,
+    dayOfMonth = dayOfMonth, month = month, updatedAt = updatedAt,
 )
 
 interface Syncable {

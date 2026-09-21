@@ -148,3 +148,13 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         db.execSQL("ALTER TABLE ai_chat_messages ADD COLUMN issueId TEXT DEFAULT NULL")
     }
 }
+
+/**
+ * Gives the reminder settings row a last-write-wins stamp so it can ride along in Drive sync.
+ * 0 (the existing row) means "never edited since sync learned about it", so any synced copy wins.
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE notification_prefs ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+    }
+}

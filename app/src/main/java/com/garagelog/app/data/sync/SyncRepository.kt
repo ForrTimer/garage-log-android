@@ -3,10 +3,12 @@ package com.garagelog.app.data.sync
 import androidx.room.withTransaction
 import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.db.AppDatabase
+import com.garagelog.app.data.entity.NotificationPrefsEntity
 import com.garagelog.app.data.entity.PhotoEntity
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
+import com.garagelog.app.data.repository.NotificationPrefsRepository
 import com.garagelog.app.data.repository.PhotoRepository
 import com.garagelog.app.data.repository.ScheduleRepository
 import com.garagelog.app.data.repository.VehicleRepository
@@ -28,6 +30,9 @@ class SyncRepository(
     private val scheduleRepository: ScheduleRepository,
     private val photoRepository: PhotoRepository,
     private val photoStore: PhotoStore,
+    private val notificationPrefsRepository: NotificationPrefsRepository,
+    /** The reminder alarm is per-device OS state, so a pulled settings change must re-arm it here. */
+    private val onNotificationPrefsPulled: (NotificationPrefsEntity) -> Unit,
     private val statusHolder: SyncStatusHolder,
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -63,11 +68,16 @@ class SyncRepository(
             schedules = scheduleRepository.getAllForSync().map { it.toSync() },
         )
 
+        // Same last-write-wins rule as mergeById, for the one settings record.
+        val localPrefs = notificationPrefsRepository.get().toSync()
+        val pulledPrefs = remoteSnapshot.notificationPrefs?.takeIf { it.updatedAt > localPrefs.updatedAt }
+
         val merged = SyncSnapshot(
             vehicles = mergeById(localSnapshot.vehicles, remoteSnapshot.vehicles),
             logs = mergeById(localSnapshot.logs, remoteSnapshot.logs),
             issues = mergeById(localSnapshot.issues, remoteSnapshot.issues),
             schedules = mergeById(localSnapshot.schedules, remoteSnapshot.schedules),
+            notificationPrefs = pulledPrefs ?: localPrefs,
         )
 
         // Applying the merge one row at a time meant one Room write per entity — each of which
@@ -92,7 +102,9 @@ class SyncRepository(
             merged.logs.forEach { logRepository.upsert(it.toEntity()) }
             merged.issues.forEach { issueRepository.upsert(it.toEntity()) }
             merged.schedules.forEach { scheduleRepository.upsert(it.toEntity()) }
+            pulledPrefs?.let { notificationPrefsRepository.upsert(it.toEntity()) }
         }
+        pulledPrefs?.let { onNotificationPrefsPulled(it.toEntity()) }
 
         val mergedJson = json.encodeToString(SyncSnapshot.serializer(), merged)
         if (existingFile != null) {

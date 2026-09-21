@@ -23,6 +23,8 @@ data class NotificationPrefsEntity(
     val dayOfWeek: Int = 2, // Monday
     val dayOfMonth: Int = 1,
     val month: Int = 0, // January
+    /** Drive-sync last-write-wins stamp; 0 = never edited on this device, so a synced copy wins. */
+    val updatedAt: Long = 0,
 ) {
     companion object {
         const val SINGLETON_ID = "singleton"

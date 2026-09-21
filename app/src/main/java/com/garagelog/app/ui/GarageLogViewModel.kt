@@ -535,8 +535,10 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     fun syncNow() = viewModelScope.launch { requestSync() }
 
     fun saveNotificationPrefs(context: Context, prefs: NotificationPrefsEntity) = viewModelScope.launch {
-        locator.notificationPrefsRepository.upsert(prefs)
-        MileageReminderScheduler.reschedule(context.applicationContext, prefs)
+        val stamped = prefs.copy(updatedAt = System.currentTimeMillis())
+        locator.notificationPrefsRepository.upsert(stamped)
+        MileageReminderScheduler.reschedule(context.applicationContext, stamped)
+        requestSync()
     }
 }
 
