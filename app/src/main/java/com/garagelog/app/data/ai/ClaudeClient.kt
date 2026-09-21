@@ -38,9 +38,10 @@ data class ClaudeRequest(
     val messages: List<ClaudeMessage>,
     val webSearch: Boolean = true,
     val maxTokens: Int = 8000,
+    val model: String = DirectClaudeClient.DIAGNOSIS_MODEL,
 )
 
-enum class ClaudeErrorKind { NoApiKey, Auth, RateLimit, Overloaded, Network, Other }
+enum class ClaudeErrorKind { NoApiKey, Auth, RateLimit, Overloaded, Network, Timeout, Other }
 
 class ClaudeException(val kind: ClaudeErrorKind, message: String) : Exception(message) {
     /** Phrased for a person looking at their truck, not a stack trace. */
@@ -51,6 +52,7 @@ class ClaudeException(val kind: ClaudeErrorKind, message: String) : Exception(me
             ClaudeErrorKind.RateLimit -> "Rate limited by the API. Wait a moment and try again."
             ClaudeErrorKind.Overloaded -> "$ASSISTANT_NAME is overloaded right now. Try again shortly."
             ClaudeErrorKind.Network -> "Couldn't reach $ASSISTANT_NAME. Check your connection."
+            ClaudeErrorKind.Timeout -> "That took longer than $ASSISTANT_NAME is allowed. Try again."
             ClaudeErrorKind.Other -> message ?: "Something went wrong talking to $ASSISTANT_NAME."
         }
 }
@@ -87,15 +89,22 @@ class DirectClaudeClient(
         val response = try {
             httpClient.newCall(httpRequest).execute()
         } catch (e: IOException) {
-            throw ClaudeException(ClaudeErrorKind.Network, e.message ?: "Network error")
+            throw networkFailure(e)
         }
 
         response.use {
             if (!it.isSuccessful) throw errorFor(it.code, it.body.string())
             val source = it.body.source()
             while (true) {
+                // Cancellation must propagate as CancellationException, never be reported as a
+                // network problem — the two look identical at the socket but mean opposite things.
                 currentCoroutineContext().ensureActive()
-                val line = source.readUtf8Line() ?: break
+                val line = try {
+                    source.readUtf8Line()
+                } catch (e: IOException) {
+                    currentCoroutineContext().ensureActive()
+                    throw networkFailure(e)
+                } ?: break
                 if (!line.startsWith(DATA_PREFIX)) continue
                 val payload = line.removePrefix(DATA_PREFIX).trim()
                 if (payload.isEmpty()) continue
@@ -144,6 +153,17 @@ class DirectClaudeClient(
         }.takeIf { it.isNotEmpty() }
     }
 
+    /**
+     * A timeout and a dead connection both surface as [IOException] but mean different things to
+     * someone staring at the screen — "check your connection" is actively misleading when the
+     * request was simply taking a long time.
+     */
+    private fun networkFailure(e: IOException): ClaudeException = when (e) {
+        is java.net.SocketTimeoutException ->
+            ClaudeException(ClaudeErrorKind.Timeout, e.message ?: "Timed out")
+        else -> ClaudeException(ClaudeErrorKind.Network, e.message ?: "Network error")
+    }
+
     private fun errorFor(code: Int, body: String): ClaudeException {
         val apiMessage = runCatching {
             json.parseToJsonElement(body).jsonObject["error"]?.jsonObject?.get("message")
@@ -160,7 +180,7 @@ class DirectClaudeClient(
     }
 
     private fun ClaudeRequest.toWire() = MessagesRequest(
-        model = MODEL,
+        model = model,
         maxTokens = maxTokens,
         system = listOf(SystemBlock(text = system, cacheControl = CacheControl())),
         messages = messages.map { WireMessage(role = it.role, content = it.content) },
@@ -169,10 +189,17 @@ class DirectClaudeClient(
 
     companion object {
         /**
-         * Opus 5 is the default deliberately: this is low-volume, one call per issue or chat turn,
-         * and a wrong diagnosis on a brake problem costs far more than the token difference.
+         * A diagnosis gets the strongest model on purpose: it's one call, it reasons over the
+         * vehicle's whole history, and being wrong about a brake problem costs far more than the
+         * token difference.
          */
-        const val MODEL = "claude-opus-5"
+        const val DIAGNOSIS_MODEL = "claude-opus-5"
+
+        /**
+         * Chat is back-and-forth and mostly lookups — specs, capacities, "is this normal" — where
+         * Sonnet answers as well and returns sooner. Ethan asked for this one specifically.
+         */
+        const val CHAT_MODEL = "claude-sonnet-5"
         private const val MESSAGES_URL = "https://api.anthropic.com/v1/messages"
         private const val ANTHROPIC_VERSION = "2023-06-01"
         private const val DATA_PREFIX = "data:"
@@ -182,7 +209,9 @@ class DirectClaudeClient(
         fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.MINUTES)
-            .callTimeout(6, TimeUnit.MINUTES)
+            // A hard ceiling so a stalled call can't hang forever, but generous: a diagnosis that
+            // runs several web searches was brushing up against the old six-minute cap.
+            .callTimeout(12, TimeUnit.MINUTES)
             .build()
     }
 }

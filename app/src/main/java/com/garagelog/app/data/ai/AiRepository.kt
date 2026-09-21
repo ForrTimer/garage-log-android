@@ -9,6 +9,7 @@ import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.ScheduleRepository
 import com.garagelog.app.data.repository.VehicleRepository
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
@@ -65,7 +66,7 @@ class AiRepository(
                 vehicleId = issue.vehicleId,
                 content = result.text,
                 sourcesJson = encodeSources(result.sources),
-                model = DirectClaudeClient.MODEL,
+                model = DirectClaudeClient.DIAGNOSIS_MODEL,
                 createdAt = System.currentTimeMillis(),
                 milesAtRun = vehicle.miles,
             ),
@@ -124,7 +125,16 @@ class AiRepository(
             }
         }
 
-        val result = collect(key, ClaudeRequest(system = AiPrompts.CHAT_SYSTEM, messages = messages))
+        val result = collect(
+            key,
+            ClaudeRequest(
+                system = AiPrompts.CHAT_SYSTEM,
+                messages = messages,
+                model = DirectClaudeClient.CHAT_MODEL,
+                // A short answer needs far less room; the cap also discourages rambling.
+                maxTokens = 2000,
+            ),
+        )
         chatDao.upsert(
             AiChatMessageEntity(
                 id = UUID.randomUUID().toString(),
@@ -189,6 +199,12 @@ class AiRepository(
                     is ClaudeEvent.SourcesFound -> event.sources.forEach { sources.putIfAbsent(it.url, it) }
                 }
             }
+        } catch (e: CancellationException) {
+            // Being stopped is not a failure and must never be shown as one. This is what made a
+            // backgrounded request report "couldn't reach Bob": the OS stops the work, the socket
+            // dies, and an indiscriminate catch turned that into a connection error on screen.
+            runHolder.finish(key)
+            throw e
         } catch (e: Throwable) {
             runHolder.fail(key, (e as? ClaudeException)?.userMessage ?: e.message ?: "Something went wrong.")
             throw e

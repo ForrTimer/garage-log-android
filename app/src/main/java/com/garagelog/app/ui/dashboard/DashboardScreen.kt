@@ -78,6 +78,8 @@ import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DueStatus
 import com.garagelog.app.util.ScheduleDueInfo
+import com.garagelog.app.util.drivingRate
+import com.garagelog.app.util.projectSchedules
 import com.garagelog.app.util.computeDueInfo
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
@@ -219,10 +221,20 @@ private fun VehicleDashboardCard(
                     }
                 }
             } else if (schedulesForVehicle.isNotEmpty()) {
+                // Nothing is due, so the useful thing to say is what's next and roughly when —
+                // projected from how fast this vehicle is actually being driven.
+                val next = projectSchedules(schedulesForVehicle, v.miles, v.isSevereDuty, drivingRate(logs))
+                    .firstOrNull { it.projectedIso != null }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                     PillBadge(text = "On track", tone = PillTone.Resolved)
                     Spacer(Modifier.width(8.dp))
-                    Text("All maintenance up to date", style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+                    Text(
+                        text = next?.let { "Next: ${it.schedule.taskName} — ${formatDate(it.projectedIso)}" }
+                            ?: "All maintenance up to date",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = garageColors.textMuted,
+                        maxLines = 2,
+                    )
                 }
             } else {
                 Text(

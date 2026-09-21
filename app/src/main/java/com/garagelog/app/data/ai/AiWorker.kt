@@ -1,12 +1,15 @@
 package com.garagelog.app.data.ai
 
 import android.app.PendingIntent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.ListenableWorker
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
@@ -17,6 +20,7 @@ import androidx.work.workDataOf
 import com.garagelog.app.MainActivity
 import com.garagelog.app.R
 import com.garagelog.app.notifications.AI_NOTIFICATION_CHANNEL_ID
+import kotlinx.coroutines.CancellationException
 
 /**
  * Runs one assistant request as background work so it survives leaving the screen, switching apps,
@@ -54,11 +58,34 @@ class AiWorker(
                 else -> return Result.failure()
             }
             Result.success()
+        } catch (e: CancellationException) {
+            // WorkManager stopping this worker is not something to report — rethrow so it's
+            // recorded as stopped rather than dressed up as a failed request the owner caused.
+            throw e
         } catch (e: Throwable) {
             // The failure is already recorded against the run key for the UI; the notification is
             // for the case where the owner has left the app and would otherwise never find out.
             notify("Couldn't finish that request", (e as? ClaudeException)?.userMessage ?: e.message.orEmpty())
             Result.failure()
+        }
+    }
+
+    /**
+     * Makes this a foreground service while it runs, which is what actually lets it survive the
+     * app being closed. Android freezes a backgrounded process, and a frozen process can't hold an
+     * HTTP stream open — without this, leaving the app killed the request mid-flight.
+     */
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        val notification = NotificationCompat.Builder(applicationContext, AI_NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification_wrench)
+            .setContentTitle("$ASSISTANT_NAME is working")
+            .setContentText(inputData.getString(KEY_LABEL).orEmpty())
+            .setOngoing(true)
+            .build()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(RUNNING_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(RUNNING_NOTIFICATION_ID, notification)
         }
     }
 
@@ -89,6 +116,7 @@ class AiWorker(
         private const val KEY_LABEL = "label"
         private const val KIND_DIAGNOSIS = "diagnosis"
         private const val KIND_CHAT = "chat"
+        private const val RUNNING_NOTIFICATION_ID = 8801
 
         fun enqueueDiagnosis(context: Context, issueId: String, label: String) {
             enqueue(

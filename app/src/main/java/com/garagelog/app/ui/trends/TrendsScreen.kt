@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -77,11 +77,9 @@ fun TrendsScreen(uiState: GarageLogUiState) {
         }
         vehicles.forEach { v ->
             val logs = uiState.logs.filter { it.vehicleId == v.id }
-            val schedules = uiState.schedules.filter { it.vehicleId == v.id }
             val rate = drivingRate(logs)
             item { SectionTitle(v.name) }
             item { RunningCostCard(vehicle = v, logs = logs, rate = rate) }
-            item { UpcomingServiceCard(vehicle = v, schedules = schedules, rate = rate) }
             item { CostTrendCard(logs) }
             item { FuelEconomyCard(logs) }
             item { OdometerCard(logs) }
@@ -134,78 +132,6 @@ private fun RunningCostCard(vehicle: VehicleEntity, logs: List<LogEntryEntity>, 
     }
 }
 
-/**
- * Turns "due in 2,381 mi" into a date, by projecting the vehicle's own measured miles/day. The
- * mileage limit and the calendar limit are both computed and the earlier one wins, because that's
- * the one that actually falls due.
- */
-@Composable
-private fun UpcomingServiceCard(
-    vehicle: VehicleEntity,
-    schedules: List<MaintenanceScheduleEntity>,
-    rate: DrivingRate?,
-) {
-    GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
-        Text("Coming up", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-        if (schedules.isEmpty()) {
-            EmptyState("No maintenance intervals set up for this vehicle yet.", icon = Icons.Filled.Build)
-            return@GarageCard
-        }
-
-        val projected = projectSchedules(schedules, vehicle.miles, vehicle.isSevereDuty, rate).take(5)
-        projected.forEachIndexed { index, item ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        item.schedule.taskName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        item.due.label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Text(
-                    text = whenDueLabel(item),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = if (item.isOverdue) FontWeight.SemiBold else FontWeight.Normal,
-                    // Status colour, and the words say the same thing — never colour alone.
-                    color = if (item.isOverdue) garageColors.alarmText else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.End,
-                    // A long task name would otherwise run straight into the date with no gap.
-                    modifier = Modifier.padding(start = 12.dp),
-                )
-            }
-            if (index != projected.lastIndex) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-        }
-
-        if (rate == null) {
-            Text(
-                "Dates appear once there are two mileage readings to measure your driving rate from.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 10.dp),
-            )
-        }
-    }
-}
-
-private fun whenDueLabel(item: ProjectedService): String = when {
-    item.isOverdue -> "Overdue"
-    item.projectedIso == null -> "—"
-    (item.daysAway ?: 0) <= 0 -> "Due now"
-    else -> "${formatDate(item.projectedIso)}\n${item.daysAway} days"
-}
-
 @Composable
 private fun OdometerCard(logs: List<LogEntryEntity>) {
     GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
@@ -231,7 +157,9 @@ private fun FuelEconomyCard(logs: List<LogEntryEntity>) {
     GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
         Text("Fuel economy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         val all = fillUpMpg(logs)
-        val fillUps = all.takeLast(8)
+        // Plenty of points still read as a trend on a line, so keep more of the history than a
+        // bar chart could fit.
+        val shown = all.takeLast(24)
         when {
             all.isEmpty() -> EmptyState(
                 "Log full-tank fill-ups to see MPG here — partial fills don't give an accurate reading.",
@@ -253,9 +181,13 @@ private fun FuelEconomyCard(logs: List<LogEntryEntity>) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
-                BarChart(
-                    bars = fillUps.map { it.mpg },
-                    labels = fillUps.map { formatDate(it.date).substringBefore(",") },
+                // A line, because the question is which way economy is moving — and unlike bars it
+                // stays readable whether there are three points or thirty, so the chart grows with
+                // the history instead of needing a different form later.
+                LineChart(
+                    values = shown.map { it.mpg },
+                    leadingLabel = formatDate(shown.first().date),
+                    trailingLabel = formatDate(shown.last().date),
                     valueLabel = { "%.1f".format(it) },
                 )
             }
@@ -281,6 +213,7 @@ private fun CostTrendCard(logs: List<LogEntryEntity>) {
                 SeriesHeading(
                     label = "Service",
                     total = serviceCosted.sumOf { it.cost ?: 0.0 },
+                    months = monthsSpanned(serviceCosted),
                     color = MaterialTheme.colorScheme.primary,
                     topPadding = 4.dp,
                 )
@@ -290,6 +223,7 @@ private fun CostTrendCard(logs: List<LogEntryEntity>) {
                 SeriesHeading(
                     label = "Fuel",
                     total = fuelCosted.sumOf { it.cost ?: 0.0 },
+                    months = monthsSpanned(fuelCosted),
                     color = garageColors.warn,
                     topPadding = 16.dp,
                 )
@@ -305,6 +239,10 @@ private fun CostTrendCard(logs: List<LogEntryEntity>) {
         }
     }
 }
+
+/** Distinct calendar months with activity — the denominator for a per-month average. */
+private fun monthsSpanned(logs: List<LogEntryEntity>): Int =
+    logs.filter { it.date.length >= 7 }.map { it.date.substring(0, 7) }.distinct().size
 
 private fun monthlyTotals(logs: List<LogEntryEntity>): List<Pair<String, Double>> {
     return logs.filter { it.date.length >= 7 }
@@ -322,16 +260,22 @@ private fun monthLabel(yyyyMm: String): String {
     return monthName(monthIndex).take(3)
 }
 
-/** A coloured swatch beside the series name, so the chart's colour has a stated meaning. */
+/**
+ * A coloured swatch beside the series name, so the chart's colour has a stated meaning — plus a
+ * per-month average, which is the figure that makes two totals over different spans comparable.
+ */
 @Composable
-private fun SeriesHeading(label: String, total: Double, color: Color, topPadding: Dp) {
+private fun SeriesHeading(label: String, total: Double, months: Int, color: Color, topPadding: Dp) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(top = topPadding),
     ) {
         Box(modifier = Modifier.size(10.dp).background(color, RoundedCornerShape(3.dp)))
         Text(
-            "$label — ${formatMoney(total)} total",
+            buildString {
+                append("$label — ${formatMoney(total)} total")
+                if (months > 0) append(" · ${formatMoney(total / months)}/mo avg")
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp),
@@ -350,16 +294,23 @@ private fun MonthlySpendChart(logs: List<LogEntryEntity>, barColor: Color) {
     )
 }
 
+/**
+ * Shares of the whole rather than dollar amounts — the totals are already stated above, and the
+ * question this answers is "where is the money going". The bars are scaled to the total for the
+ * same reason: scaled to the largest category instead, every slice would look overstated.
+ */
 @Composable
 private fun CategoryBreakdown(logs: List<LogEntryEntity>) {
     val byCategory = logs.groupBy { it.category }
         .mapValues { (_, entries) -> entries.sumOf { it.cost ?: 0.0 } }
         .toList()
         .sortedByDescending { it.second }
-    val maxValue = byCategory.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
+    val grandTotal = byCategory.sumOf { it.second }
+    if (grandTotal <= 0) return
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
         byCategory.forEach { (category, total) ->
+            val share = total / grandTotal
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Text(
                     category,
@@ -374,13 +325,13 @@ private fun CategoryBreakdown(logs: List<LogEntryEntity>) {
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth((total / maxValue).toFloat().coerceIn(0.03f, 1f))
+                            .fillMaxWidth(share.toFloat().coerceIn(0.03f, 1f))
                             .height(10.dp)
                             .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(4.dp)),
                     )
                 }
                 Text(
-                    formatMoney(total),
+                    "${(share * 100).roundToInt()}%",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp),
@@ -411,10 +362,13 @@ private fun BarChart(
                     val fraction = (value / maxValue).coerceIn(0.03f, 1f)
                     Box(
                         modifier = Modifier
-                            // Capped as well as proportional: with only one or two bars, 55% of a
-                            // half-screen column renders as a square block rather than a bar.
-                            .fillMaxWidth(0.55f)
-                            .widthIn(max = 56.dp)
+                            // A fixed width for a handful of bars, proportional once there are
+                            // enough to crowd: with one or two, 55% of a half-screen column draws
+                            // a square block rather than a bar. (A max-width constraint can't do
+                            // this — fillMaxWidth sets an exact width, so the minimum wins.)
+                            .then(
+                                if (bars.size <= 4) Modifier.width(48.dp) else Modifier.fillMaxWidth(0.55f),
+                            )
                             .fillMaxHeight(fraction)
                             .background(barColor, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)),
                     )
