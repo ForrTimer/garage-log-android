@@ -71,6 +71,26 @@ data class SyncVehicle(
     val role: String,
     val notes: String,
     val sortOrder: Int,
+    // Severe-duty flags were missing here until v10, so every sync reset them to false via
+    // toEntity()'s defaults — the same shape of bug that used to wipe vehicle photos.
+    val severeDustyAreas: Boolean = false,
+    val severeTowing: Boolean = false,
+    val severeExtendedIdling: Boolean = false,
+    val severeLowSpeedColdWeather: Boolean = false,
+    val severeHeavyCityTrafficHot: Boolean = false,
+    val severeMountainousHot: Boolean = false,
+    val severeFrequentTowing: Boolean = false,
+    val severeDeepWater: Boolean = false,
+    val trim: String = "",
+    val bodyStyle: String = "",
+    val cabStyle: String = "",
+    val bedLength: String = "",
+    val transmissionType: String = "",
+    val transmissionSpeeds: Int? = null,
+    val cylinders: Int? = null,
+    val displacementL: Double? = null,
+    val fuelType: String = "",
+    val aspiration: String = "",
     override val updatedAt: Long,
     override val deleted: Boolean,
 ) : Syncable
@@ -124,12 +144,24 @@ fun VehicleEntity.toSync() = SyncVehicle(
     id = id, name = name, year = year, make = make, model = model, engine = engine, drivetrain = drivetrain,
     vin = vin, color = color, miles = miles, milesDate = milesDate, role = role, notes = notes,
     sortOrder = sortOrder, updatedAt = updatedAt, deleted = deleted,
+    severeDustyAreas = severeDustyAreas, severeTowing = severeTowing, severeExtendedIdling = severeExtendedIdling,
+    severeLowSpeedColdWeather = severeLowSpeedColdWeather, severeHeavyCityTrafficHot = severeHeavyCityTrafficHot,
+    severeMountainousHot = severeMountainousHot, severeFrequentTowing = severeFrequentTowing, severeDeepWater = severeDeepWater,
+    trim = trim, bodyStyle = bodyStyle, cabStyle = cabStyle, bedLength = bedLength,
+    transmissionType = transmissionType, transmissionSpeeds = transmissionSpeeds, cylinders = cylinders,
+    displacementL = displacementL, fuelType = fuelType, aspiration = aspiration,
 )
 
 fun SyncVehicle.toEntity() = VehicleEntity(
     id = id, name = name, year = year, make = make, model = model, engine = engine, drivetrain = drivetrain,
     vin = vin, color = color, miles = miles, milesDate = milesDate, role = role, notes = notes,
     sortOrder = sortOrder, updatedAt = updatedAt, deleted = deleted,
+    severeDustyAreas = severeDustyAreas, severeTowing = severeTowing, severeExtendedIdling = severeExtendedIdling,
+    severeLowSpeedColdWeather = severeLowSpeedColdWeather, severeHeavyCityTrafficHot = severeHeavyCityTrafficHot,
+    severeMountainousHot = severeMountainousHot, severeFrequentTowing = severeFrequentTowing, severeDeepWater = severeDeepWater,
+    trim = trim, bodyStyle = bodyStyle, cabStyle = cabStyle, bedLength = bedLength,
+    transmissionType = transmissionType, transmissionSpeeds = transmissionSpeeds, cylinders = cylinders,
+    displacementL = displacementL, fuelType = fuelType, aspiration = aspiration,
 )
 
 fun LogEntryEntity.toSync() = SyncLog(

@@ -10,6 +10,7 @@ import com.garagelog.app.data.ai.AiWorker
 import com.garagelog.app.data.ai.DirectClaudeClient
 import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.backup.BackupManager
+import com.garagelog.app.data.catalog.VehicleCatalog
 import com.garagelog.app.data.db.AppDatabase
 import com.garagelog.app.data.db.MIGRATION_1_2
 import com.garagelog.app.data.db.MIGRATION_2_3
@@ -19,6 +20,7 @@ import com.garagelog.app.data.db.MIGRATION_5_6
 import com.garagelog.app.data.db.MIGRATION_6_7
 import com.garagelog.app.data.db.MIGRATION_7_8
 import com.garagelog.app.data.db.MIGRATION_8_9
+import com.garagelog.app.data.db.MIGRATION_9_10
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
@@ -55,7 +57,7 @@ class ServiceLocator(context: Context) {
         AppDatabase.DATABASE_NAME,
     ).addMigrations(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-        MIGRATION_7_8, MIGRATION_8_9,
+        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
     ).build()
 
     val vehicleRepository: VehicleRepository = RoomVehicleRepository(database.vehicleDao())
@@ -66,6 +68,7 @@ class ServiceLocator(context: Context) {
     val notificationPrefsRepository: NotificationPrefsRepository = RoomNotificationPrefsRepository(database.notificationPrefsDao())
 
     val photoStore = PhotoStore(appContext)
+    val vehicleCatalog = VehicleCatalog()
 
     val backupManager = BackupManager(
         vehicleRepository = vehicleRepository,

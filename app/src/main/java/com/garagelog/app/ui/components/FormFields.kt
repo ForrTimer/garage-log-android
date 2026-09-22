@@ -156,21 +156,7 @@ fun TimeField(label: String, hour: Int, minute: Int, onTimeChange: (hour: Int, m
 fun VehicleDropdown(label: String, vehicles: List<VehicleEntity>, selectedId: String?, onSelect: (String) -> Unit) {
     val selected = vehicles.find { it.id == selectedId }
     Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier.padding(top = 10.dp, bottom = 12.dp).size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (selected?.photoPath != null) {
-                AsyncImage(
-                    model = File(selected.photoPath),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(40.dp),
-                )
-            } else {
-                Icon(Icons.Filled.DirectionsCar, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        VehicleAvatar(selected?.photoPath, size = 40.dp, modifier = Modifier.padding(top = 10.dp, bottom = 12.dp))
         Box(modifier = Modifier.width(10.dp))
         ReadOnlyDropdownField(
             displayValue = selected?.name ?: "",

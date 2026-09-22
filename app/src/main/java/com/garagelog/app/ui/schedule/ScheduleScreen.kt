@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogUiState
@@ -73,6 +74,7 @@ fun ScheduleScreen(
     // done" opens the log form pre-filled with this schedule's task so the actual service
     // (cost, notes, photos) can be recorded, not just the tracker's due date silently bumped.
     onLogSchedule: (MaintenanceScheduleEntity) -> Unit,
+    onSuggestWithBob: (VehicleEntity) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
@@ -99,7 +101,7 @@ fun ScheduleScreen(
             if (vehicles.none { v -> uiState.schedules.any { it.vehicleId == v.id } }) {
                 item {
                     EmptyState(
-                        "No maintenance intervals tracked yet. Tap + to add one, like \"Oil change every 5,000 mi.\"",
+                        "No maintenance intervals tracked yet. Tap + to add one, or have $ASSISTANT_NAME suggest a schedule below.",
                         icon = Icons.Filled.Build,
                     )
                 }
@@ -116,19 +118,22 @@ fun ScheduleScreen(
                             { computeDueInfo(it, v.miles, v.isSevereDuty).remainingMiles ?: it.intervalMiles ?: Int.MAX_VALUE },
                         ),
                     )
-                if (schedules.isNotEmpty()) {
-                    item {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            SectionTitle(v.name)
-                            if (uiState.vehicles.size > 1) {
-                                ActionLink("Copy to vehicle…", onClick = { copyFromVehicle = v })
-                            }
+                // Every vehicle gets its header, even with nothing tracked yet — that's exactly when
+                // "Suggest with Bob" is most useful.
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) { SectionTitle(v.name) }
+                        ActionLink("Suggest with $ASSISTANT_NAME", onClick = { onSuggestWithBob(v) })
+                        if (uiState.vehicles.size > 1 && schedules.isNotEmpty()) {
+                            ActionLink("Copy…", onClick = { copyFromVehicle = v })
                         }
                     }
+                }
+                if (schedules.isNotEmpty()) {
                     item {
                         GarageCard {
                             schedules.forEachIndexed { index, sched ->

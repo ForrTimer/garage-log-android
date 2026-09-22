@@ -69,6 +69,7 @@ import com.garagelog.app.ui.issues.IssuesScreen
 import com.garagelog.app.ui.log.LogFormSheet
 import com.garagelog.app.ui.log.LogScreen
 import com.garagelog.app.ui.schedule.ScheduleFormSheet
+import com.garagelog.app.ui.schedule.BobScheduleSheet
 import com.garagelog.app.ui.schedule.ScheduleScreen
 import com.garagelog.app.ui.settings.SettingsScreen
 import com.garagelog.app.ui.settings.VehicleFormSheet
@@ -134,6 +135,7 @@ private sealed class Sheet {
     data class LogForm(val entry: LogEntryEntity?, val prefill: LogEntryEntity? = null) : Sheet()
     data class IssueForm(val issue: IssueEntity?) : Sheet()
     data class ScheduleForm(val schedule: MaintenanceScheduleEntity?) : Sheet()
+    data class BobSchedule(val vehicle: VehicleEntity) : Sheet()
 }
 
 @Composable
@@ -494,6 +496,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             ),
                         )
                     },
+                    onSuggestWithBob = { activeSheet = Sheet.BobSchedule(it) },
                 )
                 else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     when (mainTabs[page]) {
@@ -554,9 +557,9 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             vehicle = sheet.vehicle,
             viewModel = viewModel,
             onDismiss = { activeSheet = Sheet.None },
-            onSave = { v, starterServices ->
+            onSave = { v, starterSchedules ->
                 viewModel.saveVehicle(v)
-                if (starterServices.isNotEmpty()) viewModel.addStarterSchedules(v.id, starterServices)
+                viewModel.addSchedules(starterSchedules)
                 activeSheet = Sheet.None
             },
             onDelete = { viewModel.deleteVehicle(it); activeSheet = Sheet.None },
@@ -605,6 +608,13 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             onDismiss = { activeSheet = Sheet.None },
             onSave = { viewModel.saveSchedule(it); activeSheet = Sheet.None },
             onDelete = { viewModel.deleteSchedule(it); activeSheet = Sheet.None },
+        )
+        is Sheet.BobSchedule -> BobScheduleSheet(
+            vehicle = sheet.vehicle,
+            existing = uiState.schedules.filter { it.vehicleId == sheet.vehicle.id },
+            viewModel = viewModel,
+            onDismiss = { activeSheet = Sheet.None },
+            onAdd = { viewModel.addSchedules(it, announce = true); activeSheet = Sheet.None },
         )
     }
 }

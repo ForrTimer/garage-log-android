@@ -8,6 +8,9 @@ import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.util.computeDueInfo
 import com.garagelog.app.util.fillUpMpg
+import com.garagelog.app.util.vehicleSpecLines
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 /**
  * Turns what the app already knows about a vehicle into the context Claude reasons over.
@@ -28,8 +31,10 @@ object GarageContext {
     ): String = buildString {
         appendLine("## Vehicle")
         appendLine(identity(vehicle))
-        vehicle.engine.blankToNull()?.let { appendLine("Engine: $it") }
-        vehicle.drivetrain.blankToNull()?.let { appendLine("Drivetrain: $it") }
+        // includePersonal = false keeps the VIN out (see class doc); year/make/model are in identity.
+        vehicleSpecLines(vehicle, includePersonal = false)
+            .filterNot { (label, _) -> label in setOf("Year", "Make", "Model") }
+            .forEach { (label, value) -> appendLine("$label: $value") }
         vehicle.miles?.let { appendLine("Current odometer: $it miles (as of ${vehicle.milesDate.ifBlank { "unknown date" }})") }
         vehicle.role.blankToNull()?.let { appendLine("Role: $it") }
         vehicle.notes.blankToNull()?.let { appendLine("Owner notes: $it") }
@@ -235,4 +240,62 @@ object AiPrompts {
           the job should go to a professional.
         - Never invent a part number, torque spec, or capacity. Describe it or say you're unsure.
     """.trimIndent()
+
+    val SCHEDULE_SYSTEM = """
+        You set up the maintenance schedule for one specific vehicle in its owner's
+        maintenance-tracking app. The owner will review every item before anything is saved.
+
+        Search the web for the manufacturer's maintenance schedule for this exact year, make,
+        model, engine and transmission — the owner's manual or official maintenance guide first,
+        then reputable sources. Intervals changed a lot over the years, so a 1994 truck and a 2021
+        truck of the same make do not share a schedule. Never put the owner's personal details
+        into a search query.
+
+        If severe-duty use is listed, use the manufacturer's severe-service intervals where they
+        exist and say so in the note. If the owner's notes describe modifications such as an
+        engine swap, follow the installed engine, not the original.
+
+        Then call the propose_schedule tool exactly once with the full list, and write nothing
+        else. Include the 8 to 16 services that genuinely apply to this vehicle — fluids, filters,
+        belts, plugs, inspections — and nothing that doesn't (no timing belt on a chain engine, no
+        spark plugs on a diesel). Skip anything listed as already tracked.
+
+        For each service:
+        - name: short and plain, sentence case, like "Oil change" or "Transfer case fluid".
+        - interval_miles / interval_months: the manufacturer's numbers; null for a limit it
+          doesn't have. Never invent a limit to fill the field.
+        - note: one short sentence on where the interval comes from, or what makes it specific to
+          this vehicle. Say plainly if you could only find a general recommendation.
+    """.trimIndent()
+
+    /** Strict, so the arguments always parse into [ScheduleSuggestion]s. */
+    val PROPOSE_SCHEDULE_TOOL = CustomTool(
+        name = "propose_schedule",
+        description = "Submit the proposed maintenance schedule for the owner to review.",
+        inputSchema = Json.parseToJsonElement(
+            """
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["services"],
+              "properties": {
+                "services": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "interval_miles", "interval_months", "note"],
+                    "properties": {
+                      "name": { "type": "string" },
+                      "interval_miles": { "anyOf": [{ "type": "integer" }, { "type": "null" }] },
+                      "interval_months": { "anyOf": [{ "type": "integer" }, { "type": "null" }] },
+                      "note": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+            """.trimIndent(),
+        ).jsonObject,
+    )
 }

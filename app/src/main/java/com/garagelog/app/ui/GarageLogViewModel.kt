@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.garagelog.app.data.ai.AiRunState
+import com.garagelog.app.data.ai.ScheduleSuggestion
+import com.garagelog.app.data.ai.scheduleKey
 import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.AiDiagnosisEntity
 import com.garagelog.app.data.entity.IssueEntity
@@ -23,7 +25,6 @@ import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.data.auth.SignInStep
 import com.garagelog.app.di.ServiceLocator
 import com.garagelog.app.notifications.MileageReminderScheduler
-import com.garagelog.app.util.CommonMaintenanceServices
 import com.garagelog.app.util.todayIso
 import java.io.InputStream
 import java.io.OutputStream
@@ -38,6 +39,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 enum class AppTab { Dashboard, Log, Issues, Trends }
@@ -294,25 +296,39 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         _messages.emit(if (schedules.size == 1) "Copied 1 maintenance item." else "Copied ${schedules.size} maintenance items.")
     }
 
-    /** Adds a batch of starter maintenance schedules (see VehicleFormSheet's common-services checklist). */
-    fun addStarterSchedules(vehicleId: String, taskNames: List<String>) = viewModelScope.launch {
-        val now = System.currentTimeMillis()
-        taskNames.forEach { name ->
-            val template = CommonMaintenanceServices.byName[name] ?: return@forEach
-            locator.scheduleRepository.upsert(
-                MaintenanceScheduleEntity(
-                    id = UUID.randomUUID().toString(),
-                    vehicleId = vehicleId,
-                    taskName = name,
-                    intervalMiles = template.intervalMiles,
-                    intervalMonths = template.intervalMonths,
-                    lastDoneMileage = null,
-                    lastDoneDate = null,
-                    updatedAt = now,
-                ),
-            )
-        }
+    /**
+     * Adds a batch of new maintenance schedules — the Add vehicle checklist, or the ones kept from
+     * a Bob suggestion. One transaction-free loop is fine at this size (a dozen rows, once).
+     */
+    fun addSchedules(schedules: List<MaintenanceScheduleEntity>, announce: Boolean = false) = viewModelScope.launch {
+        if (schedules.isEmpty()) return@launch
+        schedules.forEach { locator.scheduleRepository.upsert(it) }
         requestSync()
+        if (announce) {
+            _messages.emit(if (schedules.size == 1) "Added 1 maintenance item." else "Added ${schedules.size} maintenance items.")
+        }
+    }
+
+    val vehicleCatalog get() = locator.vehicleCatalog
+
+    /**
+     * Asks Bob for a maintenance schedule for [vehicle] (possibly not saved yet). Progress shows
+     * through [aiRuns] under [scheduleKey]; the result comes back through [onResult] rather than
+     * the database, since nothing is saved until the owner has reviewed it.
+     */
+    fun suggestSchedule(
+        vehicle: VehicleEntity,
+        alreadyTracked: List<String>,
+        onResult: (List<ScheduleSuggestion>) -> Unit,
+    ) = viewModelScope.launch {
+        locator.aiRunHolder.clearError(scheduleKey(vehicle.id))
+        try {
+            onResult(locator.aiRepository.suggestSchedule(vehicle, alreadyTracked))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Already recorded on the run holder for the screen; nothing else to do.
+        }
     }
 
     fun saveLog(entry: LogEntryEntity) = viewModelScope.launch {

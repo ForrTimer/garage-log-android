@@ -158,3 +158,15 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
         db.execSQL("ALTER TABLE notification_prefs ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
     }
 }
+
+/** Structured vehicle specs (trim, body, transmission, engine details). Additive; all blank/null. */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        listOf("trim", "bodyStyle", "cabStyle", "bedLength", "transmissionType", "fuelType", "aspiration").forEach {
+            db.execSQL("ALTER TABLE vehicles ADD COLUMN $it TEXT NOT NULL DEFAULT ''")
+        }
+        db.execSQL("ALTER TABLE vehicles ADD COLUMN transmissionSpeeds INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE vehicles ADD COLUMN cylinders INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE vehicles ADD COLUMN displacementL REAL DEFAULT NULL")
+    }
+}

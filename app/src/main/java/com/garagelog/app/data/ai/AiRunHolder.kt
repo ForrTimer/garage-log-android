@@ -8,13 +8,25 @@ import kotlinx.coroutines.flow.update
 data class AiRunState(
     val running: Boolean = false,
     val searching: Boolean = false,
+    val retrying: Boolean = false,
+    /** Bob has finished researching and is writing a structured answer (a tool call). */
+    val writing: Boolean = false,
     val partialText: String = "",
     val error: String? = null,
-)
+) {
+    /** What the spinner says while this is running. */
+    val statusText: String
+        get() = when {
+            retrying -> "$ASSISTANT_NAME is busy. Retrying…"
+            writing -> "Putting it together…"
+            searching -> "Searching the web…"
+            else -> "Thinking…"
+        }
+}
 
 /**
  * Process-wide record of what's currently running, keyed by what it's running *for* (an issue id
- * for a diagnosis, a thread key for a chat) — same shape as [com.garagelog.app.data.sync.SyncStatusHolder].
+ * for a diagnosis, a thread key for a chat) â same shape as [com.garagelog.app.data.sync.SyncStatusHolder].
  *
  * Keyed rather than single-valued because the run outlives the screen that started it: leaving the
  * diagnosis screen and coming back has to find the same run still going, and two different targets
@@ -35,6 +47,11 @@ class AiRunHolder {
     }
 
     fun markSearching(key: String) = update(key) { it.copy(running = true, searching = true) }
+
+    fun markWriting(key: String) = update(key) { it.copy(running = true, searching = false, writing = true) }
+
+    /** Waiting out an "overloaded" response before trying again; any partial answer is dropped. */
+    fun markRetrying(key: String) = update(key) { AiRunState(running = true, retrying = true) }
 
     fun finish(key: String) { _runs.update { it - key } }
 

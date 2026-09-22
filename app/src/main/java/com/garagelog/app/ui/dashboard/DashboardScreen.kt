@@ -68,6 +68,7 @@ import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.ui.AppTab
 import com.garagelog.app.ui.GarageLogUiState
+import com.garagelog.app.ui.components.VehicleAvatar
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
@@ -80,6 +81,7 @@ import com.garagelog.app.util.DueStatus
 import com.garagelog.app.util.ScheduleDueInfo
 import com.garagelog.app.util.drivingRate
 import com.garagelog.app.util.projectSchedules
+import com.garagelog.app.util.vehicleSpecLines
 import com.garagelog.app.util.computeDueInfo
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
@@ -177,25 +179,14 @@ private fun VehicleDashboardCard(
 
     GarageCard(accentColor = cardAccent) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Box(
+            VehicleAvatar(
+                v.photoPath,
+                size = 48.dp,
+                placeholderDescription = "Add a photo",
                 modifier = Modifier
-                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (v.photoPath != null) {
-                    AsyncImage(
-                        model = File(v.photoPath),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(48.dp),
-                    )
-                } else {
-                    Icon(Icons.Filled.DirectionsCar, contentDescription = "Add a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            )
             Spacer(Modifier.width(12.dp))
             val title = if (v.name.isNotBlank() && v.name != v.model) {
                 v.name
@@ -286,13 +277,23 @@ private fun VehicleDashboardCard(
             modifier = Modifier.padding(top = 10.dp),
         )
         if (showDetails) {
-            val identity = listOfNotNull(v.year?.toString(), v.make.ifBlank { null }, v.model.ifBlank { null }).joinToString(" ")
-            val subtitle = listOfNotNull(v.engine.ifBlank { null }, v.drivetrain.ifBlank { null }).joinToString(" · ")
+            val specs = vehicleSpecLines(v)
             Column(modifier = Modifier.padding(top = 6.dp)) {
-                if (identity.isNotBlank()) Text(identity, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                if (v.role.isNotBlank()) Text(v.role, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                if (v.notes.isNotBlank()) Text(v.notes, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                if (specs.isEmpty()) {
+                    Text("No details yet. Add them with Edit vehicle.", color = garageColors.textMuted, style = MaterialTheme.typography.bodyMedium)
+                }
+                // A fixed label column so values line up down the card and read as a spec sheet.
+                specs.forEach { (label, value) ->
+                    Row(modifier = Modifier.padding(vertical = 2.dp)) {
+                        Text(
+                            label,
+                            color = garageColors.textMuted,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.width(104.dp),
+                        )
+                        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }
@@ -410,21 +411,7 @@ fun VehicleReorderScreen(vehicles: List<VehicleEntity>, onReorderVehicles: (List
 private fun ReorderTile(vehicle: VehicleEntity, onDragStart: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit) {
     GarageCard {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (vehicle.photoPath != null) {
-                    AsyncImage(
-                        model = File(vehicle.photoPath),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(48.dp),
-                    )
-                } else {
-                    Icon(Icons.Filled.DirectionsCar, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            VehicleAvatar(vehicle.photoPath, size = 48.dp)
             Spacer(Modifier.width(12.dp))
             Text(vehicle.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             // Same 48dp-hit-box + no-long-press-gate combination proven this session on the Home

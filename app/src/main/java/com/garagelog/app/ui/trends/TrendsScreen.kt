@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,7 +43,7 @@ import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.StatGrid
-import com.garagelog.app.ui.components.SectionTitle
+import com.garagelog.app.ui.components.VehicleAvatar
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DrivingRate
@@ -78,11 +79,35 @@ fun TrendsScreen(uiState: GarageLogUiState) {
         vehicles.forEach { v ->
             val logs = uiState.logs.filter { it.vehicleId == v.id }
             val rate = drivingRate(logs)
-            item { SectionTitle(v.name) }
+            // Pinned while its own cards scroll past, so it's always clear whose numbers these are —
+            // a small muted section label was easy to scroll straight past between vehicles.
+            stickyHeader(key = "header-${v.id}") { VehicleHeader(v) }
             item { RunningCostCard(vehicle = v, logs = logs, rate = rate) }
             item { CostTrendCard(logs) }
             item { FuelEconomyCard(logs) }
             item { OdometerCard(logs) }
+        }
+    }
+}
+
+@Composable
+private fun VehicleHeader(vehicle: VehicleEntity) {
+    val identity = listOfNotNull(vehicle.year?.toString(), vehicle.make.ifBlank { null }, vehicle.model.ifBlank { null })
+        .joinToString(" ")
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(top = 16.dp, bottom = 10.dp),
+    ) {
+        VehicleAvatar(vehicle.photoPath, size = 40.dp)
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(vehicle.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            if (identity.isNotBlank() && identity != vehicle.name) {
+                Text(identity, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
+            }
         }
     }
 }

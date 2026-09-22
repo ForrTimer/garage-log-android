@@ -112,7 +112,7 @@ fun AiDiagnosisScreen(
                 }
 
                 stream.running -> Column {
-                    RunningIndicator(stream.searching)
+                    RunningIndicator(stream.statusText)
                     if (stream.partialText.isNotEmpty()) MarkdownText(stream.partialText)
                 }
 
@@ -154,7 +154,7 @@ fun AiDiagnosisScreen(
 }
 
 @Composable
-private fun RunningIndicator(searching: Boolean) {
+private fun RunningIndicator(status: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -162,7 +162,7 @@ private fun RunningIndicator(searching: Boolean) {
     ) {
         CircularProgressIndicator(modifier = Modifier.padding(2.dp), strokeWidth = 2.dp)
         Text(
-            if (searching) "Searching the web…" else "Thinking…",
+            status,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

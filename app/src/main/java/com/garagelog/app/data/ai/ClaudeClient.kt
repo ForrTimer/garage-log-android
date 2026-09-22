@@ -11,7 +11,12 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -29,9 +34,23 @@ sealed interface ClaudeEvent {
     /** Claude started a web search — drives the "Searching the web…" progress state. */
     data object Searching : ClaudeEvent
     data class SourcesFound(val sources: List<ClaudeSource>) : ClaudeEvent
+    /** Claude began calling one of the request's [CustomTool]s; its input follows as deltas. */
+    data class ToolCallStarted(val index: Int, val name: String) : ClaudeEvent
+    /**
+     * A fragment of a tool call's JSON input for content block [index]. Server tools (web search)
+     * stream their input the same way, so only indexes announced by [ToolCallStarted] are ours.
+     */
+    data class ToolInputDelta(val index: Int, val partialJson: String) : ClaudeEvent
 }
 
 data class ClaudeMessage(val role: String, val content: String)
+
+/**
+ * A tool Claude can call to hand back structured data. The app never runs anything or replies
+ * with a result — the call's input *is* the answer — so this is only ever the last thing Claude
+ * does in a response. Strict, so the input always matches [inputSchema].
+ */
+data class CustomTool(val name: String, val description: String, val inputSchema: JsonObject)
 
 data class ClaudeRequest(
     val system: String,
@@ -39,6 +58,7 @@ data class ClaudeRequest(
     val webSearch: Boolean = true,
     val maxTokens: Int = 8000,
     val model: String = DirectClaudeClient.DIAGNOSIS_MODEL,
+    val customTools: List<CustomTool> = emptyList(),
 )
 
 enum class ClaudeErrorKind { NoApiKey, Auth, RateLimit, Overloaded, Network, Timeout, Other }
@@ -123,8 +143,14 @@ class DirectClaudeClient(
         when (root["type"]?.jsonPrimitive?.contentOrNullSafe()) {
             "content_block_delta" -> {
                 val delta = root["delta"]?.jsonObject ?: return
-                if (delta["type"]?.jsonPrimitive?.contentOrNullSafe() == "text_delta") {
-                    delta["text"]?.jsonPrimitive?.contentOrNullSafe()?.let { emit(ClaudeEvent.TextDelta(it)) }
+                when (delta["type"]?.jsonPrimitive?.contentOrNullSafe()) {
+                    "text_delta" ->
+                        delta["text"]?.jsonPrimitive?.contentOrNullSafe()?.let { emit(ClaudeEvent.TextDelta(it)) }
+                    "input_json_delta" -> {
+                        val index = root["index"]?.jsonPrimitive?.intOrNull ?: return
+                        delta["partial_json"]?.jsonPrimitive?.contentOrNullSafe()
+                            ?.let { emit(ClaudeEvent.ToolInputDelta(index, it)) }
+                    }
                 }
             }
             "content_block_start" -> {
@@ -132,11 +158,25 @@ class DirectClaudeClient(
                 when (block["type"]?.jsonPrimitive?.contentOrNullSafe()) {
                     "server_tool_use" -> emit(ClaudeEvent.Searching)
                     "web_search_tool_result" -> parseSources(block)?.let { emit(ClaudeEvent.SourcesFound(it)) }
+                    "tool_use" -> {
+                        val index = root["index"]?.jsonPrimitive?.intOrNull ?: return
+                        val name = block["name"]?.jsonPrimitive?.contentOrNullSafe() ?: return
+                        emit(ClaudeEvent.ToolCallStarted(index, name))
+                    }
                 }
             }
             "error" -> {
-                val message = root["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNullSafe()
-                throw ClaudeException(ClaudeErrorKind.Other, message ?: "Stream error")
+                // Errors can also arrive mid-stream, after a 200 — classify them the same way as
+                // an HTTP error, or "overloaded" surfaces as a bare "Overloaded" and never retries.
+                val error = root["error"]?.jsonObject
+                val message = error?.get("message")?.jsonPrimitive?.contentOrNullSafe()
+                val kind = when (error?.get("type")?.jsonPrimitive?.contentOrNullSafe()) {
+                    "overloaded_error", "api_error" -> ClaudeErrorKind.Overloaded
+                    "rate_limit_error" -> ClaudeErrorKind.RateLimit
+                    "authentication_error", "permission_error" -> ClaudeErrorKind.Auth
+                    else -> ClaudeErrorKind.Other
+                }
+                throw ClaudeException(kind, message ?: "Stream error")
             }
         }
     }
@@ -184,16 +224,27 @@ class DirectClaudeClient(
         maxTokens = maxTokens,
         system = listOf(SystemBlock(text = system, cacheControl = CacheControl())),
         messages = messages.map { WireMessage(role = it.role, content = it.content) },
-        tools = if (webSearch) listOf(WireTool()) else null,
+        tools = buildJsonArray {
+            if (webSearch) add(json.encodeToJsonElement(WireTool.serializer(), WireTool()))
+            customTools.forEach { tool ->
+                add(
+                    buildJsonObject {
+                        put("name", tool.name)
+                        put("description", tool.description)
+                        put("input_schema", tool.inputSchema)
+                        put("strict", true)
+                    },
+                )
+            }
+        }.takeIf { it.isNotEmpty() },
     )
 
     companion object {
         /**
-         * A diagnosis gets the strongest model on purpose: it's one call, it reasons over the
-         * vehicle's whole history, and being wrong about a brake problem costs far more than the
-         * token difference.
+         * Was Opus; Ethan moved diagnosis to Sonnet too after using both for a while — faster and
+         * cheaper, and the answers held up. Kept as its own constant so the two can diverge again.
          */
-        const val DIAGNOSIS_MODEL = "claude-opus-5"
+        const val DIAGNOSIS_MODEL = "claude-sonnet-5"
 
         /**
          * Chat is back-and-forth and mostly lookups — specs, capacities, "is this normal" — where
@@ -226,7 +277,8 @@ private data class MessagesRequest(
     val stream: Boolean = true,
     val system: List<SystemBlock>,
     val messages: List<WireMessage>,
-    val tools: List<WireTool>? = null,
+    /** Server tools and custom tools have different shapes, so this is built as raw JSON. */
+    val tools: JsonArray? = null,
 )
 
 @Serializable

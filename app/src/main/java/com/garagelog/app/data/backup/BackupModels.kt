@@ -48,6 +48,16 @@ data class BackupVehicle(
     val severeMountainousHot: Boolean = false,
     val severeFrequentTowing: Boolean = false,
     val severeDeepWater: Boolean = false,
+    val trim: String = "",
+    val bodyStyle: String = "",
+    val cabStyle: String = "",
+    val bedLength: String = "",
+    val transmissionType: String = "",
+    val transmissionSpeeds: Int? = null,
+    val cylinders: Int? = null,
+    val displacementL: Double? = null,
+    val fuelType: String = "",
+    val aspiration: String = "",
 )
 
 @Serializable

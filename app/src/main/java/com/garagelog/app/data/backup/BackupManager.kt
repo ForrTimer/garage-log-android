@@ -80,6 +80,9 @@ private fun VehicleEntity.toBackup() = BackupVehicle(
     severeDustyAreas = severeDustyAreas, severeTowing = severeTowing, severeExtendedIdling = severeExtendedIdling,
     severeLowSpeedColdWeather = severeLowSpeedColdWeather, severeHeavyCityTrafficHot = severeHeavyCityTrafficHot,
     severeMountainousHot = severeMountainousHot, severeFrequentTowing = severeFrequentTowing, severeDeepWater = severeDeepWater,
+    trim = trim, bodyStyle = bodyStyle, cabStyle = cabStyle, bedLength = bedLength,
+    transmissionType = transmissionType, transmissionSpeeds = transmissionSpeeds, cylinders = cylinders,
+    displacementL = displacementL, fuelType = fuelType, aspiration = aspiration,
 )
 
 private fun BackupVehicle.toEntity(sortOrder: Int) = VehicleEntity(
@@ -90,6 +93,9 @@ private fun BackupVehicle.toEntity(sortOrder: Int) = VehicleEntity(
     severeDustyAreas = severeDustyAreas, severeTowing = severeTowing, severeExtendedIdling = severeExtendedIdling,
     severeLowSpeedColdWeather = severeLowSpeedColdWeather, severeHeavyCityTrafficHot = severeHeavyCityTrafficHot,
     severeMountainousHot = severeMountainousHot, severeFrequentTowing = severeFrequentTowing, severeDeepWater = severeDeepWater,
+    trim = trim, bodyStyle = bodyStyle, cabStyle = cabStyle, bedLength = bedLength,
+    transmissionType = transmissionType, transmissionSpeeds = transmissionSpeeds, cylinders = cylinders,
+    displacementL = displacementL, fuelType = fuelType, aspiration = aspiration,
 )
 
 private fun LogEntryEntity.toBackup() = BackupLog(

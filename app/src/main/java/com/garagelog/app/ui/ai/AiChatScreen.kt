@@ -143,7 +143,7 @@ fun AiChatScreen(
                         ) {
                             CircularProgressIndicator(modifier = Modifier.padding(2.dp), strokeWidth = 2.dp)
                             Text(
-                                if (stream.searching) "Searching the web…" else "Thinking…",
+                                stream.statusText,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

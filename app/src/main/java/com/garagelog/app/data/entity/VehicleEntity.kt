@@ -30,6 +30,19 @@ data class VehicleEntity(
     val severeMountainousHot: Boolean = false,
     val severeFrequentTowing: Boolean = false,
     val severeDeepWater: Boolean = false,
+    // Spec fields, filled from the catalog pickers or a VIN decode (see data/catalog). Plain
+    // strings/numbers rather than enums: a 1994 Suburban mid engine swap doesn't have to fit a list.
+    // [engine] stays the free-text engine description; these are the structured parts beside it.
+    val trim: String = "",
+    val bodyStyle: String = "",
+    val cabStyle: String = "",
+    val bedLength: String = "",
+    val transmissionType: String = "",
+    val transmissionSpeeds: Int? = null,
+    val cylinders: Int? = null,
+    val displacementL: Double? = null,
+    val fuelType: String = "",
+    val aspiration: String = "",
     val updatedAt: Long = 0L,
     val deleted: Boolean = false,
 ) {
