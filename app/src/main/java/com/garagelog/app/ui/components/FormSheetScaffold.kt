@@ -28,6 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 
@@ -78,7 +83,11 @@ fun FormSheetScaffold(
         ) {
             Text(title, style = MaterialTheme.typography.titleLarge)
 
-            Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(scrollState)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().weight(1f)
+                    .nestedScroll(SwallowUpwardOverscroll)
+                    .verticalScroll(scrollState),
+            ) {
                 content()
             }
 
@@ -102,6 +111,21 @@ fun FormSheetScaffold(
             onDismiss = { showDeleteConfirm = false },
         )
     }
+}
+
+/**
+ * Once the form is scrolled to its end, whatever upward scroll or fling is left over would
+ * otherwise be handed to ModalBottomSheet, which drags the whole sheet up past its anchor and
+ * springs it back — the "bounce" at the bottom of a long form (Add vehicle is the one long enough
+ * to hit it). Only upward leftovers are eaten: downward ones still reach the sheet, so dragging
+ * down from the top of the form can still close it.
+ */
+private object SwallowUpwardOverscroll : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+        if (available.y < 0f) Offset(0f, available.y) else Offset.Zero
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+        if (available.y < 0f) Velocity(0f, available.y) else Velocity.Zero
 }
 
 /**
