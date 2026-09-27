@@ -277,9 +277,16 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         requestSync()
     }
 
-    /** Copies every active maintenance schedule item from one vehicle onto another, as fresh (not-yet-done) entries. */
+    /**
+     * Copies every active maintenance schedule item from one vehicle onto another, as fresh
+     * (not-yet-done) entries — skipping any task the target already tracks under the same name,
+     * which is how a copied "Oil change" used to land beside the target's own.
+     */
     fun copySchedulesToVehicle(sourceVehicleId: String, targetVehicleId: String) = viewModelScope.launch {
-        val schedules = locator.scheduleRepository.getAll().filter { it.vehicleId == sourceVehicleId }
+        val all = locator.scheduleRepository.getAll()
+        val tracked = all.filter { it.vehicleId == targetVehicleId }.map { it.taskName.trim().lowercase() }.toSet()
+        val (skipped, schedules) = all.filter { it.vehicleId == sourceVehicleId }
+            .partition { it.taskName.trim().lowercase() in tracked }
         val now = System.currentTimeMillis()
         schedules.forEach { sched ->
             locator.scheduleRepository.upsert(
@@ -292,8 +299,9 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
                 ),
             )
         }
-        requestSync()
-        _messages.emit(if (schedules.size == 1) "Copied 1 maintenance item." else "Copied ${schedules.size} maintenance items.")
+        if (schedules.isNotEmpty()) requestSync()
+        val copied = if (schedules.size == 1) "Copied 1 maintenance item" else "Copied ${schedules.size} maintenance items"
+        _messages.emit(if (skipped.isEmpty()) "$copied." else "$copied; ${skipped.size} already tracked.")
     }
 
     /**
