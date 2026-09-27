@@ -17,7 +17,7 @@ owner's vehicles. Keep them in a local folder (`owner.md`, `vehicles/<nickname>.
 
 ```sh
 ant auth login
-bash managed-agents/setup.sh ../garage-log-bob-memory
+bash managed-agents/setup.sh /path/to/your/memory-seed-folder
 ```
 
 ## Try it
