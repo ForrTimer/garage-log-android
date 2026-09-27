@@ -56,20 +56,30 @@ fun SuggestField(
     // landed inside the name.
     var editing by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
     val fieldValue = if (editing.text == value) editing else TextFieldValue(value, TextRange(value.length))
+    // Only text the user is typing narrows the list. A value that's already there (picked earlier,
+    // decoded from a VIN, loaded from a saved vehicle) opens the whole list on tap — filtering by it
+    // left a picked "Toyota" as the only option, and then hid even that, so nothing could be
+    // re-picked without first deleting the text.
+    var narrowing by remember { mutableStateOf(false) }
     val typed = value.trim()
-    val filtered = if (typed.isEmpty()) {
+    val filtered = if (!narrowing || typed.isEmpty()) {
         suggestions
     } else {
         suggestions
             .filter { it.contains(typed, ignoreCase = true) }
             .sortedByDescending { it.startsWith(typed, ignoreCase = true) }
-    }.take(MAX_SHOWN)
-    // Nothing left to suggest once the field holds exactly the one match.
-    val showMenu = expanded && filtered.isNotEmpty() && !(filtered.size == 1 && filtered[0].equals(typed, true))
+            .take(MAX_SHOWN)
+    }
+    // Nothing left to suggest once the typed text is exactly the one match.
+    val showMenu = expanded && filtered.isNotEmpty() &&
+        !(narrowing && filtered.size == 1 && filtered[0].equals(typed, true))
 
     ExposedDropdownMenuBox(
         expanded = showMenu,
-        onExpandedChange = { expanded = it },
+        onExpandedChange = {
+            expanded = it
+            if (it) narrowing = false
+        },
         modifier = modifier.fillMaxWidth().padding(top = 10.dp),
     ) {
         OutlinedTextField(
@@ -78,6 +88,7 @@ fun SuggestField(
                 editing = it
                 if (it.text != value) {
                     onValueChange(it.text)
+                    narrowing = true
                     expanded = true
                 }
             },
@@ -102,6 +113,7 @@ fun SuggestField(
                     text = { Text(option) },
                     onClick = {
                         onSuggestionPicked(option)
+                        narrowing = false
                         expanded = false
                         // On to the next field: year → make → model reads as one flow.
                         focusManager.moveFocus(FocusDirection.Down)
