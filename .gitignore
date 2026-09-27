@@ -16,3 +16,4 @@
 bin/
 gen/
 out/
+managed-agents/ids.env

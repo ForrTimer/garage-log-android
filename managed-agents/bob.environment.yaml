@@ -1,0 +1,9 @@
+# The container Bob's file tools run in. Bob only reads and writes its memory mount, so the
+# container gets no outbound network at all; web search and fetch run on Anthropic's servers and
+# aren't affected by this.
+# Create once: ant beta:environments create < managed-agents/bob.environment.yaml
+name: garage-log-bob
+config:
+  type: cloud
+  networking:
+    type: limited
