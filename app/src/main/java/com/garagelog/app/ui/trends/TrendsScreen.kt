@@ -1,5 +1,6 @@
 package com.garagelog.app.ui.trends
 
+import java.util.Locale
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -314,9 +315,18 @@ private fun MonthlySpendChart(logs: List<LogEntryEntity>, barColor: Color) {
     BarChart(
         bars = totals.map { it.second.toFloat() },
         labels = totals.map { monthLabel(it.first) },
-        valueLabel = { formatMoney(it.toDouble()).removeSuffix(".00") },
+        valueLabel = ::compactMoney,
         barColor = barColor,
     )
+}
+
+/**
+ * Whole dollars, and thousands as "$1.2k": six bars leave each label about 45dp, and "$1,203.27"
+ * wrapped onto two lines there. The exact totals are in the series heading above the chart.
+ */
+private fun compactMoney(value: Float): String = when {
+    value >= 1000f -> "$" + String.format(Locale.US, "%.1fk", value / 1000f).replace(".0k", "k")
+    else -> "$" + value.roundToInt()
 }
 
 /**
@@ -382,7 +392,13 @@ private fun BarChart(
     ) {
         bars.forEachIndexed { index, value ->
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                Text(valueLabel(value), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    valueLabel(value),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
                     val fraction = (value / maxValue).coerceIn(0.03f, 1f)
                     Box(
