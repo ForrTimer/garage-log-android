@@ -11,6 +11,7 @@ import com.garagelog.app.data.ai.BobAgent
 import com.garagelog.app.data.ai.GarageMirror
 import com.garagelog.app.data.ai.ManagedAgentsApi
 import com.garagelog.app.data.auth.AuthManager
+import com.garagelog.app.data.cloud.GarageCloud
 import com.garagelog.app.data.backup.BackupManager
 import com.garagelog.app.data.catalog.VehicleCatalog
 import com.garagelog.app.data.db.AppDatabase
@@ -102,6 +103,13 @@ class ServiceLocator(context: Context) {
     )
 
     val authManager = AuthManager(appContext)
+    val garageCloud = GarageCloud(
+        context = appContext,
+        vehicleRepository = vehicleRepository,
+        logRepository = logRepository,
+        issueRepository = issueRepository,
+        scheduleRepository = scheduleRepository,
+    )
     private val driveApiClient = DriveApiClient()
     val syncStatusHolder = SyncStatusHolder()
 

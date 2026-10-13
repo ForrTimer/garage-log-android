@@ -68,6 +68,9 @@ fun SettingsScreen(uiState: GarageLogUiState, viewModel: GarageLogViewModel) {
         item {
             AccountSection(viewModel = viewModel, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
         }
+        item {
+            SharedGarageSection(viewModel = viewModel, modifier = Modifier.padding(bottom = 12.dp))
+        }
 
         item {
             GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {

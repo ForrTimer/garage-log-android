@@ -14,6 +14,9 @@ import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,7 +57,34 @@ class AuthManager(context: Context) {
         val credential = response.credential as CustomCredential
         val idTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
         pendingEmail = idTokenCredential.id
+        // Same Google account, same token: sign in to Firebase too, so a shared garage works without
+        // a second prompt. Best effort — Drive sync doesn't depend on it.
+        runCatching { firebaseSignIn(idTokenCredential.idToken) }
         requestDriveAuthorization()
+    }
+
+    /**
+     * Signs in to Firebase for shared garages, showing Google's account picker if needed. The ID
+     * token's audience is the Drive project's web client (GOOGLE_WEB_CLIENT_ID); Firebase accepts it
+     * because that client is safelisted in the Firebase project's Google provider — Firebase couldn't
+     * mint its own Android client, since this package + SHA-1 already belongs to the Drive project.
+     */
+    suspend fun signInToFirebase(activity: Activity): Result<FirebaseUser> = runCatching {
+        FirebaseAuth.getInstance().currentUser?.let { return@runCatching it }
+        val option = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .build()
+        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+        val credential = credentialManager.getCredential(activity, request).credential as CustomCredential
+        firebaseSignIn(GoogleIdTokenCredential.createFrom(credential.data).idToken)
+    }
+
+    private suspend fun firebaseSignIn(idToken: String): FirebaseUser {
+        val result = FirebaseAuth.getInstance()
+            .signInWithCredential(GoogleAuthProvider.getCredential(idToken, null))
+            .await()
+        return requireNotNull(result.user) { "Firebase sign-in returned no user." }
     }
 
     /** Call from the launcher callback after resolving a [SignInStep.NeedsDriveConsent] intent sender. */
@@ -114,6 +144,7 @@ class AuthManager(context: Context) {
         pendingEmail = null
         _signedInEmail.value = null
         prefs.edit().remove(KEY_EMAIL).apply()
+        FirebaseAuth.getInstance().signOut()
         runCatching { credentialManager.clearCredentialState(ClearCredentialStateRequest()) }
     }
 

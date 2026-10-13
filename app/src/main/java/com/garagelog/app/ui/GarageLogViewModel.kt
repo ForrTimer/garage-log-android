@@ -23,6 +23,8 @@ import com.garagelog.app.data.entity.PhotoOwnerType
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.data.auth.SignInStep
+import com.garagelog.app.data.cloud.GarageMembership
+import com.garagelog.app.data.cloud.GarageSetupResult
 import com.garagelog.app.di.ServiceLocator
 import com.garagelog.app.notifications.MileageReminderScheduler
 import com.garagelog.app.util.todayIso
@@ -557,6 +559,41 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun syncNow() = viewModelScope.launch { requestSync() }
+
+    val garageMembership: StateFlow<GarageMembership> = locator.garageCloud.membership
+
+    private val _garageSetupRunning = MutableStateFlow(false)
+    val garageSetupRunning: StateFlow<Boolean> = _garageSetupRunning
+
+    private val _lastGarageSetup = MutableStateFlow<GarageSetupResult?>(null)
+    val lastGarageSetup: StateFlow<GarageSetupResult?> = _lastGarageSetup
+
+    /** Signs in to Firebase if needed, then finds or creates this account's shared garage. */
+    fun setUpSharedGarage(activity: Activity) = viewModelScope.launch {
+        if (_garageSetupRunning.value) return@launch
+        _garageSetupRunning.value = true
+        try {
+            locator.authManager.signInToFirebase(activity).onFailure {
+                _messages.emit("Couldn't sign in for the shared garage: ${it.message}")
+                return@launch
+            }
+            val result = locator.garageCloud.setUpGarage()
+            _lastGarageSetup.value = result
+            _messages.emit(
+                when {
+                    !result.uploaded -> "Connected to your shared garage."
+                    result.matches -> "Shared garage ready: everything uploaded."
+                    else -> "Uploaded, but the cloud's counts don't match this phone's. Details in Settings."
+                },
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _messages.emit("Shared garage setup failed: ${e.message}")
+        } finally {
+            _garageSetupRunning.value = false
+        }
+    }
 
     fun saveNotificationPrefs(context: Context, prefs: NotificationPrefsEntity) = viewModelScope.launch {
         val stamped = prefs.copy(updatedAt = System.currentTimeMillis())
