@@ -211,7 +211,8 @@ class BobAgent(
             stream.close()
         }
 
-        val text = state.answer.joinToString("").trim()
+        state.closeSegment()
+        val text = state.best
         state.failure?.let { failure -> if (text.isEmpty() && state.toolInputs.isEmpty()) throw failure }
         if (text.isEmpty() && state.toolInputs.isEmpty() && !state.budgetReached) {
             throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME didn't answer. Try again.")
@@ -228,8 +229,19 @@ class BobAgent(
         var budgetReached = false
         var failure: ClaudeException? = null
         val seen = HashSet<String>()
-        /** Text since the last tool call — earlier text is "let me check" narration, not the answer. */
-        val answer = mutableListOf<String>()
+        /**
+         * Text between tool calls, one stretch at a time. The answer is the longest stretch: that
+         * drops "let me check" narration before research and a "noted that" line after a notes
+         * update, either of which the last-stretch rule picked up instead of the answer.
+         */
+        val segment = StringBuilder()
+        var best = ""
+
+        fun closeSegment() {
+            val text = segment.toString().trim()
+            if (text.length > best.length) best = text
+            segment.clear()
+        }
         val sources = LinkedHashMap<String, ClaudeSource>()
         val toolInputs = HashMap<String, String>()
         /** Tool-use event id → tool name, to recognise which results are web search results. */
@@ -261,13 +273,15 @@ class BobAgent(
             "session.status_running" -> state.started = true
             "agent.message" -> {
                 state.started = true
-                state.answer += event["content"]?.textBlocks().orEmpty()
+                event["content"]?.textBlocks()?.forEach { state.segment.append(it) }
             }
             "agent.tool_use" -> {
                 val name = event.string("name").orEmpty()
                 id?.let { state.toolNames[it] = name }
-                state.answer.clear()
-                runHolder.start(runKey)
+                state.closeSegment()
+                // Clear the live preview of narration, but not of an answer already written: a
+                // notes update after the answer would otherwise blank it on screen.
+                if (state.best.length < SUBSTANTIAL_ANSWER) runHolder.start(runKey)
                 if (name == "web_search" || name == "web_fetch") runHolder.markSearching(runKey) else runHolder.markReading(runKey)
             }
             "agent.tool_result" -> {
@@ -278,7 +292,7 @@ class BobAgent(
                 val name = event.string("name").orEmpty()
                 val input = event["input"]?.toString() ?: "{}"
                 state.toolInputs[name] = input
-                state.answer.clear()
+                state.closeSegment()
                 runHolder.markWriting(runKey)
                 val result = onCustomTool(name, input)
                 api.sendEvents(
@@ -343,6 +357,7 @@ class BobAgent(
     companion object {
         private const val PREFS_NAME = "garage_log_bob_sessions"
         private const val MAX_RECONNECTS = 3
+        private const val SUBSTANTIAL_ANSWER = 300
 
         /** $1 per session, in cents as the API wants it — Ethan's number. */
         private const val SESSION_BUDGET_CENTS = "100"

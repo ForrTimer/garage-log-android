@@ -15,6 +15,8 @@ data class AiRunState(
     val reading: Boolean = false,
     val partialText: String = "",
     val error: String? = null,
+    /** [error] is Bob explaining why he didn't do it, not something going wrong. */
+    val declined: Boolean = false,
 ) {
     /** What the spinner says while this is running. */
     val statusText: String
@@ -60,8 +62,8 @@ class AiRunHolder {
 
     fun finish(key: String) { _runs.update { it - key } }
 
-    fun fail(key: String, message: String) = update(key) {
-        AiRunState(running = false, error = message)
+    fun fail(key: String, message: String, declined: Boolean = false) = update(key) {
+        AiRunState(running = false, error = message, declined = declined)
     }
 
     fun clearError(key: String) {

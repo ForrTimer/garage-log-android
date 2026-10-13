@@ -233,7 +233,8 @@ class AiRepository(
                 ?: throw if (turn.budgetReached) budgetSpent()
                 // Bob declines rather than inventing intervals (a made-up vehicle, one with no published
                 // schedule); his reason is more use to the owner than a generic failure.
-                else ClaudeException(ClaudeErrorKind.Other, turn.text.ifBlank { "$ASSISTANT_NAME didn't return a schedule. Try again." })
+                else if (turn.text.isNotBlank()) ClaudeException(ClaudeErrorKind.Other, turn.text, fromAssistant = true)
+                else ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME didn't return a schedule. Try again.")
             runCatching { json.decodeFromString(ProposedSchedule.serializer(), input).services }
                 .getOrElse { throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME's schedule came back unreadable. Try again.") }
                 .filter { it.name.isNotBlank() }
@@ -254,7 +255,11 @@ class AiRepository(
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "$key failed", e)
-            runHolder.fail(key, (e as? ClaudeException)?.userMessage ?: e.message ?: "Something went wrong.")
+            runHolder.fail(
+                key,
+                (e as? ClaudeException)?.userMessage ?: e.message ?: "Something went wrong.",
+                declined = (e as? ClaudeException)?.fromAssistant == true,
+            )
             throw e
         }
     }

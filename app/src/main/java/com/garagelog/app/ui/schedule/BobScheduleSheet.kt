@@ -25,6 +25,7 @@ import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.FormSheetScaffold
+import com.garagelog.app.ui.components.MarkdownText
 import com.garagelog.app.ui.theme.garageColors
 
 /**
@@ -109,7 +110,13 @@ fun BobScheduleButton(viewModel: GarageLogViewModel, runKey: String, ready: Bool
             else -> {
                 ActionLink(if (run?.error != null) "Try again with $ASSISTANT_NAME" else "Fill in with $ASSISTANT_NAME", onClick = onRun)
                 run?.error?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = garageColors.alarmText, modifier = Modifier.padding(top = 4.dp))
+                    if (run.declined) {
+                        // Bob explaining why he won't (a vehicle with no real schedule to find) is an
+                        // answer, not a failure — shown as his reply rather than in alarm red.
+                        MarkdownText(it, modifier = Modifier.padding(top = 8.dp))
+                    } else {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = garageColors.alarmText, modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
             }
         }

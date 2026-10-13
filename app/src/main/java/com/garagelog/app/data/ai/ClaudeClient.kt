@@ -68,6 +68,8 @@ class ClaudeException(
     message: String,
     /** The HTTP status, when the failure was an error response rather than a dropped connection. */
     val status: Int? = null,
+    /** The message is Bob's own reply (he declined to do it), not a failure — shown as his words. */
+    val fromAssistant: Boolean = false,
 ) : Exception(message) {
     /** Phrased for a person looking at their truck, not a stack trace. */
     val userMessage: String

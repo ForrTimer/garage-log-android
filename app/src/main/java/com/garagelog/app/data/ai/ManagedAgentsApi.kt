@@ -93,13 +93,9 @@ class ManagedAgentsApi(
         if (e.status == 409) false else throw e
     }
 
+    /** POST, not PATCH: the API reference lists PATCH, but the live API answers it with a 405. */
     suspend fun updateMemory(storeId: String, memoryId: String, content: String) {
-        val request = Request.Builder()
-            .url(url("memory_stores", storeId, "memories", memoryId))
-            .patch(buildJsonObject { put("content", content) }.toString().toRequestBody(JSON_MEDIA))
-            .headers(MEMORY_BETA)
-            .build()
-        call(request)
+        call(post(url("memory_stores", storeId, "memories", memoryId), buildJsonObject { put("content", content) }, MEMORY_BETA))
     }
 
     suspend fun deleteMemory(storeId: String, memoryId: String) {
