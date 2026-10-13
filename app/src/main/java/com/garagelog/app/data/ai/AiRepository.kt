@@ -8,6 +8,7 @@ import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.VehicleRepository
 import com.garagelog.app.util.todayIso
+import android.util.Log
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -230,7 +231,9 @@ class AiRepository(
             )
             val input = turn.toolInputs[AiPrompts.PROPOSE_SCHEDULE_TOOL.name]
                 ?: throw if (turn.budgetReached) budgetSpent()
-                else ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME didn't return a schedule. Try again.")
+                // Bob declines rather than inventing intervals (a made-up vehicle, one with no published
+                // schedule); his reason is more use to the owner than a generic failure.
+                else ClaudeException(ClaudeErrorKind.Other, turn.text.ifBlank { "$ASSISTANT_NAME didn't return a schedule. Try again." })
             runCatching { json.decodeFromString(ProposedSchedule.serializer(), input).services }
                 .getOrElse { throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME's schedule came back unreadable. Try again.") }
                 .filter { it.name.isNotBlank() }
@@ -250,6 +253,7 @@ class AiRepository(
             runHolder.finish(key)
             throw e
         } catch (e: Exception) {
+            Log.w(TAG, "$key failed", e)
             runHolder.fail(key, (e as? ClaudeException)?.userMessage ?: e.message ?: "Something went wrong.")
             throw e
         }
@@ -261,6 +265,7 @@ class AiRepository(
     )
 
     private companion object {
+        const val TAG = "AiRepository"
         const val MODEL_LABEL = "Bob agent (claude-sonnet-5)"
         const val RECAP_MESSAGES = 6
         const val RECAP_CHARS = 800

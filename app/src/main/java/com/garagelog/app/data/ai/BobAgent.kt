@@ -155,6 +155,17 @@ class BobAgent(
         message: String,
         onCustomTool: (String, String) -> String,
     ): BobTurn {
+        // Callers include the schedule sheet, which runs on the main dispatcher; every read and
+        // close below is network I/O.
+        return withContext(Dispatchers.IO) { streamOnIo(runKey, sessionId, message, onCustomTool) }
+    }
+
+    private suspend fun streamOnIo(
+        runKey: String,
+        sessionId: String,
+        message: String,
+        onCustomTool: (String, String) -> String,
+    ): BobTurn {
         val state = TurnState()
         runHolder.start(runKey)
         var stream = api.openStream(sessionId)

@@ -1,5 +1,6 @@
 package com.garagelog.app.data.ai
 
+import android.os.Looper
 import java.io.Closeable
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -210,7 +211,14 @@ class EventStream internal constructor(private val response: Response, private v
         }
     }
 
-    override fun close() = response.close()
+    /**
+     * Closing a stream mid-body writes a reset frame, which is network I/O, and the cancel hook
+     * can fire on the main thread. Off the main thread it closes inline; on it, in the background.
+     */
+    override fun close() {
+        if (Looper.myLooper() == Looper.getMainLooper()) Thread { runCatching { response.close() } }.start()
+        else runCatching { response.close() }
+    }
 }
 
 internal fun JsonObject.string(key: String): String? =
