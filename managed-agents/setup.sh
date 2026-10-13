@@ -30,8 +30,20 @@ if [ -z "${BOB_MEMORY_STORE_ID:-}" ]; then
     --name "Garage Log" \
     --description "What earlier conversations learned about the owner and their vehicles that the app's data doesn't show: preferences, modifications, confirmed fixes, past diagnoses. owner.md, plus one note per vehicle under vehicles/." \
     --transform id -r)"
-  (cd "$seed" && find . -name '*.md' | sed 's|^\./||') | while read -r rel; do
-    ant beta:memory-stores:memories create --memory-store-id "$BOB_MEMORY_STORE_ID" \
-      --path "/$rel" --content "@$seed/$rel" --transform path -r
-  done
 fi
+
+# Seed notes that aren't in the store yet. A note already there is left alone: once Bob has been
+# writing to it, the store is the source of truth, not the seed folder.
+existing="$(ant beta:memory-stores:memories list --memory-store-id "$BOB_MEMORY_STORE_ID" \
+  --transform path --format jsonl < /dev/null)"
+(cd "$seed" && find . -name '*.md' | sed 's|^\./||') | while read -r rel; do
+  if grep -qxF "\"/$rel\"" <<< "$existing"; then
+    echo "already in store: /$rel"
+  else
+    # < /dev/null: ant otherwise reads stdin as the request body, which here is this loop's list.
+    # MSYS2_ARG_CONV_EXCL: Git Bash on Windows rewrites "/owner.md" into a Windows path.
+    MSYS2_ARG_CONV_EXCL="--path=" ant beta:memory-stores:memories create \
+      --memory-store-id "$BOB_MEMORY_STORE_ID" \
+      "--path=/$rel" --content "$(cat "$seed/$rel")" --transform path -r < /dev/null
+  fi
+done
