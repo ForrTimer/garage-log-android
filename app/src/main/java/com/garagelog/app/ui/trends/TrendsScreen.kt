@@ -25,12 +25,16 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +60,11 @@ import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
 import com.garagelog.app.util.monthName
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -172,7 +181,7 @@ private fun OdometerCard(logs: List<LogEntryEntity>) {
                 values = points.map { it.second },
                 leadingLabel = formatDate(points.first().first),
                 trailingLabel = formatDate(points.last().first),
-                valueLabel = { formatMiles(it.toInt()) },
+                unit = "mi",
             )
         }
     }
@@ -214,7 +223,7 @@ private fun FuelEconomyCard(logs: List<LogEntryEntity>) {
                     values = shown.map { it.mpg },
                     leadingLabel = formatDate(shown.first().date),
                     trailingLabel = formatDate(shown.last().date),
-                    valueLabel = { "%.1f".format(it) },
+                    unit = "mpg",
                 )
             }
         }
@@ -420,40 +429,94 @@ private fun BarChart(
     }
 }
 
-/** A minimal line chart — [values] plotted left-to-right, normalized to the card's own range. */
+/**
+ * A line chart with a labelled vertical axis: [values] plotted left-to-right against round tick
+ * values ([niceTicks]), each tick drawn as a recessive dotted gridline with its label in the left
+ * gutter. The top label carries [unit], so the axis names its own units without a separate title.
+ */
 @Composable
-private fun LineChart(values: List<Float>, leadingLabel: String, trailingLabel: String, valueLabel: (Float) -> String) {
-    val minValue = values.min()
-    val maxValue = values.max()
-    // Only the on-canvas normalization needs a non-zero span (a flat line would otherwise divide
-    // by zero) — the labels above/below the chart must still show the real min/max, or a flat
-    // reading (e.g. two mileage entries logged the same day) would display a fabricated value.
-    val chartSpan = (maxValue - minValue).coerceAtLeast(1f)
+private fun LineChart(values: List<Float>, leadingLabel: String, trailingLabel: String, unit: String) {
+    val ticks = remember(values) { niceTicks(values.min(), values.max()) }
+    val axisMin = ticks.first()
+    val axisSpan = ticks.last() - ticks.first()
+    val step = if (ticks.size > 1) ticks[1] - ticks[0] else 1f
     val lineColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val measurer = rememberTextMeasurer()
+    val tickLabels = ticks.mapIndexed { i, t -> formatTick(t, step) + if (i == ticks.lastIndex) " $unit" else "" }
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(valueLabel(minValue), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(valueLabel(maxValue), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Canvas(modifier = Modifier.fillMaxWidth().height(110.dp).padding(vertical = 6.dp)) {
-            val stepX = if (values.size > 1) size.width / (values.size - 1) else size.width
+        Canvas(modifier = Modifier.fillMaxWidth().height(140.dp)) {
+            val layouts = tickLabels.map { measurer.measure(it, labelStyle) }
+            val gutter = layouts.maxOf { it.size.width } + 8.dp.toPx()
+            // Half a label's height above and below, so the top and bottom labels aren't clipped.
+            val inset = layouts.first().size.height / 2f
+            val plotTop = inset
+            val plotHeight = size.height - 2 * inset
+            fun yFor(v: Float) = plotTop + plotHeight - (v - axisMin) / axisSpan * plotHeight
+
+            val dotted = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 4.dp.toPx()))
+            ticks.forEachIndexed { i, t ->
+                val y = yFor(t)
+                drawLine(gridColor, Offset(gutter, y), Offset(size.width, y), strokeWidth = 1.dp.toPx(), pathEffect = dotted)
+                val label = layouts[i]
+                drawText(label, topLeft = Offset(gutter - 8.dp.toPx() - label.size.width, y - label.size.height / 2f))
+            }
+
+            // Inset the first and last points by the marker radius so they aren't cut in half.
+            val radius = 4.dp.toPx()
+            val left = gutter + radius
+            val width = size.width - left - radius
+            val stepX = if (values.size > 1) width / (values.size - 1) else 0f
             val path = androidx.compose.ui.graphics.Path()
             values.forEachIndexed { index, v ->
-                val x = index * stepX
-                val y = size.height - ((v - minValue) / chartSpan) * size.height
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                val x = left + index * stepX
+                if (index == 0) path.moveTo(x, yFor(v)) else path.lineTo(x, yFor(v))
             }
-            drawPath(path, color = lineColor, style = Stroke(width = 5f, cap = StrokeCap.Round))
+            drawPath(path, color = lineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
             values.forEachIndexed { index, v ->
-                val x = index * stepX
-                val y = size.height - ((v - minValue) / chartSpan) * size.height
-                drawCircle(color = lineColor, radius = 6f, center = Offset(x, y))
+                drawCircle(color = lineColor, radius = radius, center = Offset(left + index * stepX, yFor(v)))
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(leadingLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(trailingLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+/**
+ * Three to five round tick values (steps of 1, 2, 2.5 or 5 times a power of ten) that bracket
+ * [min]..[max]. A flat series still gets a real span around its value rather than a zero-height
+ * axis, so the line sits in the middle at its true reading.
+ */
+private fun niceTicks(min: Float, max: Float): List<Float> {
+    val span = (max - min).takeIf { it > 0f } ?: maxOf(abs(max) * 0.1f, 1f)
+    val raw = span / 3f
+    val magnitude = 10f.pow(floor(log10(raw)))
+    val step = when (raw / magnitude) {
+        in 0f..1f -> 1f
+        in 1f..2f -> 2f
+        in 2f..2.5f -> 2.5f
+        in 2.5f..5f -> 5f
+        else -> 10f
+    } * magnitude
+    val center = (min + max) / 2f
+    val lo = if (max > min) floor(min / step) * step else floor((center - span / 2f) / step) * step
+    val hi = if (max > min) ceil(max / step) * step else ceil((center + span / 2f) / step) * step
+    return generateSequence(lo) { it + step }.takeWhile { it <= hi + step / 2f }.toList()
+}
+
+/** "18", "17.5", or "205k" for odometer-sized values — only as many decimals as the step needs. */
+private fun formatTick(value: Float, step: Float): String {
+    if (abs(value) >= 10_000f && step >= 1_000f) {
+        val decimals = if (step % 1_000f == 0f) 0 else 1
+        return "%,.${decimals}fk".format(value / 1_000f)
+    }
+    val decimals = when {
+        step >= 1f -> if (step % 1f == 0f) 0 else 1
+        else -> (-floor(log10(step))).toInt().coerceAtMost(3)
+    }
+    return "%,.${decimals}f".format(value)
 }

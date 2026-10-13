@@ -17,3 +17,6 @@ bin/
 gen/
 out/
 managed-agents/ids.env
+
+# Firebase config for Ethan's project (public repo; keep the API key out of it)
+app/google-services.json

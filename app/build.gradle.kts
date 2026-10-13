@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
 }
 
 // The Drive-sync web OAuth client ID isn't a secret, but it's environment-specific setup
@@ -74,6 +75,10 @@ kotlin {
 }
 
 dependencies {
+    // Shared garages (multi-user): Auth + Firestore only. No Analytics, deliberately.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
