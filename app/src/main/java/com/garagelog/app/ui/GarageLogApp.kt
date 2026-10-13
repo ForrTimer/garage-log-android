@@ -177,6 +177,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             when (event) {
                 Lifecycle.Event.ON_STOP -> stoppedAtMillis = System.currentTimeMillis()
                 Lifecycle.Event.ON_START -> {
+                    // Pick up what other people in a shared garage changed while this was closed.
+                    viewModel.syncNow()
                     val stoppedAt = stoppedAtMillis
                     if (stoppedAt == null || System.currentTimeMillis() - stoppedAt > HOME_RESET_AWAY_THRESHOLD_MS) {
                         viewModel.resetToHome()

@@ -12,6 +12,7 @@ import com.garagelog.app.data.ai.GarageMirror
 import com.garagelog.app.data.ai.ManagedAgentsApi
 import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.cloud.GarageCloud
+import com.garagelog.app.data.cloud.GarageSync
 import com.garagelog.app.data.backup.BackupManager
 import com.garagelog.app.data.catalog.VehicleCatalog
 import com.garagelog.app.data.db.AppDatabase
@@ -112,6 +113,17 @@ class ServiceLocator(context: Context) {
     )
     private val driveApiClient = DriveApiClient()
     val syncStatusHolder = SyncStatusHolder()
+    private val garageSync = GarageSync(
+        context = appContext,
+        database = database,
+        cloud = garageCloud,
+        vehicleRepository = vehicleRepository,
+        logRepository = logRepository,
+        issueRepository = issueRepository,
+        scheduleRepository = scheduleRepository,
+        notificationPrefsRepository = notificationPrefsRepository,
+        onNotificationPrefsPulled = { MileageReminderScheduler.reschedule(appContext, it) },
+    )
 
     val syncRepository = SyncRepository(
         database = database,
@@ -126,6 +138,7 @@ class ServiceLocator(context: Context) {
         notificationPrefsRepository = notificationPrefsRepository,
         onNotificationPrefsPulled = { MileageReminderScheduler.reschedule(appContext, it) },
         statusHolder = syncStatusHolder,
+        garageSync = garageSync,
     )
 
     fun enqueueDiagnosis(issueId: String, label: String) =

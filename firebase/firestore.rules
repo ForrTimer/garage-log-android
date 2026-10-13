@@ -73,7 +73,7 @@ service cloud.firestore {
         allow read: if canSee(g, vehicleId);
         allow create: if isAdmin(g);
         allow update: if isAdmin(g)
-          || (canSee(g, vehicleId) && onlyChanges(['miles', 'milesDate', 'updatedAt']));
+          || (canSee(g, vehicleId) && onlyChanges(['miles', 'milesDate', 'updatedAt', 'serverUpdatedAt']));
       }
 
       match /schedules/{id} {
@@ -81,7 +81,7 @@ service cloud.firestore {
         allow create: if isAdmin(g);
         allow update: if isAdmin(g)
           || (canSee(g, resource.data.vehicleId)
-              && onlyChanges(['lastDoneMileage', 'lastDoneDate', 'updatedAt']));
+              && onlyChanges(['lastDoneMileage', 'lastDoneDate', 'updatedAt', 'serverUpdatedAt']));
       }
 
       // Logs, issues and photos all carry vehicleId. A record can't be moved onto a vehicle the

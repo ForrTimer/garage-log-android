@@ -153,7 +153,11 @@ class GarageCloud(
         records.chunked(BATCH_SIZE).forEach { chunk ->
             val batch = db.batch()
             chunk.forEach { record ->
-                batch.set(ref.document(id(record)), json.encodeToJsonElement(serializer, record).toFirestoreMap())
+                batch.set(
+                    ref.document(id(record)),
+                    json.encodeToJsonElement(serializer, record).toFirestoreMap() +
+                        (GarageSync.SERVER_UPDATED_AT to FieldValue.serverTimestamp()),
+                )
             }
             batch.commit().await()
         }
@@ -170,6 +174,14 @@ class GarageCloud(
         listOf(VEHICLES, SCHEDULES, LOGS, ISSUES).associateWith { collection ->
             db.collection("garages/$garageId/$collection").count().get(AggregateSource.SERVER).await().count.toInt()
         }
+
+    /** Sync re-reads the member doc each run; an admin may have changed this person's role. */
+    fun updateRole(role: String) {
+        val current = _membership.value
+        if (current.garageId == null || current.role == role) return
+        prefs.edit().putString(KEY_ROLE, role).apply()
+        _membership.value = current.copy(role = role)
+    }
 
     private fun remember(garageId: String, role: String, email: String) {
         prefs.edit().putString(KEY_GARAGE, garageId).putString(KEY_ROLE, role).putString(KEY_EMAIL, email).apply()

@@ -2,6 +2,7 @@ package com.garagelog.app.data.sync
 
 import androidx.room.withTransaction
 import com.garagelog.app.data.auth.AuthManager
+import com.garagelog.app.data.cloud.GarageSync
 import com.garagelog.app.data.db.AppDatabase
 import com.garagelog.app.data.entity.NotificationPrefsEntity
 import com.garagelog.app.data.entity.PhotoEntity
@@ -34,11 +35,17 @@ class SyncRepository(
     /** The reminder alarm is per-device OS state, so a pulled settings change must re-arm it here. */
     private val onNotificationPrefsPulled: (NotificationPrefsEntity) -> Unit,
     private val statusHolder: SyncStatusHolder,
+    /** In a shared garage, records sync through Firestore instead of the Drive snapshot. */
+    private val garageSync: GarageSync,
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     /** Pulls + merges + pushes everything in one pass. Silently no-ops if not signed in. */
     suspend fun sync() {
+        if (garageSync.isActive) {
+            syncGarage()
+            return
+        }
         val token = authManager.getValidAccessToken() ?: return
         statusHolder.onSyncStarted()
         runCatching {
@@ -48,6 +55,23 @@ class SyncRepository(
             statusHolder.onSyncSucceeded()
         }.onFailure { error ->
             statusHolder.onSyncFailed(error.message)
+        }
+    }
+
+    /**
+     * Records go through the garage. Attachment photos still ride Drive (for the signed-in
+     * account) until photos move to Cloud Storage, so nothing that synced before stops syncing.
+     */
+    private suspend fun syncGarage() {
+        statusHolder.onSyncStarted()
+        try {
+            garageSync.sync()
+            authManager.getValidAccessToken()?.let { syncPhotos(it) }
+            statusHolder.onSyncSucceeded()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            statusHolder.onSyncFailed(e.message)
         }
     }
 

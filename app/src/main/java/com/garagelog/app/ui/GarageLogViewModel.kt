@@ -579,6 +579,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
             }
             val result = locator.garageCloud.setUpGarage()
             _lastGarageSetup.value = result
+            requestSync()
             _messages.emit(
                 when {
                     !result.uploaded -> "Connected to your shared garage."
