@@ -111,7 +111,7 @@ object GarageContext {
         return if (vehicle.name.isNotBlank() && vehicle.name != spec) "${vehicle.name} — $spec" else spec
     }
 
-    private fun serviceLine(entry: LogEntryEntity): String = buildString {
+    internal fun serviceLine(entry: LogEntryEntity): String = buildString {
         append(entry.date)
         entry.mileage?.let { append(" @ $it mi") }
         append(" — [${entry.category}] ${entry.task.ifBlank { "(no task)" }}")
@@ -120,7 +120,7 @@ object GarageContext {
         entry.notes.blankToNull()?.let { append(" — notes: $it") }
     }
 
-    private fun issueLine(issue: IssueEntity): String = buildString {
+    internal fun issueLine(issue: IssueEntity): String = buildString {
         append(issue.title)
         append(" [${IssueStatus.fromLabel(issue.status).label}")
         append(", ${issue.priority}]")
@@ -129,7 +129,7 @@ object GarageContext {
     }
 
     /** A downward MPG trend is a real diagnostic signal, so it's worth a line in every profile. */
-    private fun fuelEconomy(logs: List<LogEntryEntity>): String? {
+    internal fun fuelEconomy(logs: List<LogEntryEntity>): String? {
         val fillUps = fillUpMpg(logs)
         if (fillUps.isEmpty()) return null
         val recent = fillUps.takeLast(5)
@@ -143,7 +143,7 @@ object GarageContext {
         }
     }
 
-    private fun severeDutyConditions(vehicle: VehicleEntity): List<String> = buildList {
+    internal fun severeDutyConditions(vehicle: VehicleEntity): List<String> = buildList {
         if (vehicle.severeDustyAreas) add("dusty areas")
         if (vehicle.severeTowing) add("towing")
         if (vehicle.severeFrequentTowing) add("frequent towing")

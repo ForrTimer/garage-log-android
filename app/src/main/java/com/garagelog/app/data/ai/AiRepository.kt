@@ -6,12 +6,10 @@ import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.AiDiagnosisEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.repository.IssueRepository
-import com.garagelog.app.data.repository.LogRepository
-import com.garagelog.app.data.repository.ScheduleRepository
 import com.garagelog.app.data.repository.VehicleRepository
+import com.garagelog.app.util.todayIso
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerialName
@@ -20,20 +18,23 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /**
- * Owns every assistant-backed operation end to end: given only an id, it gathers the vehicle's
- * context itself, streams the answer, reports progress to [AiRunHolder], and persists the result.
+ * Owns every assistant-backed operation end to end: given only an id, it brings Bob's copy of the
+ * records up to date, runs the turn, reports progress to [AiRunHolder], and persists the result.
  *
  * Self-sufficient on purpose — the caller is a background worker that may outlive the screen that
  * started it, so it can't depend on UI state being around to hand it a vehicle and its history.
+ *
+ * Bob runs as a Managed Agent ([BobAgent]): the vehicle's records live in a memory store he looks
+ * things up in ([GarageMirror]), so each message carries the question and which vehicle, not the
+ * whole history. [DirectClaudeClient] is no longer used here; it stays as the fallback path.
  */
 class AiRepository(
-    private val client: ClaudeClient,
+    private val bob: BobAgent,
+    private val mirror: GarageMirror,
     private val diagnosisDao: AiDiagnosisDao,
     private val chatDao: AiChatDao,
     private val vehicleRepository: VehicleRepository,
-    private val logRepository: LogRepository,
     private val issueRepository: IssueRepository,
-    private val scheduleRepository: ScheduleRepository,
     private val runHolder: AiRunHolder,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -45,250 +46,229 @@ class AiRepository(
     fun observeChat(): Flow<List<AiChatMessageEntity>> = chatDao.observeAll()
 
     /** Throws [ClaudeException] on failure, after recording it against [issueId] for the UI. */
-    suspend fun runDiagnosis(issueId: String) {
+    suspend fun runDiagnosis(issueId: String) = reporting(issueId) {
         val issue = issueRepository.getAll().find { it.id == issueId }
             ?: error("That issue no longer exists.")
         val vehicle = vehicleRepository.getAll().find { it.id == issue.vehicleId }
             ?: error("That issue's vehicle no longer exists.")
+        mirror.sync()
 
-        val prompt = buildString {
-            appendLine(profileFor(vehicle.id))
+        val message = buildString {
+            appendLine("Kind: Diagnosis")
+            appendLine(vehicleLine(vehicle))
+            appendLine("Today: ${todayIso()}")
             appendLine()
-            appendLine(GarageContext.issueDetail(issue))
+            append(GarageContext.issueDetail(issue))
         }
-
-        val result = collect(
-            key = issueId,
-            request = ClaudeRequest(
-                system = AiPrompts.DIAGNOSIS_SYSTEM,
-                messages = listOf(ClaudeMessage("user", prompt)),
-            ),
+        // A re-run is a fresh look, not a continuation of the last one.
+        val diagnosisThread = diagnosisThreadKey(issueId)
+        bob.forget(diagnosisThread)
+        val turn = bob.runTurn(
+            runKey = issueId,
+            threadKey = diagnosisThread,
+            title = "Diagnosis: ${issue.title}",
+            opening = { message },
+            followUp = message,
         )
+        if (turn.text.isEmpty()) throw budgetSpent()
         diagnosisDao.upsert(
             AiDiagnosisEntity(
                 issueId = issue.id,
                 vehicleId = issue.vehicleId,
-                content = result.text,
-                sourcesJson = encodeSources(result.sources),
-                model = DirectClaudeClient.DIAGNOSIS_MODEL,
+                content = turn.text + if (turn.budgetReached) BUDGET_NOTE else "",
+                sourcesJson = encodeSources(turn.sources),
+                model = MODEL_LABEL,
                 createdAt = System.currentTimeMillis(),
                 milesAtRun = vehicle.miles,
             ),
         )
+        // "Ask a follow-up" carries on in the same session, so Bob already has his diagnosis in
+        // context instead of being handed it back as text.
+        bob.sessionFor(diagnosisThread)?.let { bob.adoptSession(AiChatMessageEntity.threadKey(vehicle.id, issueId), it) }
     }
 
     /**
-     * [issueId] non-null makes this a follow-up on that issue's diagnosis: the thread is seeded
-     * with the issue and the diagnosis already given, so the first question can just be "why?"
-     * without the owner restating any of it.
+     * [issueId] non-null makes this a follow-up on that issue's diagnosis. A thread keeps its agent
+     * session, so a follow-up sends only the question; a new session (the first question, or after
+     * the last one hit its spend cap) is told the vehicle and given a short recap of the thread.
      */
     suspend fun runChat(vehicleId: String, issueId: String?, question: String) {
-        val vehicle = vehicleRepository.getAll().find { it.id == vehicleId }
-            ?: error("That vehicle no longer exists.")
         val key = AiChatMessageEntity.threadKey(vehicleId, issueId)
-        val history = chatDao.getAll().filter { it.vehicleId == vehicleId && it.issueId == issueId }
-            .sortedBy { it.createdAt }
+        reporting(key) {
+            val vehicle = vehicleRepository.getAll().find { it.id == vehicleId }
+                ?: error("That vehicle no longer exists.")
+            val history = chatDao.getAll().filter { it.vehicleId == vehicleId && it.issueId == issueId }
+                .sortedBy { it.createdAt }
+            val issue = issueId?.let { id -> issueRepository.getAll().find { it.id == id } }
+            // Only needed when the diagnosis session is gone and the thread starts over.
+            val diagnosis = issueId?.let { diagnosisDao.getForIssue(it) }
+            val vehicleLine = vehicleLine(vehicle)
+            mirror.sync()
 
-        val opening = buildString {
-            appendLine(profileFor(vehicleId))
-            if (issueId != null) {
-                val issue = issueRepository.getAll().find { it.id == issueId }
-                if (issue != null) {
+            chatDao.upsert(
+                AiChatMessageEntity(
+                    id = UUID.randomUUID().toString(),
+                    vehicleId = vehicleId,
+                    issueId = issueId,
+                    role = "user",
+                    content = question,
+                    sourcesJson = "",
+                    createdAt = System.currentTimeMillis(),
+                ),
+            )
+
+            val opening = {
+                buildString {
+                    appendLine("Kind: Chat")
+                    appendLine(vehicleLine)
+                    appendLine("Today: ${todayIso()}")
+                    if (issue != null) {
+                        appendLine()
+                        appendLine("The owner is following up on this issue:")
+                        appendLine(GarageContext.issueDetail(issue))
+                    }
+                    if (diagnosis != null) {
+                        appendLine()
+                        appendLine("## The diagnosis you gave earlier (don't repeat it back)")
+                        appendLine(diagnosis.content)
+                    }
+                    if (history.isNotEmpty()) {
+                        appendLine()
+                        appendLine("Earlier in this conversation (for context; don't answer these again):")
+                        history.takeLast(RECAP_MESSAGES).forEach { message ->
+                            val who = if (message.role == "user") "Owner" else ASSISTANT_NAME
+                            appendLine("$who: ${message.content.take(RECAP_CHARS)}")
+                        }
+                    }
                     appendLine()
-                    appendLine(GarageContext.issueDetail(issue))
-                }
-                diagnosisDao.getForIssue(issueId)?.let { diagnosis ->
+                    appendLine("---")
                     appendLine()
-                    appendLine("## The diagnosis you already gave for this issue")
-                    appendLine(diagnosis.content)
+                    append(question)
                 }
-                appendLine()
-                appendLine("The owner is following up on that diagnosis. Don't repeat it back to them.")
             }
+            val turn = bob.runTurn(
+                runKey = key,
+                threadKey = key,
+                title = issue?.let { "Follow-up: ${it.title}" } ?: "Chat: ${vehicle.name}",
+                opening = opening,
+                followUp = question,
+            )
+            if (turn.text.isEmpty()) throw budgetSpent()
+            chatDao.upsert(
+                AiChatMessageEntity(
+                    id = UUID.randomUUID().toString(),
+                    vehicleId = vehicleId,
+                    issueId = issueId,
+                    role = "assistant",
+                    content = turn.text + if (turn.budgetReached) BUDGET_NOTE else "",
+                    sourcesJson = encodeSources(turn.sources),
+                    createdAt = System.currentTimeMillis(),
+                ),
+            )
         }
-
-        chatDao.upsert(
-            AiChatMessageEntity(
-                id = UUID.randomUUID().toString(),
-                vehicleId = vehicleId,
-                issueId = issueId,
-                role = "user",
-                content = question,
-                sourcesJson = "",
-                createdAt = System.currentTimeMillis(),
-            ),
-        )
-
-        val messages = if (history.isEmpty()) {
-            listOf(ClaudeMessage("user", "$opening\n\n---\n\n$question"))
-        } else {
-            buildList {
-                add(ClaudeMessage("user", "$opening\n\n---\n\n${history.first().content}"))
-                history.drop(1).forEach { add(ClaudeMessage(it.role, it.content)) }
-                add(ClaudeMessage("user", question))
-            }
-        }
-
-        val result = collect(
-            key,
-            ClaudeRequest(
-                system = AiPrompts.CHAT_SYSTEM,
-                messages = messages,
-                model = DirectClaudeClient.CHAT_MODEL,
-                // A short answer needs far less room; the cap also discourages rambling.
-                maxTokens = 2000,
-            ),
-        )
-        chatDao.upsert(
-            AiChatMessageEntity(
-                id = UUID.randomUUID().toString(),
-                vehicleId = vehicleId,
-                issueId = issueId,
-                role = "assistant",
-                content = result.text,
-                sourcesJson = encodeSources(result.sources),
-                createdAt = System.currentTimeMillis(),
-            ),
-        )
     }
 
-    suspend fun clearThread(vehicleId: String, issueId: String?) =
+    /** Clearing a thread also drops its session, so the next question starts clean. */
+    suspend fun clearThread(vehicleId: String, issueId: String?) {
         chatDao.deleteForThread(vehicleId, issueId)
+        bob.forget(AiChatMessageEntity.threadKey(vehicleId, issueId))
+    }
 
-    suspend fun deleteDiagnosisForIssue(issueId: String) = diagnosisDao.deleteForIssue(issueId)
+    suspend fun deleteDiagnosisForIssue(issueId: String) {
+        diagnosisDao.deleteForIssue(issueId)
+        bob.forget(diagnosisThreadKey(issueId))
+    }
 
     suspend fun deleteForVehicle(vehicleId: String) {
         diagnosisDao.deleteForVehicle(vehicleId)
         chatDao.deleteForVehicle(vehicleId)
+        bob.forget(AiChatMessageEntity.threadKey(vehicleId, null))
     }
 
     suspend fun deleteAll() {
         diagnosisDao.deleteAll()
         chatDao.deleteAll()
+        bob.forgetAll()
     }
 
     fun decodeSources(raw: String): List<ClaudeSource> =
         if (raw.isBlank()) emptyList()
         else runCatching { json.decodeFromString(sourceListSerializer, raw) }.getOrDefault(emptyList())
 
-    private suspend fun profileFor(vehicleId: String): String {
-        val vehicle = vehicleRepository.getAll().find { it.id == vehicleId } ?: error("Unknown vehicle")
-        return GarageContext.vehicleProfile(
-            vehicle = vehicle,
-            schedules = scheduleRepository.getAll().filter { it.vehicleId == vehicleId },
-            logs = logRepository.getAll().filter { it.vehicleId == vehicleId },
-            issues = issueRepository.getAll().filter { it.vehicleId == vehicleId },
-        )
-    }
-
     private fun encodeSources(sources: List<ClaudeSource>): String =
         if (sources.isEmpty()) "" else json.encodeToString(sourceListSerializer, sources)
 
+    private suspend fun vehicleLine(vehicle: VehicleEntity): String =
+        "Vehicle: ${GarageContext.identity(vehicle)} — records in ${mirror.folderFor(vehicle)}"
+
     /**
      * Researches and proposes a maintenance schedule for [vehicle] — which may not be saved yet,
-     * when this runs from the Add vehicle form. Nothing is persisted: the owner reviews the list
-     * and the caller saves what they keep. Runs in the caller's scope rather than a worker for the
-     * same reason: without the form open there is nothing to show the result in.
-     *
-     * [alreadyTracked] is passed in rather than read from the database for the same unsaved-vehicle
-     * reason; Bob is told to skip those.
+     * when this runs from the Add vehicle form, so its details go in the message rather than
+     * coming from the records store. Nothing is persisted: the owner reviews the list and the
+     * caller saves what they keep. Runs in the caller's scope rather than a worker for the same
+     * reason: without the form open there is nothing to show the result in.
      */
     suspend fun suggestSchedule(vehicle: VehicleEntity, alreadyTracked: List<String>): List<ScheduleSuggestion> {
-        val prompt = buildString {
-            appendLine(GarageContext.vehicleProfile(vehicle, schedules = emptyList(), logs = emptyList(), issues = emptyList()))
-            appendLine()
-            appendLine("## Already tracked (skip these)")
-            if (alreadyTracked.isEmpty()) appendLine("Nothing yet.") else alreadyTracked.forEach { appendLine("- $it") }
-        }
-        val result = collect(
-            key = scheduleKey(vehicle.id),
-            request = ClaudeRequest(
-                system = AiPrompts.SCHEDULE_SYSTEM,
-                messages = listOf(ClaudeMessage("user", prompt)),
-                model = DirectClaudeClient.CHAT_MODEL,
-                customTools = listOf(AiPrompts.PROPOSE_SCHEDULE_TOOL),
-            ),
-        )
-        val input = result.toolInputs[AiPrompts.PROPOSE_SCHEDULE_TOOL.name]
-            ?: throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME didn't return a schedule. Try again.")
-        return runCatching { json.decodeFromString(ProposedSchedule.serializer(), input).services }
-            .getOrElse { throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME's schedule came back unreadable. Try again.") }
-            .filter { it.name.isNotBlank() }
-    }
-
-    private data class StreamResult(
-        val text: String,
-        val sources: List<ClaudeSource>,
-        /** Complete JSON input of each custom tool Claude called, by tool name. */
-        val toolInputs: Map<String, String> = emptyMap(),
-    )
-
-    private companion object {
-        /** Waits before each automatic retry of an overloaded request; three tries, ~30s total. */
-        val OVERLOAD_BACKOFF_MS = longArrayOf(4_000, 10_000, 20_000)
-    }
-
-    private suspend fun collect(key: String, request: ClaudeRequest): StreamResult {
-        runHolder.start(key)
-        val text = StringBuilder()
-        // Several searches can run in one answer and the same page can come back twice; keyed by
-        // URL so the source list stays deduplicated but keeps first-seen order.
-        val sources = LinkedHashMap<String, ClaudeSource>()
-        // Content-block index → tool name, for our own tool calls only; see ClaudeEvent.ToolInputDelta.
-        val toolNames = HashMap<Int, String>()
-        val toolInputs = HashMap<Int, StringBuilder>()
-        try {
-            var attempt = 0
-            while (true) {
-                try {
-                    client.stream(request).collect { event ->
-                        when (event) {
-                            is ClaudeEvent.TextDelta -> {
-                                text.append(event.text)
-                                runHolder.appendDelta(key, event.text)
-                            }
-                            is ClaudeEvent.Searching -> runHolder.markSearching(key)
-                            is ClaudeEvent.SourcesFound -> event.sources.forEach { sources.putIfAbsent(it.url, it) }
-                            is ClaudeEvent.ToolCallStarted -> {
-                                toolNames[event.index] = event.name
-                                runHolder.markWriting(key)
-                            }
-                            is ClaudeEvent.ToolInputDelta ->
-                                if (event.index in toolNames) toolInputs.getOrPut(event.index) { StringBuilder() }.append(event.partialJson)
-                        }
-                    }
-                    break
-                } catch (e: ClaudeException) {
-                    // "Overloaded" is Anthropic shedding load, not anything wrong with the request,
-                    // and it usually clears in seconds — so ride it out rather than making the owner
-                    // tap retry. Only before any answer has arrived, though: once output is flowing,
-                    // a retry would be paying twice for the same answer.
-                    if (e.kind != ClaudeErrorKind.Overloaded || text.isNotEmpty() || toolInputs.isNotEmpty() ||
-                        attempt >= OVERLOAD_BACKOFF_MS.size
-                    ) throw e
-                    runHolder.markRetrying(key)
-                    delay(OVERLOAD_BACKOFF_MS[attempt++])
-                    sources.clear()
-                    toolNames.clear()
-                    runHolder.start(key)
-                }
+        val key = scheduleKey(vehicle.id)
+        return reporting(key) {
+            val message = buildString {
+                appendLine("Kind: Schedule")
+                appendLine("Today: ${todayIso()}")
+                appendLine()
+                appendLine(GarageContext.vehicleProfile(vehicle, schedules = emptyList(), logs = emptyList(), issues = emptyList()))
+                appendLine()
+                appendLine("## Already tracked (skip these)")
+                if (alreadyTracked.isEmpty()) appendLine("Nothing yet.") else alreadyTracked.forEach { appendLine("- $it") }
             }
+            val turn = bob.runTurn(
+                runKey = key,
+                threadKey = null,
+                title = "Schedule: ${vehicle.name.ifBlank { GarageContext.identity(vehicle) }}",
+                opening = { message },
+                followUp = message,
+                onCustomTool = { _, _ -> "Received. The owner will review these before anything is saved." },
+            )
+            val input = turn.toolInputs[AiPrompts.PROPOSE_SCHEDULE_TOOL.name]
+                ?: throw if (turn.budgetReached) budgetSpent()
+                else ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME didn't return a schedule. Try again.")
+            runCatching { json.decodeFromString(ProposedSchedule.serializer(), input).services }
+                .getOrElse { throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME's schedule came back unreadable. Try again.") }
+                .filter { it.name.isNotBlank() }
+        }
+    }
+
+    /**
+     * Records a failure against [key] so whichever screen is watching can show it. Being stopped
+     * is not a failure and must never be shown as one — that's what made a backgrounded request
+     * once report "couldn't reach Bob".
+     */
+    private suspend fun <T> reporting(key: String, block: suspend () -> T): T {
+        runHolder.start(key)
+        return try {
+            block().also { runHolder.finish(key) }
         } catch (e: CancellationException) {
-            // Being stopped is not a failure and must never be shown as one. This is what made a
-            // backgrounded request report "couldn't reach Bob": the OS stops the work, the socket
-            // dies, and an indiscriminate catch turned that into a connection error on screen.
             runHolder.finish(key)
             throw e
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             runHolder.fail(key, (e as? ClaudeException)?.userMessage ?: e.message ?: "Something went wrong.")
             throw e
         }
-        runHolder.finish(key)
-        return StreamResult(
-            text = text.toString().trim(),
-            sources = sources.values.toList(),
-            toolInputs = toolInputs.mapKeys { (index, _) -> toolNames.getValue(index) }.mapValues { it.value.toString() },
-        )
+    }
+
+    private fun budgetSpent() = ClaudeException(
+        ClaudeErrorKind.Other,
+        "This conversation reached its \$1 limit before $ASSISTANT_NAME finished. Ask again to start a fresh one.",
+    )
+
+    private companion object {
+        const val MODEL_LABEL = "Bob agent (claude-sonnet-5)"
+        const val RECAP_MESSAGES = 6
+        const val RECAP_CHARS = 800
+        const val BUDGET_NOTE =
+            "\n\n_This conversation reached its \$1 limit, so the next question starts a fresh one. " +
+                "Anything worth remembering is in $ASSISTANT_NAME's notes._"
+
+        fun diagnosisThreadKey(issueId: String) = "diagnosis:$issueId"
     }
 }
 

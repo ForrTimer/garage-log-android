@@ -7,7 +7,9 @@ import com.garagelog.app.data.ai.AiKeyStore
 import com.garagelog.app.data.ai.AiRepository
 import com.garagelog.app.data.ai.AiRunHolder
 import com.garagelog.app.data.ai.AiWorker
-import com.garagelog.app.data.ai.DirectClaudeClient
+import com.garagelog.app.data.ai.BobAgent
+import com.garagelog.app.data.ai.GarageMirror
+import com.garagelog.app.data.ai.ManagedAgentsApi
 import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.backup.BackupManager
 import com.garagelog.app.data.catalog.VehicleCatalog
@@ -81,14 +83,21 @@ class ServiceLocator(context: Context) {
 
     val aiKeyStore = AiKeyStore(appContext)
     val aiRunHolder = AiRunHolder()
+    private val managedAgentsApi = ManagedAgentsApi(aiKeyStore)
     val aiRepository = AiRepository(
-        client = DirectClaudeClient(aiKeyStore),
+        bob = BobAgent(appContext, managedAgentsApi, aiRunHolder),
+        mirror = GarageMirror(
+            api = managedAgentsApi,
+            storeId = BobAgent.DATA_STORE_ID,
+            vehicleRepository = vehicleRepository,
+            logRepository = logRepository,
+            issueRepository = issueRepository,
+            scheduleRepository = scheduleRepository,
+        ),
         diagnosisDao = database.aiDiagnosisDao(),
         chatDao = database.aiChatDao(),
         vehicleRepository = vehicleRepository,
-        logRepository = logRepository,
         issueRepository = issueRepository,
-        scheduleRepository = scheduleRepository,
         runHolder = aiRunHolder,
     )
 

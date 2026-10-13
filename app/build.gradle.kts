@@ -17,6 +17,15 @@ val localProperties = Properties().apply {
 }
 val googleWebClientId: String = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")
 
+// Bob's Managed Agent IDs, written by managed-agents/setup.sh into a gitignored ids.env. They're
+// account-specific rather than secret; a build without the file has blank IDs and Bob says he
+// isn't set up.
+val bobIds = Properties().apply {
+    val file = rootProject.file("managed-agents/ids.env")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun bobId(key: String): String = bobIds.getProperty(key, "").trim()
+
 android {
     namespace = "com.garagelog.app"
     compileSdk = 37
@@ -28,6 +37,10 @@ android {
         versionCode = 1
         versionName = "1.0"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        buildConfigField("String", "BOB_AGENT_ID", "\"${bobId("BOB_AGENT_ID")}\"")
+        buildConfigField("String", "BOB_ENVIRONMENT_ID", "\"${bobId("BOB_ENVIRONMENT_ID")}\"")
+        buildConfigField("String", "BOB_NOTES_STORE_ID", "\"${bobId("BOB_MEMORY_STORE_ID")}\"")
+        buildConfigField("String", "BOB_DATA_STORE_ID", "\"${bobId("BOB_DATA_STORE_ID")}\"")
     }
 
     buildTypes {

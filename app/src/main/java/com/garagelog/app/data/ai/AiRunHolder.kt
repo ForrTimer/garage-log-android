@@ -11,6 +11,8 @@ data class AiRunState(
     val retrying: Boolean = false,
     /** Bob has finished researching and is writing a structured answer (a tool call). */
     val writing: Boolean = false,
+    /** Bob is looking things up in the app's records or his own notes. */
+    val reading: Boolean = false,
     val partialText: String = "",
     val error: String? = null,
 ) {
@@ -20,6 +22,7 @@ data class AiRunState(
             retrying -> "$ASSISTANT_NAME is busy. Retrying…"
             writing -> "Putting it together…"
             searching -> "Searching the web…"
+            reading -> "Checking your records…"
             else -> "Thinking…"
         }
 }
@@ -43,10 +46,12 @@ class AiRunHolder {
     fun start(key: String) = update(key) { AiRunState(running = true) }
 
     fun appendDelta(key: String, delta: String) = update(key) {
-        it.copy(running = true, searching = false, partialText = it.partialText + delta)
+        it.copy(running = true, searching = false, reading = false, partialText = it.partialText + delta)
     }
 
-    fun markSearching(key: String) = update(key) { it.copy(running = true, searching = true) }
+    fun markSearching(key: String) = update(key) { it.copy(running = true, searching = true, reading = false) }
+
+    fun markReading(key: String) = update(key) { it.copy(running = true, searching = false, reading = true) }
 
     fun markWriting(key: String) = update(key) { it.copy(running = true, searching = false, writing = true) }
 

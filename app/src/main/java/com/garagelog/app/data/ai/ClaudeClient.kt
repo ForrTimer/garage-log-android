@@ -63,7 +63,12 @@ data class ClaudeRequest(
 
 enum class ClaudeErrorKind { NoApiKey, Auth, RateLimit, Overloaded, Network, Timeout, Other }
 
-class ClaudeException(val kind: ClaudeErrorKind, message: String) : Exception(message) {
+class ClaudeException(
+    val kind: ClaudeErrorKind,
+    message: String,
+    /** The HTTP status, when the failure was an error response rather than a dropped connection. */
+    val status: Int? = null,
+) : Exception(message) {
     /** Phrased for a person looking at their truck, not a stack trace. */
     val userMessage: String
         get() = when (kind) {
