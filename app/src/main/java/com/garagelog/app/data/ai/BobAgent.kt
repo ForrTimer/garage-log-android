@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -73,9 +74,27 @@ class BobAgent(
             throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME isn't set up on this build. Run managed-agents/setup.sh, then rebuild.")
         }
         val existing = threadKey?.let { sessionFor(it) }?.takeIf { usable(it) }
-        val sessionId = existing ?: createSession(title).also { id -> threadKey?.let { adoptSession(it, id) } }
-        val message = if (existing != null) followUp else opening()
+        if (existing != null) {
+            try {
+                return finishTurn(threadKey, existing, runKey, followUp, onCustomTool)
+            } catch (e: ClaudeException) {
+                // A session paused at its cap (the app died before forgetting it) or otherwise
+                // refusing new messages: start the thread fresh rather than failing the question.
+                if (e.status != 400) throw e
+                forget(threadKey)
+            }
+        }
+        val sessionId = createSession(title).also { id -> threadKey?.let { adoptSession(it, id) } }
+        return finishTurn(threadKey, sessionId, runKey, opening(), onCustomTool)
+    }
 
+    private suspend fun finishTurn(
+        threadKey: String?,
+        sessionId: String,
+        runKey: String,
+        message: String,
+        onCustomTool: (String, String) -> String,
+    ): BobTurn {
         val turn = try {
             stream(runKey, sessionId, message, onCustomTool)
         } catch (e: CancellationException) {
@@ -139,6 +158,9 @@ class BobAgent(
         val state = TurnState()
         runHolder.start(runKey)
         var stream = api.openStream(sessionId)
+        // A blocked read doesn't notice cancellation; closing the stream unblocks it at once
+        // instead of after the next heartbeat or the read timeout.
+        val closeOnCancel = kotlin.coroutines.coroutineContext.job.invokeOnCompletion { stream.close() }
         try {
             val sent = api.sendEvents(sessionId, listOf(userMessage(message)))
             state.messageId = sent.firstOrNull()?.string("id")
@@ -174,6 +196,7 @@ class BobAgent(
                 handle(event, state, runKey, sessionId, onCustomTool)
             }
         } finally {
+            closeOnCancel.dispose()
             stream.close()
         }
 
