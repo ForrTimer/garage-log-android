@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun MarkdownText(markdown: String, modifier: Modifier = Modifier) {
-    val blocks = remember(markdown) { parseBlocks(markdown) }
+    val blocks = remember(markdown) { ruleAfterTldr(parseBlocks(markdown)) }
     Column(modifier = modifier) {
         blocks.forEach { block -> RenderBlock(block) }
     }
@@ -290,6 +290,20 @@ private fun parseBlocks(markdown: String): List<MdBlock> {
     }
     flushParagraph()
     return blocks
+}
+
+/**
+ * Bob opens every answer with a bold "TL;DR:" line; a rule under it separates the short answer
+ * from the reasoning. Done here rather than in Bob's instructions so it costs nothing, can't be
+ * forgotten by the model, and applies to answers saved before it existed. Only drawn once
+ * something follows the TL;DR, so a streaming answer doesn't end on a dangling line.
+ */
+private fun ruleAfterTldr(blocks: List<MdBlock>): List<MdBlock> {
+    val tldr = blocks.indexOfFirst {
+        it is MdBlock.Paragraph && it.text.trimStart('*', ' ').startsWith("TL;DR", ignoreCase = true)
+    }
+    if (tldr < 0 || tldr == blocks.lastIndex || blocks[tldr + 1] is MdBlock.Rule) return blocks
+    return blocks.toMutableList().apply { add(tldr + 1, MdBlock.Rule) }
 }
 
 private fun isTableRow(line: String): Boolean = line.startsWith("|") && line.count { it == '|' } >= 2

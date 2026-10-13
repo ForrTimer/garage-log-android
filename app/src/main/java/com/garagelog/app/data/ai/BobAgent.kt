@@ -69,6 +69,7 @@ class BobAgent(
         opening: () -> String,
         followUp: String,
         onCustomTool: (name: String, inputJson: String) -> String = { _, _ -> "Received." },
+        model: BobModel? = null,
     ): BobTurn {
         if (!isConfigured) {
             throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME isn't set up on this build. Run managed-agents/setup.sh, then rebuild.")
@@ -84,7 +85,7 @@ class BobAgent(
                 forget(threadKey)
             }
         }
-        val sessionId = createSession(title).also { id -> threadKey?.let { adoptSession(it, id) } }
+        val sessionId = createSession(title, model).also { id -> threadKey?.let { adoptSession(it, id) } }
         return finishTurn(threadKey, sessionId, runKey, opening(), onCustomTool)
     }
 
@@ -114,9 +115,25 @@ class BobAgent(
         if (e.status == 404) false else throw e
     }
 
-    private suspend fun createSession(title: String): String {
+    /**
+     * [model] runs this one session on a different model than the agent's own, without a new
+     * agent version. An override replaces the agent's whole model object, so it carries its own
+     * effort level too.
+     */
+    private suspend fun createSession(title: String, model: BobModel?): String {
         val body = buildJsonObject {
-            put("agent", AGENT_ID)
+            if (model == null) {
+                put("agent", AGENT_ID)
+            } else {
+                putJsonObject("agent") {
+                    put("type", "agent_with_overrides")
+                    put("id", AGENT_ID)
+                    putJsonObject("model") {
+                        put("id", model.id)
+                        put("effort", model.effort)
+                    }
+                }
+            }
             put("environment_id", ENVIRONMENT_ID)
             put("title", title.take(200))
             put(
@@ -366,5 +383,14 @@ class BobAgent(
         private val ENVIRONMENT_ID = BuildConfig.BOB_ENVIRONMENT_ID
         private val NOTES_STORE_ID = BuildConfig.BOB_NOTES_STORE_ID
         val DATA_STORE_ID: String = BuildConfig.BOB_DATA_STORE_ID
+
+        /**
+         * Plain chat: Haiku 5.5 at low effort, about 20x cheaper per token than the agent's
+         * Sonnet. Diagnosis and schedules keep the agent's own model and effort (bob.agent.yaml).
+         */
+        val CHAT_MODEL = BobModel(id = "claude-haiku-5-5", effort = "low")
     }
 }
+
+/** A model and effort level for one session, overriding the agent's. */
+data class BobModel(val id: String, val effort: String)

@@ -153,6 +153,8 @@ class AiRepository(
                 title = issue?.let { "Follow-up: ${it.title}" } ?: "Chat: ${vehicle.name}",
                 opening = opening,
                 followUp = question,
+                // An issue's follow-up stays on the diagnosis model; a plain chat runs cheap.
+                model = if (issue == null) BobAgent.CHAT_MODEL else null,
             )
             if (turn.text.isEmpty()) throw budgetSpent()
             chatDao.upsert(
