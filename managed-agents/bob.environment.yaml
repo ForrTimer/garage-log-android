@@ -1,9 +1,16 @@
-# The container Bob's file tools run in. Bob only reads and writes its memory mount, so the
-# container gets no outbound network at all; web search and fetch run on Anthropic's servers and
-# aren't affected by this.
+# The container Bob's file tools run in. Bob only reads and writes its memory mount, and bash is
+# off in the agent, so nothing in the container makes network calls of its own.
+#
+# Networking is unrestricted because `limited` with no allowed_hosts made web_search fail with
+# url_not_allowed (found 2026-10-13), even though the docs say web tools aren't governed by the
+# environment. Search can't be narrowed to a short host list without losing the owner and
+# mechanic forums Bob's diagnoses rely on. Owner's call, 2026-10-13.
+#
 # Create once: ant beta:environments create < managed-agents/bob.environment.yaml
+# Change:      ant beta:environments update --environment-id <id> < managed-agents/bob.environment.yaml
+#              (applies to new sessions only)
 name: garage-log-bob
 config:
   type: cloud
   networking:
-    type: limited
+    type: unrestricted
