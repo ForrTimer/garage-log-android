@@ -46,8 +46,15 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 (full mode by default since AGP 8) strips unused code and resources: most of the
+            // material-icons-extended library, for one. Every library here ships its own keep rules,
+            // and the app avoids reflection (Firestore through maps, generated serializers).
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Debug-signed until a release keystore exists, so a release build can be installed and
+            // tested (Google sign-in is registered to the debug key's SHA-1). Replace before publishing.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
