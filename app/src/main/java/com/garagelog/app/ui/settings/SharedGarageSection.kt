@@ -13,11 +13,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garagelog.app.data.cloud.GarageCloud
 import com.garagelog.app.data.cloud.GarageSetupOutcome
 import com.garagelog.app.ui.GarageLogViewModel
@@ -31,10 +31,10 @@ import com.garagelog.app.ui.theme.garageColors
 @Composable
 fun SharedGarageSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
     val activity = LocalActivity.current
-    val membership by viewModel.garageMembership.collectAsState()
-    val running by viewModel.garageSetupRunning.collectAsState()
-    val lastSetup by viewModel.lastGarageSetup.collectAsState()
-    val pendingInvite by viewModel.pendingInvite.collectAsState()
+    val membership by viewModel.garageMembership.collectAsStateWithLifecycle()
+    val running by viewModel.garageSetupRunning.collectAsStateWithLifecycle()
+    val lastSetup by viewModel.lastGarageSetup.collectAsStateWithLifecycle()
+    val pendingInvite by viewModel.pendingInvite.collectAsStateWithLifecycle()
 
     GarageCard(modifier = modifier) {
         Text("Shared garage", style = MaterialTheme.typography.titleMedium)

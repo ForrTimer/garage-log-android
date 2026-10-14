@@ -10,7 +10,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.ai.scheduleKey
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
@@ -87,8 +87,8 @@ fun BobScheduleSheet(
 /** Shared by the Add vehicle form and the Maintenance screen's suggestion sheet. */
 @Composable
 fun BobScheduleButton(viewModel: GarageLogViewModel, runKey: String, ready: Boolean, onRun: () -> Unit) {
-    val hasKey by viewModel.hasAiKey.collectAsState()
-    val runs by viewModel.aiRuns.collectAsState()
+    val hasKey by viewModel.hasAiKey.collectAsStateWithLifecycle()
+    val runs by viewModel.aiRuns.collectAsStateWithLifecycle()
     val run = runs[runKey]
     Column(modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) {
         when {

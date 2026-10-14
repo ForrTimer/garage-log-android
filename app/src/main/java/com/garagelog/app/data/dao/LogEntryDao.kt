@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LogEntryDao {
+    /** One row by id, tombstone or not (callers that want a live row check `deleted`). */
+    @Query("SELECT * FROM log_entries WHERE id = :id")
+    suspend fun getById(id: String): LogEntryEntity?
+
     @Query("SELECT * FROM log_entries WHERE deleted = 0 ORDER BY date DESC")
     fun observeAll(): Flow<List<LogEntryEntity>>
 

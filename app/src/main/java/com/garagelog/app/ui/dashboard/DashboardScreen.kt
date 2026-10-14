@@ -2,14 +2,14 @@ package com.garagelog.app.ui.dashboard
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
@@ -56,31 +56,34 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.garagelog.app.data.ai.ASSISTANT_NAME
-import com.garagelog.app.data.entity.LogCategory
+import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.IssueStatus
+import com.garagelog.app.data.entity.LogCategory
+import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.ui.AppTab
 import com.garagelog.app.ui.GarageLogUiState
-import com.garagelog.app.ui.components.VehicleAvatar
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
 import com.garagelog.app.ui.components.StatGrid
+import com.garagelog.app.ui.components.VehicleAvatar
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DueStatus
+import com.garagelog.app.util.ProjectedService
 import com.garagelog.app.util.ScheduleDueInfo
-import com.garagelog.app.util.drivingRate
-import com.garagelog.app.util.projectSchedules
-import com.garagelog.app.util.vehicleSpecLines
 import com.garagelog.app.util.computeDueInfo
+import com.garagelog.app.util.drivingRate
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
+import com.garagelog.app.util.projectSchedules
+import com.garagelog.app.util.vehicleSpecLines
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,6 +133,48 @@ fun DashboardScreen(
     }
 }
 
+/** Everything a vehicle card shows that's derived from the records. */
+private class CardData(
+    val logs: List<LogEntryEntity>,
+    val openIssues: List<IssueEntity>,
+    val serviceSpent: Double,
+    val fuelSpent: Double,
+    val lastLog: LogEntryEntity?,
+    val schedules: List<MaintenanceScheduleEntity>,
+    val dueItems: List<Pair<MaintenanceScheduleEntity, ScheduleDueInfo>>,
+    /** What comes next when nothing is due, projected from how fast this vehicle is driven. */
+    val nextProjected: ProjectedService?,
+)
+
+private fun cardData(v: VehicleEntity, uiState: GarageLogUiState): CardData {
+    val logs = uiState.logs.filter { it.vehicleId == v.id }
+    // Fuel is an ongoing running cost, not money spent on the vehicle's condition — mixing the two
+    // made "logged spend" drift upward with every fill-up and hid what maintenance actually cost.
+    val (fuelLogs, serviceLogs) = logs.partition { it.category == LogCategory.Fuel.name }
+    val schedules = uiState.schedules.filter { it.vehicleId == v.id }
+    val dueItems = schedules
+        .map { it to computeDueInfo(it, v.miles, v.isSevereDuty) }
+        .filter { it.second.status == DueStatus.OVERDUE || it.second.status == DueStatus.DUE_SOON }
+        .sortedWith(
+            compareByDescending<Pair<MaintenanceScheduleEntity, ScheduleDueInfo>> { it.second.status == DueStatus.OVERDUE }
+                .thenBy { it.second.remainingMiles ?: it.first.intervalMiles ?: Int.MAX_VALUE },
+        )
+    return CardData(
+        logs = logs,
+        openIssues = uiState.issues.filter { it.vehicleId == v.id && it.status != IssueStatus.Resolved.label },
+        serviceSpent = serviceLogs.sumOf { it.cost ?: 0.0 },
+        fuelSpent = fuelLogs.sumOf { it.cost ?: 0.0 },
+        lastLog = logs.maxByOrNull { it.date },
+        schedules = schedules,
+        dueItems = dueItems,
+        nextProjected = if (dueItems.isEmpty() && schedules.isNotEmpty()) {
+            projectSchedules(schedules, v.miles, v.isSevereDuty, drivingRate(logs)).firstOrNull { it.projectedIso != null }
+        } else {
+            null
+        },
+    )
+}
+
 @Composable
 private fun VehicleDashboardCard(
     uiState: GarageLogUiState,
@@ -142,22 +187,16 @@ private fun VehicleDashboardCard(
     onAskClaude: ((VehicleEntity) -> Unit)?,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
 ) {
-    val logs = uiState.logs.filter { it.vehicleId == v.id }
-    val openIssues = uiState.issues.filter { it.vehicleId == v.id && it.status != IssueStatus.Resolved.label }
-    // Fuel is an ongoing running cost, not money spent on the vehicle's condition — mixing the two
-    // made "logged spend" drift upward with every fill-up and hid what maintenance actually cost.
-    val (fuelLogs, serviceLogs) = logs.partition { it.category == LogCategory.Fuel.name }
-    val serviceSpent = serviceLogs.sumOf { it.cost ?: 0.0 }
-    val fuelSpent = fuelLogs.sumOf { it.cost ?: 0.0 }
-    val lastLog = logs.maxByOrNull { it.date }
-    val schedulesForVehicle = uiState.schedules.filter { it.vehicleId == v.id }
-    val dueItems = schedulesForVehicle
-        .map { it to computeDueInfo(it, v.miles, v.isSevereDuty) }
-        .filter { it.second.status == DueStatus.OVERDUE || it.second.status == DueStatus.DUE_SOON }
-        .sortedWith(
-            compareByDescending<Pair<MaintenanceScheduleEntity, ScheduleDueInfo>> { it.second.status == DueStatus.OVERDUE }
-                .thenBy { it.second.remainingMiles ?: it.first.intervalMiles ?: Int.MAX_VALUE },
-        )
+    // Recomputed only when this vehicle or the records change, not on every recomposition of the
+    // card (a dialog opening, a photo loading, the pager settling).
+    val card = remember(v, uiState.logs, uiState.issues, uiState.schedules) { cardData(v, uiState) }
+    val logs = card.logs
+    val openIssues = card.openIssues
+    val serviceSpent = card.serviceSpent
+    val fuelSpent = card.fuelSpent
+    val lastLog = card.lastLog
+    val schedulesForVehicle = card.schedules
+    val dueItems = card.dueItems
 
     var showMileageDialog by remember(v.id) { mutableStateOf(false) }
 
@@ -211,8 +250,7 @@ private fun VehicleDashboardCard(
             } else if (schedulesForVehicle.isNotEmpty()) {
                 // Nothing is due, so the useful thing to say is what's next and roughly when —
                 // projected from how fast this vehicle is actually being driven.
-                val next = projectSchedules(schedulesForVehicle, v.miles, v.isSevereDuty, drivingRate(logs))
-                    .firstOrNull { it.projectedIso != null }
+                val next = card.nextProjected
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                     PillBadge(text = "On track", tone = PillTone.Resolved)
                     Spacer(Modifier.width(8.dp))

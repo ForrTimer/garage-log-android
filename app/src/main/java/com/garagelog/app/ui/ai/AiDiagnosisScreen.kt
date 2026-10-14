@@ -15,12 +15,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.ai.AiRunState
 import com.garagelog.app.data.ai.ClaudeSource
@@ -56,7 +56,7 @@ fun AiDiagnosisScreen(
     // Null = hidden: follow-ups are Bob chat, which Standard members don't get.
     onAskFollowUp: (() -> Unit)?,
 ) {
-    val runs by runsFlow.collectAsState()
+    val runs by runsFlow.collectAsStateWithLifecycle()
     val stream = runs[issue.id] ?: AiRunState()
     val error = stream.error
     val scrollState = rememberScrollState()

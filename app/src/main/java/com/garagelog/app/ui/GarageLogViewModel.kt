@@ -209,7 +209,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun deleteVehicle(id: String) = viewModelScope.launch {
-        locator.vehicleRepository.getAll().find { it.id == id }?.photoPath?.let { locator.photoStore.delete(it) }
+        locator.vehicleRepository.getById(id)?.photoPath?.let { locator.photoStore.delete(it) }
         locator.photoRepository.softDeleteForVehicle(id)
         locator.logRepository.softDeleteForVehicle(id)
         locator.issueRepository.softDeleteForVehicle(id)
@@ -357,7 +357,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
 
     fun saveLog(entry: LogEntryEntity) = viewModelScope.launch {
         // The forms rebuild the entity, so who created it comes from the stored row, not the form.
-        val createdBy = locator.logRepository.getAllForSync().find { it.id == entry.id }?.createdBy ?: locator.garageCloud.currentUid
+        val createdBy = locator.logRepository.getById(entry.id)?.createdBy ?: locator.garageCloud.currentUid
         locator.logRepository.upsert(entry.copy(createdBy = createdBy, updatedAt = System.currentTimeMillis()))
         val mileage = entry.mileage
         if (mileage != null) {
@@ -380,7 +380,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         // edit) for that rarer case.
         val scheduleId = entry.fulfillsScheduleId
         if (entry.category == LogCategory.Routine.name && scheduleId != null) {
-            locator.scheduleRepository.getAll().find { it.id == scheduleId }?.let { schedule ->
+            locator.scheduleRepository.getById(scheduleId)?.takeUnless { it.deleted }?.let { schedule ->
                 val currentLastDone = schedule.lastDoneDate
                 if (currentLastDone == null || entry.date >= currentLastDone) {
                     locator.scheduleRepository.upsert(
@@ -404,7 +404,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun saveIssue(issue: IssueEntity) = viewModelScope.launch {
-        val createdBy = locator.issueRepository.getAllForSync().find { it.id == issue.id }?.createdBy ?: locator.garageCloud.currentUid
+        val createdBy = locator.issueRepository.getById(issue.id)?.createdBy ?: locator.garageCloud.currentUid
         locator.issueRepository.upsert(issue.copy(createdBy = createdBy, updatedAt = System.currentTimeMillis()))
         requestSync()
     }
@@ -428,7 +428,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun markScheduleDoneToday(schedule: MaintenanceScheduleEntity) = viewModelScope.launch {
-        val vehicle = locator.vehicleRepository.getAll().find { it.id == schedule.vehicleId }
+        val vehicle = locator.vehicleRepository.getById(schedule.vehicleId)?.takeUnless { it.deleted }
         locator.scheduleRepository.upsert(
             schedule.copy(
                 lastDoneMileage = vehicle?.miles ?: schedule.lastDoneMileage,

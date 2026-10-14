@@ -3,6 +3,7 @@ package com.garagelog.app.data.repository
 import com.garagelog.app.data.dao.NotificationPrefsDao
 import com.garagelog.app.data.entity.NotificationPrefsEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 interface NotificationPrefsRepository {
@@ -12,7 +13,7 @@ interface NotificationPrefsRepository {
 }
 
 class RoomNotificationPrefsRepository(private val dao: NotificationPrefsDao) : NotificationPrefsRepository {
-    override fun observe(): Flow<NotificationPrefsEntity> = dao.observe().map { it ?: NotificationPrefsEntity() }
+    override fun observe(): Flow<NotificationPrefsEntity> = dao.observe().map { it ?: NotificationPrefsEntity() }.distinctUntilChanged()
     override suspend fun get(): NotificationPrefsEntity = dao.get() ?: NotificationPrefsEntity()
     override suspend fun upsert(prefs: NotificationPrefsEntity) = dao.upsert(prefs)
 }

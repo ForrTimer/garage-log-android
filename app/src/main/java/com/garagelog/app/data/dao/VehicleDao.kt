@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VehicleDao {
+    /** One row by id, tombstone or not (callers that want a live row check `deleted`). */
+    @Query("SELECT * FROM vehicles WHERE id = :id")
+    suspend fun getById(id: String): VehicleEntity?
+
     @Query("SELECT * FROM vehicles WHERE deleted = 0 ORDER BY sortOrder ASC")
     fun observeAll(): Flow<List<VehicleEntity>>
 
@@ -29,6 +33,8 @@ interface VehicleDao {
     @Query("DELETE FROM vehicles")
     suspend fun deleteAll()
 
-    @Query("UPDATE vehicles SET miles = :miles, milesDate = :milesDate, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun bumpMileage(id: String, miles: Int, milesDate: String, updatedAt: Long)
+    // The odometer only moves forward: the check and the write are one statement, so two saves
+    // racing can't lower it.
+    @Query("UPDATE vehicles SET miles = :miles, milesDate = :milesDate, updatedAt = :updatedAt WHERE id = :id AND (miles IS NULL OR miles < :miles)")
+    suspend fun bumpMileageIfHigher(id: String, miles: Int, milesDate: String, updatedAt: Long)
 }

@@ -1,9 +1,11 @@
 package com.garagelog.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,13 +18,23 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -30,13 +42,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -45,55 +58,42 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.garagelog.app.ui.theme.GarageFabShape
-import com.garagelog.app.ui.theme.garageColors
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
-import com.garagelog.app.ui.components.VehiclePickerRow
-import androidx.activity.compose.BackHandler
 import com.garagelog.app.ui.ai.AiChatScreen
 import com.garagelog.app.ui.ai.AiDiagnosisScreen
+import com.garagelog.app.ui.components.GarageDrawer
+import com.garagelog.app.ui.components.VehiclePickerRow
 import com.garagelog.app.ui.dashboard.DashboardScreen
 import com.garagelog.app.ui.dashboard.VehicleReorderScreen
 import com.garagelog.app.ui.issues.IssueFormSheet
 import com.garagelog.app.ui.issues.IssuesScreen
 import com.garagelog.app.ui.log.LogFormSheet
 import com.garagelog.app.ui.log.LogScreen
-import com.garagelog.app.ui.schedule.ScheduleFormSheet
 import com.garagelog.app.ui.schedule.BobScheduleSheet
+import com.garagelog.app.ui.schedule.ScheduleFormSheet
 import com.garagelog.app.ui.schedule.ScheduleScreen
-import com.garagelog.app.ui.settings.SettingsScreen
-import com.garagelog.app.ui.settings.VehicleFormSheet
-import com.garagelog.app.ui.trends.TrendsScreen
-import com.garagelog.app.util.todayIso
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.runtime.rememberCoroutineScope
-import com.garagelog.app.data.ai.ASSISTANT_NAME
-import com.garagelog.app.ui.components.GarageDrawer
 import com.garagelog.app.ui.settings.ManageVehiclesScreen
 import com.garagelog.app.ui.settings.MembersScreen
-import kotlinx.coroutines.launch
+import com.garagelog.app.ui.settings.SettingsScreen
+import com.garagelog.app.ui.settings.VehicleFormSheet
+import com.garagelog.app.ui.theme.GarageFabShape
+import com.garagelog.app.ui.theme.garageColors
+import com.garagelog.app.ui.trends.TrendsScreen
+import com.garagelog.app.util.todayIso
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 private val mainTabs = listOf(AppTab.Dashboard, AppTab.Log, AppTab.Issues, AppTab.Trends)
 
@@ -144,12 +144,12 @@ private sealed class Sheet {
 
 @Composable
 fun GarageLogApp(viewModel: GarageLogViewModel) {
-    val uiState by viewModel.uiState.collectAsState()
-    val syncStatus by viewModel.syncStatus.collectAsState()
-    val diagnoses by viewModel.diagnoses.collectAsState()
-    val chatMessages by viewModel.chatMessages.collectAsState()
-    val hasAiKey by viewModel.hasAiKey.collectAsState()
-    val access by viewModel.access.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
+    val diagnoses by viewModel.diagnoses.collectAsStateWithLifecycle()
+    val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
+    val hasAiKey by viewModel.hasAiKey.collectAsStateWithLifecycle()
+    val access by viewModel.access.collectAsStateWithLifecycle()
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
     var reorderMode by remember { mutableStateOf(false) }
     val context = LocalContext.current

@@ -33,7 +33,7 @@ private data class DriveFileList(val files: List<DriveFile> = emptyList())
  * full `google-api-services-drive` client, since all we need is list/get/create/update/delete
  * against one JSON snapshot file and a handful of photo files.
  */
-class DriveApiClient(private val httpClient: OkHttpClient = OkHttpClient()) {
+class DriveApiClient(private val httpClient: OkHttpClient) {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun findFileByName(accessToken: String, name: String): DriveFileRef? = withContext(Dispatchers.IO) {

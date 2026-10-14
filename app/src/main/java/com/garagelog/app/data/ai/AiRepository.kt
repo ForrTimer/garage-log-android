@@ -48,9 +48,9 @@ class AiRepository(
 
     /** Throws [ClaudeException] on failure, after recording it against [issueId] for the UI. */
     suspend fun runDiagnosis(issueId: String) = reporting(issueId) {
-        val issue = issueRepository.getAll().find { it.id == issueId }
+        val issue = issueRepository.getById(issueId)?.takeUnless { it.deleted }
             ?: error("That issue no longer exists.")
-        val vehicle = vehicleRepository.getAll().find { it.id == issue.vehicleId }
+        val vehicle = vehicleRepository.getById(issue.vehicleId)?.takeUnless { it.deleted }
             ?: error("That issue's vehicle no longer exists.")
         mirror.sync()
 
@@ -96,11 +96,10 @@ class AiRepository(
     suspend fun runChat(vehicleId: String, issueId: String?, question: String) {
         val key = AiChatMessageEntity.threadKey(vehicleId, issueId)
         reporting(key) {
-            val vehicle = vehicleRepository.getAll().find { it.id == vehicleId }
+            val vehicle = vehicleRepository.getById(vehicleId)?.takeUnless { it.deleted }
                 ?: error("That vehicle no longer exists.")
-            val history = chatDao.getAll().filter { it.vehicleId == vehicleId && it.issueId == issueId }
-                .sortedBy { it.createdAt }
-            val issue = issueId?.let { id -> issueRepository.getAll().find { it.id == id } }
+            val history = chatDao.getThread(vehicleId, issueId)
+            val issue = issueId?.let { issueRepository.getById(it)?.takeUnless { issue -> issue.deleted } }
             // Only needed when the diagnosis session is gone and the thread starts over.
             val diagnosis = issueId?.let { diagnosisDao.getForIssue(it) }
             val vehicleLine = vehicleLine(vehicle)

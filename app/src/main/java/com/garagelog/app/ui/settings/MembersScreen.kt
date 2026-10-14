@@ -17,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garagelog.app.data.cloud.GarageCloud
 import com.garagelog.app.data.cloud.GarageMember
 import com.garagelog.app.data.cloud.StandardPermissions
@@ -48,8 +48,8 @@ private const val STANDARD = "Standard"
 /** Admins only: who's in the shared garage, who's invited, and what Standard members may do. */
 @Composable
 fun MembersScreen(vehicles: List<VehicleEntity>, viewModel: GarageLogViewModel) {
-    val page by viewModel.membersPage.collectAsState()
-    val busy by viewModel.membersBusy.collectAsState()
+    val page by viewModel.membersPage.collectAsStateWithLifecycle()
+    val busy by viewModel.membersBusy.collectAsStateWithLifecycle()
     var inviting by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<GarageMember?>(null) }
 

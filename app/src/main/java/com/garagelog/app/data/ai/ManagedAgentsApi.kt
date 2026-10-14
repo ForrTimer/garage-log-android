@@ -37,7 +37,8 @@ data class RemoteMemory(val id: String, val path: String, val sha256: String)
  */
 class ManagedAgentsApi(
     private val keyStore: AiKeyStore,
-    private val httpClient: OkHttpClient = defaultHttpClient(),
+    /** Derived from the app's shared client by [withTimeouts], so it shares its pools. */
+    private val httpClient: OkHttpClient,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -179,7 +180,7 @@ class ManagedAgentsApi(
          * The event stream sends heartbeats, so a long silence means a dead connection, not a slow
          * answer — a short read timeout is right here, unlike the Messages API stream.
          */
-        fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        fun withTimeouts(shared: OkHttpClient): OkHttpClient = shared.newBuilder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(90, TimeUnit.SECONDS)
             .build()

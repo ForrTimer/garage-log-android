@@ -8,16 +8,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.theme.garageColors
@@ -27,8 +27,8 @@ import kotlinx.coroutines.flow.collectLatest
 @Composable
 fun AccountSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
     val activity = LocalActivity.current
-    val email by viewModel.signedInEmail.collectAsState()
-    val syncStatus by viewModel.syncStatus.collectAsState()
+    val email by viewModel.signedInEmail.collectAsStateWithLifecycle()
+    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
 
     val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         viewModel.completeDriveConsent(result.data)

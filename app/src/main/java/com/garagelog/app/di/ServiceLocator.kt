@@ -1,6 +1,7 @@
 package com.garagelog.app.di
 
 import android.content.Context
+import androidx.glance.appwidget.updateAll
 import androidx.room.Room
 import androidx.work.WorkManager
 import com.garagelog.app.data.ai.AiKeyStore
@@ -11,12 +12,13 @@ import com.garagelog.app.data.ai.BobAgent
 import com.garagelog.app.data.ai.GarageMirror
 import com.garagelog.app.data.ai.ManagedAgentsApi
 import com.garagelog.app.data.auth.AuthManager
-import com.garagelog.app.data.cloud.GarageCloud
-import com.garagelog.app.data.cloud.LocalGarageData
-import com.garagelog.app.data.cloud.GarageSync
 import com.garagelog.app.data.backup.BackupManager
 import com.garagelog.app.data.catalog.VehicleCatalog
+import com.garagelog.app.data.cloud.GarageCloud
+import com.garagelog.app.data.cloud.GarageSync
+import com.garagelog.app.data.cloud.LocalGarageData
 import com.garagelog.app.data.db.AppDatabase
+import com.garagelog.app.data.db.MIGRATION_10_11
 import com.garagelog.app.data.db.MIGRATION_1_2
 import com.garagelog.app.data.db.MIGRATION_2_3
 import com.garagelog.app.data.db.MIGRATION_3_4
@@ -26,7 +28,6 @@ import com.garagelog.app.data.db.MIGRATION_6_7
 import com.garagelog.app.data.db.MIGRATION_7_8
 import com.garagelog.app.data.db.MIGRATION_8_9
 import com.garagelog.app.data.db.MIGRATION_9_10
-import com.garagelog.app.data.db.MIGRATION_10_11
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
@@ -47,7 +48,7 @@ import com.garagelog.app.data.sync.SyncStatusHolder
 import com.garagelog.app.data.sync.SyncWorker
 import com.garagelog.app.notifications.MileageReminderScheduler
 import com.garagelog.app.widget.GarageLogWidget
-import androidx.glance.appwidget.updateAll
+import okhttp3.OkHttpClient
 
 /**
  * Hand-rolled composition root — no DI framework needed for a single-user local app.
@@ -74,7 +75,11 @@ class ServiceLocator(context: Context) {
     val notificationPrefsRepository: NotificationPrefsRepository = RoomNotificationPrefsRepository(database.notificationPrefsDao())
 
     val photoStore = PhotoStore(appContext)
-    val vehicleCatalog = VehicleCatalog()
+    // One OkHttp client for the whole app: each one owns a connection pool and threads, so the
+    // users below derive their own timeouts from it with newBuilder(), which shares them.
+    private val httpClient = OkHttpClient()
+
+    val vehicleCatalog = VehicleCatalog(httpClient)
 
     val backupManager = BackupManager(
         vehicleRepository = vehicleRepository,
@@ -87,7 +92,7 @@ class ServiceLocator(context: Context) {
 
     val aiKeyStore = AiKeyStore(appContext)
     val aiRunHolder = AiRunHolder()
-    private val managedAgentsApi = ManagedAgentsApi(aiKeyStore)
+    private val managedAgentsApi = ManagedAgentsApi(aiKeyStore, ManagedAgentsApi.withTimeouts(httpClient))
     val aiRepository = AiRepository(
         bob = BobAgent(appContext, managedAgentsApi, aiRunHolder),
         mirror = GarageMirror(
@@ -115,7 +120,7 @@ class ServiceLocator(context: Context) {
         scheduleRepository = scheduleRepository,
         localData = localGarageData,
     )
-    private val driveApiClient = DriveApiClient()
+    private val driveApiClient = DriveApiClient(httpClient)
     val syncStatusHolder = SyncStatusHolder()
     private val garageSync = GarageSync(
         context = appContext,

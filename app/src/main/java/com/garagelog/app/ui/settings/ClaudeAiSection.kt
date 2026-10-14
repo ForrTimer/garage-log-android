@@ -14,10 +14,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.ConfirmDialog
@@ -29,7 +29,7 @@ import com.garagelog.app.ui.components.GarageCard
  */
 @Composable
 fun ClaudeAiSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
-    val hasKey by viewModel.hasAiKey.collectAsState()
+    val hasKey by viewModel.hasAiKey.collectAsStateWithLifecycle()
     var draft by remember { mutableStateOf("") }
     var confirmingRemove by remember { mutableStateOf(false) }
 

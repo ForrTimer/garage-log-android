@@ -3,9 +3,11 @@ package com.garagelog.app.data.repository
 import com.garagelog.app.data.dao.LogEntryDao
 import com.garagelog.app.data.entity.LogEntryEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 interface LogRepository {
     fun observeAll(): Flow<List<LogEntryEntity>>
+    suspend fun getById(id: String): LogEntryEntity?
     suspend fun getAll(): List<LogEntryEntity>
     suspend fun getAllForSync(): List<LogEntryEntity>
     suspend fun count(): Int
@@ -16,7 +18,8 @@ interface LogRepository {
 }
 
 class RoomLogRepository(private val dao: LogEntryDao) : LogRepository {
-    override fun observeAll(): Flow<List<LogEntryEntity>> = dao.observeAll()
+    override fun observeAll(): Flow<List<LogEntryEntity>> = dao.observeAll().distinctUntilChanged()
+    override suspend fun getById(id: String): LogEntryEntity? = dao.getById(id)
     override suspend fun getAll(): List<LogEntryEntity> = dao.getAll()
     override suspend fun getAllForSync(): List<LogEntryEntity> = dao.getAllForSync()
     override suspend fun count(): Int = dao.count()

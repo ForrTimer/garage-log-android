@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MaintenanceScheduleDao {
+    /** One row by id, tombstone or not (callers that want a live row check `deleted`). */
+    @Query("SELECT * FROM maintenance_schedules WHERE id = :id")
+    suspend fun getById(id: String): MaintenanceScheduleEntity?
+
     @Query("SELECT * FROM maintenance_schedules WHERE deleted = 0 ORDER BY taskName ASC")
     fun observeAll(): Flow<List<MaintenanceScheduleEntity>>
 

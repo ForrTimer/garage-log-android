@@ -33,8 +33,8 @@ interface AiChatDao {
     @Query("SELECT * FROM ai_chat_messages ORDER BY createdAt ASC")
     fun observeAll(): Flow<List<AiChatMessageEntity>>
 
-    @Query("SELECT * FROM ai_chat_messages ORDER BY createdAt ASC")
-    suspend fun getAll(): List<AiChatMessageEntity>
+    @Query("SELECT * FROM ai_chat_messages WHERE vehicleId = :vehicleId AND issueId IS :issueId ORDER BY createdAt ASC")
+    suspend fun getThread(vehicleId: String, issueId: String?): List<AiChatMessageEntity>
 
     @Upsert
     suspend fun upsert(message: AiChatMessageEntity)

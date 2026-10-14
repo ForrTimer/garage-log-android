@@ -51,12 +51,13 @@ data class CatalogSpec(
  * knows, the form still takes whatever is typed. Results are cached for the process's lifetime —
  * the data changes yearly, and a form session asks the same questions repeatedly as you type.
  */
-class VehicleCatalog(
-    private val http: OkHttpClient = OkHttpClient.Builder()
+class VehicleCatalog(shared: OkHttpClient) {
+    // Short timeouts: these answer a dropdown while someone types, so a slow source is skipped.
+    private val http: OkHttpClient = shared.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
-        .build(),
-) {
+        .build()
+
     private val json = Json { ignoreUnknownKeys = true }
     private val cache = ConcurrentHashMap<String, Any>()
 

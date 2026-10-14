@@ -3,9 +3,11 @@ package com.garagelog.app.data.repository
 import com.garagelog.app.data.dao.MaintenanceScheduleDao
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 interface ScheduleRepository {
     fun observeAll(): Flow<List<MaintenanceScheduleEntity>>
+    suspend fun getById(id: String): MaintenanceScheduleEntity?
     suspend fun getAll(): List<MaintenanceScheduleEntity>
     suspend fun getAllForSync(): List<MaintenanceScheduleEntity>
     suspend fun count(): Int
@@ -16,7 +18,8 @@ interface ScheduleRepository {
 }
 
 class RoomScheduleRepository(private val dao: MaintenanceScheduleDao) : ScheduleRepository {
-    override fun observeAll(): Flow<List<MaintenanceScheduleEntity>> = dao.observeAll()
+    override fun observeAll(): Flow<List<MaintenanceScheduleEntity>> = dao.observeAll().distinctUntilChanged()
+    override suspend fun getById(id: String): MaintenanceScheduleEntity? = dao.getById(id)
     override suspend fun getAll(): List<MaintenanceScheduleEntity> = dao.getAll()
     override suspend fun getAllForSync(): List<MaintenanceScheduleEntity> = dao.getAllForSync()
     override suspend fun count(): Int = dao.count()
