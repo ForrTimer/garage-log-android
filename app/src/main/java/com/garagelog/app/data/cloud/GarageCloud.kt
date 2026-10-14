@@ -163,8 +163,14 @@ class GarageCloud(
         val uid = user.uid
         val email = user.email.orEmpty().lowercase()
 
-        val existing = (db.document("users/$uid").get().await().get("garageIds") as? List<*>)
+        var existing = (db.document("users/$uid").get().await().get("garageIds") as? List<*>)
             ?.filterIsInstance<String>()?.firstOrNull()
+        if (existing != null && !db.document("garages/$existing/members/$uid").get().await().exists()) {
+            // Removed from it since (their phone may never have synced to notice): forget it, so a
+            // new invite or a garage of their own can take its place.
+            forgetGarageFor(uid, existing)
+            existing = null
+        }
         if (existing == null) {
             findInvite(email)?.let { invite ->
                 return GarageSetupOutcome.Invited(invite, vehicleRepository.getAll().size)
@@ -413,10 +419,20 @@ class GarageCloud(
         if (next != current) remember(next)
     }
 
-    /** An admin removed this person: the phone stops syncing with the garage. */
-    fun forgetGarage() {
+    /**
+     * An admin removed this person: the phone stops syncing with the garage, and their account
+     * stops listing it, so signing in again finds a new invite rather than a garage they can't open.
+     */
+    suspend fun forgetGarage() {
+        val garageId = _membership.value.garageId
+        val uid = auth.currentUser?.uid
         prefs.edit().remove(KEY_GARAGE).remove(KEY_ROLE).remove(KEY_VEHICLES).remove(KEY_PERMISSIONS).apply()
         _membership.value = GarageMembership(null, null, _membership.value.email)
+        if (garageId != null && uid != null) runCatching { forgetGarageFor(uid, garageId) }
+    }
+
+    private suspend fun forgetGarageFor(uid: String, garageId: String) {
+        db.document("users/$uid").update("garageIds", FieldValue.arrayRemove(garageId)).await()
     }
 
     private fun remember(membership: GarageMembership) {
