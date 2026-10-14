@@ -1,41 +1,16 @@
 package com.garagelog.app.ui
 
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.content.IntentSender
-import android.net.Uri
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.garagelog.app.data.ai.AiRunState
-import com.garagelog.app.data.ai.ScheduleSuggestion
-import com.garagelog.app.data.ai.scheduleKey
-import com.garagelog.app.data.entity.AiChatMessageEntity
-import com.garagelog.app.data.entity.AiDiagnosisEntity
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.garagelog.app.data.entity.IssueEntity
-import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.NotificationPrefsEntity
-import com.garagelog.app.data.entity.PhotoEntity
-import com.garagelog.app.data.entity.PhotoOwnerType
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.sync.SyncStatus
-import com.garagelog.app.data.auth.SignInStep
-import com.garagelog.app.data.cloud.GarageMembership
-import com.garagelog.app.data.cloud.GarageSetupOutcome
-import com.garagelog.app.data.cloud.GarageSetupResult
-import com.garagelog.app.data.cloud.MembersPage
-import com.garagelog.app.data.cloud.StandardPermissions
 import com.garagelog.app.di.ServiceLocator
-import com.garagelog.app.notifications.MileageReminderScheduler
-import com.garagelog.app.util.todayIso
-import java.io.InputStream
-import java.io.OutputStream
-import java.util.UUID
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,8 +19,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 enum class AppTab { Dashboard, Log, Issues, Trends }
@@ -94,33 +67,25 @@ private data class RepoBundle(
     val notificationPrefs: NotificationPrefsEntity,
 )
 
+private data class UiFlags(
+    val activeVehicleId: String?,
+    val currentTab: AppTab,
+    val subScreen: SubScreen?,
+)
+
+/**
+ * The app shell: where you are (tab, sub-screen, vehicle filter), the records every tab reads,
+ * what this person may do in a shared garage, and sync status. Changing records is
+ * [RecordsViewModel]'s job; Bob, account settings and the shared garage have their own.
+ */
 class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
 
     private val activeVehicleId = MutableStateFlow<String?>(null)
     private val currentTab = MutableStateFlow(AppTab.Dashboard)
     private val subScreen = MutableStateFlow<SubScreen?>(null)
 
-    /**
-     * Keyed by what the request is for, and owned by a process-wide holder rather than this
-     * ViewModel, so an answer in flight survives the screen being closed or the app being left.
-     */
-    val aiRuns: StateFlow<Map<String, AiRunState>> = locator.aiRunHolder.runs
-
-    val hasAiKey: StateFlow<Boolean> = locator.aiKeyStore.hasKey
-
-    val diagnoses: StateFlow<Map<String, AiDiagnosisEntity>> =
-        locator.aiRepository.observeDiagnoses()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
-
-    val chatMessages: StateFlow<List<AiChatMessageEntity>> =
-        locator.aiRepository.observeChat()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private val _messages = MutableSharedFlow<String>()
-    val messages: SharedFlow<String> = _messages
-
-    private val _pendingDriveConsent = MutableSharedFlow<IntentSender>()
-    val pendingDriveConsent: SharedFlow<IntentSender> = _pendingDriveConsent
+    /** Every ViewModel's confirmations and errors, shown as toasts by GarageLogApp. */
+    val messages: SharedFlow<String> = locator.userMessages.messages
 
     // True once the first real Room read has landed — distinct from uiState's synchronous
     // default value, so the splash screen can wait for actual data instead of dismissing
@@ -128,8 +93,10 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     private val _isDataLoaded = MutableStateFlow(false)
     val isDataLoaded: StateFlow<Boolean> = _isDataLoaded
 
-    val signedInEmail: StateFlow<String?> = locator.authManager.signedInEmail
     val syncStatus: StateFlow<SyncStatus> = locator.syncStatusHolder.status
+
+    val access: StateFlow<Access> = locator.garageCloud.membership.map { Access(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Access(locator.garageCloud.membership.value))
 
     private val repoBundle = combine(
         locator.vehicleRepository.observeAll(),
@@ -148,15 +115,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         }
     }
 
-    private val uiFlags = combine(activeVehicleId, currentTab, subScreen) { a, b, c ->
-        UiFlags(a, b, c)
-    }
-
-    private data class UiFlags(
-        val activeVehicleId: String?,
-        val currentTab: AppTab,
-        val subScreen: SubScreen?,
-    )
+    private val uiFlags = combine(activeVehicleId, currentTab, subScreen) { a, b, c -> UiFlags(a, b, c) }
 
     val uiState: StateFlow<GarageLogUiState> = combine(repoBundle, uiFlags) { bundle, flags ->
         GarageLogUiState(
@@ -165,7 +124,9 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
             issues = bundle.issues,
             schedules = bundle.schedules,
             notificationPrefs = bundle.notificationPrefs,
-            activeVehicleId = flags.activeVehicleId,
+            // A filter on a vehicle that's gone (deleted here, removed by a sync, a reset to demo
+            // data) would show empty tabs; it falls back to "All" instead.
+            activeVehicleId = flags.activeVehicleId?.takeIf { id -> bundle.vehicles.any { it.id == id } },
             currentTab = flags.currentTab,
             subScreen = flags.subScreen,
         )
@@ -180,13 +141,18 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         }
         activeVehicleId.value = id
     }
+
     fun selectTab(tab: AppTab) {
         currentTab.value = tab
         subScreen.value = null
     }
+
     fun openSchedule() { subScreen.value = SubScreen.Schedule }
     fun openSettings() { subScreen.value = SubScreen.Settings }
     fun openManageVehicles() { subScreen.value = SubScreen.ManageVehicles }
+    fun openMembers() { subScreen.value = SubScreen.Members }
+    fun openDiagnosis(issueId: String) { subScreen.value = SubScreen.Diagnosis(issueId) }
+    fun openChat(vehicleId: String, issueId: String? = null) { subScreen.value = SubScreen.Chat(vehicleId, issueId) }
     fun closeSubScreen() { subScreen.value = null }
 
     /** Filters to [vehicleId] and switches to [tab] — e.g. tapping a dashboard stat. */
@@ -201,514 +167,9 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         selectTab(AppTab.Dashboard)
     }
 
-    private suspend fun requestSync() = locator.requestSync()
+    fun syncNow() = viewModelScope.launch { locator.requestSync() }
 
-    fun saveVehicle(vehicle: VehicleEntity) = viewModelScope.launch {
-        locator.vehicleRepository.upsert(vehicle.copy(updatedAt = System.currentTimeMillis()))
-        requestSync()
-    }
-
-    fun deleteVehicle(id: String) = viewModelScope.launch {
-        locator.vehicleRepository.getById(id)?.photoPath?.let { locator.photoStore.delete(it) }
-        locator.photoRepository.softDeleteForVehicle(id)
-        locator.logRepository.softDeleteForVehicle(id)
-        locator.issueRepository.softDeleteForVehicle(id)
-        locator.scheduleRepository.softDeleteForVehicle(id)
-        locator.vehicleRepository.softDelete(id)
-        // AI data is hard-deleted, not soft-deleted — it never syncs, so there's no peer that
-        // needs to learn the row is gone.
-        locator.aiRepository.deleteForVehicle(id)
-        if (activeVehicleId.value == id) activeVehicleId.value = null
-        requestSync()
-    }
-
-    /**
-     * Copies a freshly-picked photo into app storage right away and hands the resulting stable
-     * file path back via [onComplete] — used by VehicleFormSheet so the sheet can preview/carry
-     * the photo through to Save without holding onto the picker's own content:// Uri. That Uri's
-     * read grant is short-lived (Android's Photo Picker doesn't intend it to be held onto), so a
-     * photo held only as a Uri until Save was tapped would go unreadable within seconds.
-     * Runs in viewModelScope rather than a Composable-scoped coroutine so the copy itself can't
-     * be cancelled by anything happening to the sheet's composition while the picker is on top —
-     * only the (harmless-if-dropped) UI callback is at risk of firing into a disposed sheet.
-     */
-    fun copyPhotoToAppStorage(sourceUri: Uri, onComplete: (String?) -> Unit) = viewModelScope.launch {
-        val path = locator.photoStore.copyIntoAppStorage(sourceUri, UUID.randomUUID().toString())
-        onComplete(path)
-    }
-
-    /** Deletes a photo file directly — for a staged-but-not-yet-saved copy from [copyPhotoToAppStorage]. */
-    fun deletePhotoFile(path: String) {
-        locator.photoStore.delete(path)
-    }
-
-    fun setVehiclePhoto(vehicle: VehicleEntity, sourceUri: Uri) = viewModelScope.launch {
-        val path = locator.photoStore.copyIntoAppStorage(sourceUri, UUID.randomUUID().toString()) ?: return@launch
-        vehicle.photoPath?.let { locator.photoStore.delete(it) }
-        locator.vehicleRepository.upsert(vehicle.copy(photoPath = path, updatedAt = System.currentTimeMillis()))
-        requestSync()
-    }
-
-    fun removeVehiclePhoto(vehicle: VehicleEntity) = viewModelScope.launch {
-        vehicle.photoPath?.let { locator.photoStore.delete(it) }
-        locator.vehicleRepository.upsert(vehicle.copy(photoPath = null, updatedAt = System.currentTimeMillis()))
-        requestSync()
-    }
-
-    /**
-     * The Dashboard's quick "Update mileage" dialog — deliberately lighter-weight than opening a
-     * full Log entry sheet for something this routine, but every mileage change still needs to be
-     * tracked for the Trends tab's odometer chart, so it writes a Mileage-category log entry
-     * alongside the vehicle bump rather than updating the vehicle silently.
-     */
-    fun updateMileage(vehicle: VehicleEntity, mileage: Int) = viewModelScope.launch {
-        val today = todayIso()
-        locator.vehicleRepository.bumpMileageIfHigher(vehicle.id, mileage, today)
-        locator.logRepository.upsert(
-            LogEntryEntity(
-                id = UUID.randomUUID().toString(),
-                vehicleId = vehicle.id,
-                date = today,
-                mileage = mileage,
-                category = LogCategory.Mileage.name,
-                task = "Mileage update",
-                cost = null,
-                parts = "",
-                notes = "",
-                createdBy = locator.garageCloud.currentUid,
-                updatedAt = System.currentTimeMillis(),
-            ),
-        )
-        requestSync()
-    }
-
-    /** Persists a new home-tab display order after the user drags a vehicle tile to a new spot. */
-    fun reorderVehicles(orderedIds: List<String>) = viewModelScope.launch {
-        val vehicles = locator.vehicleRepository.getAll()
-        val now = System.currentTimeMillis()
-        orderedIds.forEachIndexed { index, id ->
-            val vehicle = vehicles.find { it.id == id } ?: return@forEachIndexed
-            if (vehicle.sortOrder != index) locator.vehicleRepository.upsert(vehicle.copy(sortOrder = index, updatedAt = now))
-        }
-        requestSync()
-    }
-
-    /**
-     * Copies every active maintenance schedule item from one vehicle onto another, as fresh
-     * (not-yet-done) entries — skipping any task the target already tracks under the same name,
-     * which is how a copied "Oil change" used to land beside the target's own.
-     */
-    fun copySchedulesToVehicle(sourceVehicleId: String, targetVehicleId: String) = viewModelScope.launch {
-        val all = locator.scheduleRepository.getAll()
-        val tracked = all.filter { it.vehicleId == targetVehicleId }.map { it.taskName.trim().lowercase() }.toSet()
-        val (skipped, schedules) = all.filter { it.vehicleId == sourceVehicleId }
-            .partition { it.taskName.trim().lowercase() in tracked }
-        val now = System.currentTimeMillis()
-        schedules.forEach { sched ->
-            locator.scheduleRepository.upsert(
-                sched.copy(
-                    id = UUID.randomUUID().toString(),
-                    vehicleId = targetVehicleId,
-                    lastDoneMileage = null,
-                    lastDoneDate = null,
-                    updatedAt = now,
-                ),
-            )
-        }
-        if (schedules.isNotEmpty()) requestSync()
-        val copied = if (schedules.size == 1) "Copied 1 maintenance item" else "Copied ${schedules.size} maintenance items"
-        _messages.emit(if (skipped.isEmpty()) "$copied." else "$copied; ${skipped.size} already tracked.")
-    }
-
-    /**
-     * Adds a batch of new maintenance schedules — the Add vehicle checklist, or the ones kept from
-     * a Bob suggestion. One transaction-free loop is fine at this size (a dozen rows, once).
-     */
-    fun addSchedules(schedules: List<MaintenanceScheduleEntity>, announce: Boolean = false) = viewModelScope.launch {
-        if (schedules.isEmpty()) return@launch
-        schedules.forEach { locator.scheduleRepository.upsert(it) }
-        requestSync()
-        if (announce) {
-            _messages.emit(if (schedules.size == 1) "Added 1 maintenance item." else "Added ${schedules.size} maintenance items.")
-        }
-    }
-
-    val vehicleCatalog get() = locator.vehicleCatalog
-
-    /**
-     * Asks Bob for a maintenance schedule for [vehicle] (possibly not saved yet). Progress shows
-     * through [aiRuns] under [scheduleKey]; the result comes back through [onResult] rather than
-     * the database, since nothing is saved until the owner has reviewed it.
-     */
-    fun suggestSchedule(
-        vehicle: VehicleEntity,
-        alreadyTracked: List<String>,
-        onResult: (List<ScheduleSuggestion>) -> Unit,
-    ) = viewModelScope.launch {
-        locator.aiRunHolder.clearError(scheduleKey(vehicle.id))
-        try {
-            onResult(locator.aiRepository.suggestSchedule(vehicle, alreadyTracked))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Already recorded on the run holder for the screen; nothing else to do.
-        }
-    }
-
-    fun saveLog(entry: LogEntryEntity) = viewModelScope.launch {
-        // The forms rebuild the entity, so who created it comes from the stored row, not the form.
-        val createdBy = locator.logRepository.getById(entry.id)?.createdBy ?: locator.garageCloud.currentUid
-        locator.logRepository.upsert(entry.copy(createdBy = createdBy, updatedAt = System.currentTimeMillis()))
-        val mileage = entry.mileage
-        if (mileage != null) {
-            locator.vehicleRepository.bumpMileageIfHigher(entry.vehicleId, mileage, entry.date)
-        }
-        // A Routine entry linked to a schedule item (via the "Fulfills schedule" picker) is the
-        // maintenance actually happening — use the log's own date/mileage (which may be backfilled
-        // for a past service, not necessarily "today"/"current miles") rather than duplicating the
-        // separate "mark done today" quick-action's today-and-current-mileage assumption.
-        //
-        // Only ever ADVANCE the schedule's lastDoneDate, never regress it. Without this guard,
-        // retroactively linking several existing entries to the same schedule (editing/saving
-        // them one at a time) let whichever one happened to be saved *last* silently overwrite a
-        // more recent entry's already-correct due date — e.g. linking an April oil-change entry
-        // after a September one was already linked reverted the schedule to "overdue since April"
-        // even though the real last oil change was in September. ISO yyyy-MM-dd strings compare
-        // correctly with plain string comparison. The one trade-off: correcting the *date itself*
-        // on the entry that currently defines the schedule's due date (a typo fix, say) won't take
-        // effect this way — use the "Last done" fields on the schedule directly (Maintenance →
-        // edit) for that rarer case.
-        val scheduleId = entry.fulfillsScheduleId
-        if (entry.category == LogCategory.Routine.name && scheduleId != null) {
-            locator.scheduleRepository.getById(scheduleId)?.takeUnless { it.deleted }?.let { schedule ->
-                val currentLastDone = schedule.lastDoneDate
-                if (currentLastDone == null || entry.date >= currentLastDone) {
-                    locator.scheduleRepository.upsert(
-                        schedule.copy(
-                            lastDoneMileage = entry.mileage ?: schedule.lastDoneMileage,
-                            lastDoneDate = entry.date,
-                            updatedAt = System.currentTimeMillis(),
-                        ),
-                    )
-                }
-            }
-        }
-        requestSync()
-    }
-
-    fun deleteLog(id: String) = viewModelScope.launch {
-        locator.photoRepository.getForOwner(PhotoOwnerType.LOG.name, id).forEach { locator.photoStore.delete(it.filePath) }
-        locator.photoRepository.softDeleteForOwner(PhotoOwnerType.LOG.name, id)
-        locator.logRepository.softDelete(id)
-        requestSync()
-    }
-
-    fun saveIssue(issue: IssueEntity) = viewModelScope.launch {
-        val createdBy = locator.issueRepository.getById(issue.id)?.createdBy ?: locator.garageCloud.currentUid
-        locator.issueRepository.upsert(issue.copy(createdBy = createdBy, updatedAt = System.currentTimeMillis()))
-        requestSync()
-    }
-
-    fun deleteIssue(id: String) = viewModelScope.launch {
-        locator.photoRepository.getForOwner(PhotoOwnerType.ISSUE.name, id).forEach { locator.photoStore.delete(it.filePath) }
-        locator.photoRepository.softDeleteForOwner(PhotoOwnerType.ISSUE.name, id)
-        locator.issueRepository.softDelete(id)
-        locator.aiRepository.deleteDiagnosisForIssue(id)
-        requestSync()
-    }
-
-    fun saveSchedule(schedule: MaintenanceScheduleEntity) = viewModelScope.launch {
-        locator.scheduleRepository.upsert(schedule.copy(updatedAt = System.currentTimeMillis()))
-        requestSync()
-    }
-
-    fun deleteSchedule(id: String) = viewModelScope.launch {
-        locator.scheduleRepository.softDelete(id)
-        requestSync()
-    }
-
-    fun markScheduleDoneToday(schedule: MaintenanceScheduleEntity) = viewModelScope.launch {
-        val vehicle = locator.vehicleRepository.getById(schedule.vehicleId)?.takeUnless { it.deleted }
-        locator.scheduleRepository.upsert(
-            schedule.copy(
-                lastDoneMileage = vehicle?.miles ?: schedule.lastDoneMileage,
-                lastDoneDate = todayIso(),
-                updatedAt = System.currentTimeMillis(),
-            ),
-        )
-        requestSync()
-    }
-
-    fun observePhotosForOwner(ownerType: PhotoOwnerType, ownerId: String): Flow<List<PhotoEntity>> =
-        locator.photoRepository.observeForOwner(ownerType.name, ownerId)
-
-    fun addPhoto(ownerType: PhotoOwnerType, ownerId: String, sourceUri: Uri) = viewModelScope.launch {
-        val photoId = UUID.randomUUID().toString()
-        val path = locator.photoStore.copyIntoAppStorage(sourceUri, photoId)
-        if (path == null) {
-            _messages.emit("Couldn't save that photo.")
-            return@launch
-        }
-        locator.photoRepository.upsert(
-            PhotoEntity(
-                id = photoId,
-                ownerType = ownerType.name,
-                ownerId = ownerId,
-                filePath = path,
-                addedDate = todayIso(),
-                updatedAt = System.currentTimeMillis(),
-            ),
-        )
-        requestSync()
-    }
-
-    fun deletePhoto(photo: PhotoEntity) = viewModelScope.launch {
-        locator.photoStore.delete(photo.filePath)
-        locator.photoRepository.softDelete(photo.id)
-        requestSync()
-    }
-
-    /**
-     * Cleans up photos attached to an owner that's about to be discarded without ever being
-     * saved — e.g. a new log entry the user picked photos onto (photos need a real id to attach
-     * to, so a not-yet-saved entry's id is provisional) and then backed out of instead of saving.
-     * Same soft-delete + file-delete pattern as an existing entry's own delete path.
-     */
-    fun discardPhotosForOwner(ownerType: PhotoOwnerType, ownerId: String) = viewModelScope.launch {
-        locator.photoRepository.getForOwner(ownerType.name, ownerId).forEach { locator.photoStore.delete(it.filePath) }
-        locator.photoRepository.softDeleteForOwner(ownerType.name, ownerId)
-        requestSync()
-    }
-
-    fun openDiagnosis(issueId: String) { subScreen.value = SubScreen.Diagnosis(issueId) }
-
-    fun openChat(vehicleId: String, issueId: String? = null) {
-        subScreen.value = SubScreen.Chat(vehicleId, issueId)
-    }
-
-    /** Both of these hand off to [com.garagelog.app.data.ai.AiWorker] rather than running here,
-     * so the request outlives this ViewModel and the answer is saved even if the app is closed. */
-    fun runDiagnosis(issue: IssueEntity) {
-        locator.aiRunHolder.clearError(issue.id)
-        locator.enqueueDiagnosis(issue.id, issue.title)
-    }
-
-    fun sendChatMessage(vehicleId: String, issueId: String?, question: String, label: String) {
-        if (question.isBlank()) return
-        locator.aiRunHolder.clearError(AiChatMessageEntity.threadKey(vehicleId, issueId))
-        locator.enqueueChat(vehicleId, issueId, question.trim(), label)
-    }
-
-    fun cancelDiagnosis(issueId: String) {
-        locator.cancelAiWork("ai-diagnosis-$issueId")
-        locator.aiRunHolder.finish(issueId)
-    }
-
-    fun cancelChat(vehicleId: String, issueId: String?) {
-        locator.cancelAiWork("ai-chat-${issueId ?: vehicleId}")
-        locator.aiRunHolder.finish(AiChatMessageEntity.threadKey(vehicleId, issueId))
-    }
-
-    fun clearChat(vehicleId: String, issueId: String?) = viewModelScope.launch {
-        locator.aiRepository.clearThread(vehicleId, issueId)
-    }
-
-    fun setAiApiKey(key: String) {
-        locator.aiKeyStore.setApiKey(key)
-        viewModelScope.launch { _messages.emit("API key saved.") }
-    }
-
-    fun clearAiApiKey() {
-        locator.aiKeyStore.clear()
-        viewModelScope.launch { _messages.emit("API key removed.") }
-    }
-
-    fun aiKeyHint(): String? = locator.aiKeyStore.keyHint()
-
-    fun decodeAiSources(sourcesJson: String) = locator.aiRepository.decodeSources(sourcesJson)
-
-    fun exportBackup(output: OutputStream) = viewModelScope.launch {
-        runCatching { locator.backupManager.exportToStream(output) }
-            .onSuccess { _messages.emit("Backup exported.") }
-            .onFailure { _messages.emit("Export failed: ${it.message}") }
-    }
-
-    fun importBackup(input: InputStream) = viewModelScope.launch {
-        val result = locator.backupManager.importFromStream(input)
-        _messages.emit(
-            if (result.isSuccess) "Backup imported." else "Could not read that file: ${result.exceptionOrNull()?.message}",
-        )
-        if (result.isSuccess) requestSync()
-    }
-
-    fun resetToSeed() = viewModelScope.launch {
-        locator.backupManager.resetToSeed()
-        locator.aiRepository.deleteAll()
-        activeVehicleId.value = null
-        _messages.emit("Reset to seed data.")
-        requestSync()
-    }
-
-    fun beginSignIn(activity: Activity) = viewModelScope.launch {
-        val result = locator.authManager.beginSignIn(activity)
-        result.onSuccess { step ->
-            when (step) {
-                is SignInStep.Complete -> {
-                    _messages.emit("Signed in as ${step.email}.")
-                    requestSync()
-                }
-                is SignInStep.NeedsDriveConsent -> _pendingDriveConsent.emit(step.intentSender)
-            }
-        }.onFailure { _messages.emit("Sign-in failed: ${it.message}") }
-    }
-
-    fun completeDriveConsent(data: Intent?) = viewModelScope.launch {
-        val result = locator.authManager.completeDriveConsent(data)
-        result.onSuccess { step ->
-            _messages.emit("Signed in as ${step.email}.")
-            requestSync()
-        }.onFailure { _messages.emit("Couldn't finish connecting Drive: ${it.message}") }
-    }
-
-    fun signOut() = viewModelScope.launch {
-        locator.authManager.signOut()
-        _messages.emit("Signed out.")
-    }
-
-    fun syncNow() = viewModelScope.launch { requestSync() }
-
-    val garageMembership: StateFlow<GarageMembership> = locator.garageCloud.membership
-
-    private val _garageSetupRunning = MutableStateFlow(false)
-    val garageSetupRunning: StateFlow<Boolean> = _garageSetupRunning
-
-    private val _lastGarageSetup = MutableStateFlow<GarageSetupResult?>(null)
-    val lastGarageSetup: StateFlow<GarageSetupResult?> = _lastGarageSetup
-
-    /** Signs in to Firebase if needed, then finds or creates this account's shared garage. */
-    fun setUpSharedGarage(activity: Activity) = viewModelScope.launch {
-        if (_garageSetupRunning.value) return@launch
-        _garageSetupRunning.value = true
-        try {
-            locator.authManager.signInToFirebase(activity).onFailure {
-                _messages.emit("Couldn't sign in for the shared garage: ${it.message}")
-                return@launch
-            }
-            val result = when (val outcome = locator.garageCloud.setUpGarage()) {
-                is GarageSetupOutcome.Invited -> {
-                    // Nothing joined yet: the invite dialog asks first.
-                    _pendingInvite.value = outcome
-                    return@launch
-                }
-                is GarageSetupOutcome.Ready -> outcome.result
-            }
-            _lastGarageSetup.value = result
-            requestSync()
-            _messages.emit(
-                when {
-                    !result.uploaded -> "Connected to your shared garage."
-                    result.matches -> "Shared garage ready: everything uploaded."
-                    else -> "Uploaded, but the cloud's counts don't match this phone's. Details in Settings."
-                },
-            )
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            _messages.emit("Shared garage setup failed: ${e.message}")
-        } finally {
-            _garageSetupRunning.value = false
-        }
-    }
-
-    val access: StateFlow<Access> = garageMembership.map { Access(it) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, Access(garageMembership.value))
-
-    private val _pendingInvite = MutableStateFlow<GarageSetupOutcome.Invited?>(null)
-    val pendingInvite: StateFlow<GarageSetupOutcome.Invited?> = _pendingInvite
-
-    fun dismissInvite() { _pendingInvite.value = null }
-
-    /**
-     * Joins the pending invite's garage. [backupTo] = export this phone's records there first (a
-     * Standard member's own vehicles are about to be removed from the phone); [clearLocal] = remove
-     * them. The export finishes before anything is cleared, and a failed export stops the join.
-     */
-    fun acceptInvite(clearLocal: Boolean, backupTo: OutputStream? = null) = viewModelScope.launch {
-        val pending = _pendingInvite.value ?: return@launch
-        _garageSetupRunning.value = true
-        try {
-            if (backupTo != null) {
-                locator.backupManager.exportToStream(backupTo)
-                _messages.emit("Backup exported.")
-            }
-            locator.garageCloud.acceptInvite(pending.invite, clearLocal)
-            _pendingInvite.value = null
-            requestSync()
-            _messages.emit("Joined ${pending.invite.garageName.ifBlank { "the shared garage" }}.")
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            _messages.emit("Couldn't join: ${e.message}")
-        } finally {
-            _garageSetupRunning.value = false
-        }
-    }
-
-    // ---- Members screen (admins) ----
-
-    fun openMembers() { subScreen.value = SubScreen.Members }
-
-    private val _membersPage = MutableStateFlow<MembersPage?>(null)
-    val membersPage: StateFlow<MembersPage?> = _membersPage
-
-    private val _membersBusy = MutableStateFlow(false)
-    val membersBusy: StateFlow<Boolean> = _membersBusy
-
-    fun loadMembers() = membersAction(null) { }
-
-    fun inviteMember(email: String, role: String, vehicleIds: List<String>) =
-        membersAction("Invite saved. They join the next time they sign in to the shared garage.") {
-            locator.garageCloud.invite(email, role, vehicleIds)
-        }
-
-    fun withdrawInvite(email: String) = membersAction("Invite withdrawn.") { locator.garageCloud.withdrawInvite(email) }
-
-    fun updateMember(uid: String, role: String, vehicleIds: List<String>) =
-        membersAction("Saved. Their phone picks it up on its next sync.") { locator.garageCloud.updateMember(uid, role, vehicleIds) }
-
-    fun removeMember(uid: String) = membersAction("Removed from the garage.") { locator.garageCloud.removeMember(uid) }
-
-    fun saveStandardPermissions(permissions: StandardPermissions) =
-        membersAction(null) { locator.garageCloud.savePermissions(permissions) }
-
-    /** Runs one admin action, then re-reads the page so it shows what the garage now holds. */
-    private fun membersAction(done: String?, action: suspend () -> Unit) = viewModelScope.launch {
-        _membersBusy.value = true
-        try {
-            action()
-            _membersPage.value = locator.garageCloud.loadMembersPage()
-            done?.let { _messages.emit(it) }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            _messages.emit("Couldn't update the garage: ${e.message}")
-        } finally {
-            _membersBusy.value = false
-        }
-    }
-
-    fun saveNotificationPrefs(context: Context, prefs: NotificationPrefsEntity) = viewModelScope.launch {
-        val stamped = prefs.copy(updatedAt = System.currentTimeMillis())
-        locator.notificationPrefsRepository.upsert(stamped)
-        MileageReminderScheduler.reschedule(context.applicationContext, stamped)
-        requestSync()
-    }
-}
-
-class GarageLogViewModelFactory(private val locator: ServiceLocator) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        require(modelClass.isAssignableFrom(GarageLogViewModel::class.java))
-        return GarageLogViewModel(locator) as T
+    companion object {
+        val Factory = viewModelFactory { initializer { GarageLogViewModel(locator()) } }
     }
 }

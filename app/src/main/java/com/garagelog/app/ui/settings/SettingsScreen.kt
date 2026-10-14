@@ -25,10 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.entity.NotificationPrefsEntity
 import com.garagelog.app.data.entity.ReminderCadence
 import com.garagelog.app.ui.GarageLogUiState
-import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.LabeledTextField
@@ -45,27 +45,31 @@ import com.garagelog.app.util.todayIso
 import java.util.Calendar
 
 @Composable
-fun SettingsScreen(uiState: GarageLogUiState, viewModel: GarageLogViewModel) {
+fun SettingsScreen(
+    uiState: GarageLogUiState,
+    onOpenMembers: () -> Unit,
+    account: AccountViewModel = viewModel(factory = AccountViewModel.Factory),
+) {
     val context = LocalContext.current
     var showResetConfirm by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
-            context.contentResolver.openOutputStream(uri)?.let { viewModel.exportBackup(it) }
+            context.contentResolver.openOutputStream(uri)?.let { account.exportBackup(it) }
         }
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            context.contentResolver.openInputStream(uri)?.let { viewModel.importBackup(it) }
+            context.contentResolver.openInputStream(uri)?.let { account.importBackup(it) }
         }
     }
 
     LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
         item {
-            AccountSection(viewModel = viewModel, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+            AccountSection(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
         }
         item {
-            SharedGarageSection(viewModel = viewModel, modifier = Modifier.padding(bottom = 12.dp))
+            SharedGarageSection(onOpenMembers = onOpenMembers, modifier = Modifier.padding(bottom = 12.dp))
         }
 
         item {
@@ -87,11 +91,11 @@ fun SettingsScreen(uiState: GarageLogUiState, viewModel: GarageLogViewModel) {
         }
 
         item {
-            ClaudeAiSection(viewModel = viewModel, modifier = Modifier.padding(bottom = 12.dp))
+            ClaudeAiSection(modifier = Modifier.padding(bottom = 12.dp))
         }
 
         item {
-            MileageReminderCard(uiState.notificationPrefs, viewModel, modifier = Modifier.padding(bottom = 12.dp))
+            MileageReminderCard(uiState.notificationPrefs, account, modifier = Modifier.padding(bottom = 12.dp))
         }
 
         item {
@@ -136,7 +140,7 @@ fun SettingsScreen(uiState: GarageLogUiState, viewModel: GarageLogViewModel) {
             title = "Reset to seed data?",
             message = "This will erase all current data on this device and restore the original seed data.",
             confirmLabel = "Reset",
-            onConfirm = { viewModel.resetToSeed() },
+            onConfirm = { account.resetToSeed() },
             onDismiss = { showResetConfirm = false },
         )
     }
@@ -148,7 +152,7 @@ private val weekdayOrder = listOf(
 )
 
 @Composable
-private fun MileageReminderCard(saved: NotificationPrefsEntity, viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
+private fun MileageReminderCard(saved: NotificationPrefsEntity, account: AccountViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var draft by remember(saved) { mutableStateOf(saved) }
 
@@ -228,7 +232,7 @@ private fun MileageReminderCard(saved: NotificationPrefsEntity, viewModel: Garag
         }
 
         Button(
-            onClick = { viewModel.saveNotificationPrefs(context, draft) },
+            onClick = { account.saveNotificationPrefs(context, draft) },
             enabled = draft != saved,
             modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
         ) { Text("Save reminder settings") }

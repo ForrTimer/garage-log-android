@@ -18,23 +18,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.garagelog.app.ui.GarageLogViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.formatDateTime
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
-fun AccountSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
+fun AccountSection(modifier: Modifier = Modifier, account: AccountViewModel = viewModel(factory = AccountViewModel.Factory)) {
     val activity = LocalActivity.current
-    val email by viewModel.signedInEmail.collectAsStateWithLifecycle()
-    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
+    val email by account.signedInEmail.collectAsStateWithLifecycle()
+    val syncStatus by account.syncStatus.collectAsStateWithLifecycle()
 
     val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        viewModel.completeDriveConsent(result.data)
+        account.completeDriveConsent(result.data)
     }
     LaunchedEffect(Unit) {
-        viewModel.pendingDriveConsent.collectLatest { intentSender ->
+        account.pendingDriveConsent.collectLatest { intentSender ->
             consentLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
         }
     }
@@ -49,7 +49,7 @@ fun AccountSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier)
                 style = MaterialTheme.typography.bodyMedium,
             )
             Button(
-                onClick = { activity?.let { viewModel.beginSignIn(it) } },
+                onClick = { activity?.let { account.beginSignIn(it) } },
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
             ) { Text("Sign in with Google") }
         } else {
@@ -64,8 +64,8 @@ fun AccountSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier)
                 style = MaterialTheme.typography.bodySmall,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                OutlinedButton(onClick = { viewModel.syncNow() }, modifier = Modifier.weight(1f)) { Text("Sync now") }
-                OutlinedButton(onClick = { viewModel.signOut() }, modifier = Modifier.weight(1f)) { Text("Sign out") }
+                OutlinedButton(onClick = { account.syncNow() }, modifier = Modifier.weight(1f)) { Text("Sync now") }
+                OutlinedButton(onClick = { account.signOut() }, modifier = Modifier.weight(1f)) { Text("Sign out") }
             }
         }
     }

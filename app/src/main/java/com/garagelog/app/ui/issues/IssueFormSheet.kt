@@ -12,12 +12,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.IssuePriority
 import com.garagelog.app.data.entity.IssueStatus
 import com.garagelog.app.data.entity.PhotoOwnerType
 import com.garagelog.app.data.entity.VehicleEntity
-import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.RecordsViewModel
 import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
@@ -43,7 +44,7 @@ fun IssueFormSheet(
     issue: IssueEntity?,
     vehicles: List<VehicleEntity>,
     defaultVehicleId: String?,
-    viewModel: GarageLogViewModel,
+    records: RecordsViewModel = viewModel(factory = RecordsViewModel.Factory),
     onDismiss: () -> Unit,
     onSave: (IssueEntity) -> Unit,
     onDelete: (String) -> Unit,
@@ -83,7 +84,7 @@ fun IssueFormSheet(
         title = if (issue == null) "New issue" else "Edit issue",
         onDismiss = {
             // Closing a never-saved issue orphans any photos already attached to stableId.
-            if (issue == null) viewModel.discardPhotosForOwner(PhotoOwnerType.ISSUE, stableId)
+            if (issue == null) records.discardPhotosForOwner(PhotoOwnerType.ISSUE, stableId)
             onDismiss()
         },
         showDelete = issue != null && canDelete,
@@ -134,7 +135,7 @@ fun IssueFormSheet(
         DateField("Date opened", form.dateOpened) { form = form.copy(dateOpened = it) }
         LabeledTextField("Description / diagnosis notes", form.description, { form = form.copy(description = it) }, singleLine = false, minLines = 3)
 
-        PhotoGridSection(viewModel = viewModel, ownerType = PhotoOwnerType.ISSUE, ownerId = stableId)
+        PhotoGridSection(records = records, ownerType = PhotoOwnerType.ISSUE, ownerId = stableId)
     }
 
     // A plain AlertDialog rather than the shared ConfirmDialog — that component always fires

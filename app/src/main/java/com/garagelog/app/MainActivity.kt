@@ -4,17 +4,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.garagelog.app.ui.GarageLogViewModel
-import com.garagelog.app.ui.GarageLogViewModelFactory
 import com.garagelog.app.ui.GarageLogApp
+import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.theme.GarageLogTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -40,7 +39,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun GarageLogRoot(app: GarageLogApplication, onReady: () -> Unit) {
-    val viewModel: GarageLogViewModel = viewModel(factory = GarageLogViewModelFactory(app.serviceLocator))
+    val viewModel: GarageLogViewModel = viewModel(factory = GarageLogViewModel.Factory)
     // Wait for the real first Room read (not just the next frame) before dismissing the splash,
     // plus a small floor so its 1000ms icon animation actually gets to play instead of the
     // splash vanishing on a fast local DB before it's had a chance to show.
@@ -52,7 +51,7 @@ private fun GarageLogRoot(app: GarageLogApplication, onReady: () -> Unit) {
     // GarageLogTheme now reads isSystemInDarkTheme() by default — no argument needed.
     GarageLogTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            GarageLogApp(viewModel = viewModel)
+            GarageLogApp(shell = viewModel)
         }
     }
 }

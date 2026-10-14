@@ -18,11 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.ai.scheduleKey
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
-import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.ai.BobViewModel
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.MarkdownText
@@ -36,7 +37,7 @@ import com.garagelog.app.ui.theme.garageColors
 fun BobScheduleSheet(
     vehicle: VehicleEntity,
     existing: List<MaintenanceScheduleEntity>,
-    viewModel: GarageLogViewModel,
+    bob: BobViewModel = viewModel(factory = BobViewModel.Factory),
     onDismiss: () -> Unit,
     onAdd: (List<MaintenanceScheduleEntity>) -> Unit,
 ) {
@@ -63,11 +64,11 @@ fun BobScheduleSheet(
             modifier = Modifier.padding(top = 8.dp),
         )
         BobScheduleButton(
-            viewModel = viewModel,
+            bob = bob,
             runKey = scheduleKey(vehicle.id),
             ready = vehicle.year != null && vehicle.make.isNotBlank() && vehicle.model.isNotBlank(),
             onRun = {
-                viewModel.suggestSchedule(vehicle, alreadyTracked = existing.map { it.taskName }) { suggestions ->
+                bob.suggestSchedule(vehicle, alreadyTracked = existing.map { it.taskName }) { suggestions ->
                     drafts = suggestions.map {
                         ServiceDraft(
                             name = it.name,
@@ -86,9 +87,9 @@ fun BobScheduleSheet(
 
 /** Shared by the Add vehicle form and the Maintenance screen's suggestion sheet. */
 @Composable
-fun BobScheduleButton(viewModel: GarageLogViewModel, runKey: String, ready: Boolean, onRun: () -> Unit) {
-    val hasKey by viewModel.hasAiKey.collectAsStateWithLifecycle()
-    val runs by viewModel.aiRuns.collectAsStateWithLifecycle()
+fun BobScheduleButton(bob: BobViewModel, runKey: String, ready: Boolean, onRun: () -> Unit) {
+    val hasKey by bob.hasApiKey.collectAsStateWithLifecycle()
+    val runs by bob.runs.collectAsStateWithLifecycle()
     val run = runs[runKey]
     Column(modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) {
         when {

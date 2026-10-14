@@ -47,6 +47,7 @@ import com.garagelog.app.data.sync.SyncRepository
 import com.garagelog.app.data.sync.SyncStatusHolder
 import com.garagelog.app.data.sync.SyncWorker
 import com.garagelog.app.notifications.MileageReminderScheduler
+import com.garagelog.app.ui.UserMessages
 import com.garagelog.app.widget.GarageLogWidget
 import okhttp3.OkHttpClient
 
@@ -122,6 +123,7 @@ class ServiceLocator(context: Context) {
     )
     private val driveApiClient = DriveApiClient(httpClient)
     val syncStatusHolder = SyncStatusHolder()
+    val userMessages = UserMessages()
     private val garageSync = GarageSync(
         context = appContext,
         database = database,

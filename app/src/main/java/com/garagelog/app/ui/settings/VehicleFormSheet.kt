@@ -19,38 +19,33 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.ai.scheduleKey
-import com.garagelog.app.data.catalog.CatalogConfig
-import com.garagelog.app.data.catalog.CatalogSpec
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
-import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.RecordsViewModel
+import com.garagelog.app.ui.ai.BobViewModel
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
-import com.garagelog.app.ui.components.ReadOnlyDropdownField
 import com.garagelog.app.ui.components.SegmentedControl
 import com.garagelog.app.ui.components.SuggestField
 import com.garagelog.app.ui.schedule.BobScheduleButton
@@ -58,128 +53,16 @@ import com.garagelog.app.ui.schedule.ServiceChecklist
 import com.garagelog.app.ui.schedule.ServiceDraft
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.CommonMaintenanceServices
-import com.garagelog.app.util.formatLiters
 import com.garagelog.app.util.todayIso
 import java.io.File
 import java.util.UUID
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-/** Everything editable, as the text being typed — parsed into numbers only at Save. */
-private data class VehicleFormState(
-    val name: String,
-    val year: String,
-    val make: String,
-    val model: String,
-    val trim: String,
-    val engine: String,
-    val displacementL: String,
-    val cylinders: String,
-    val aspiration: String,
-    val fuelType: String,
-    val transmissionType: String,
-    val transmissionSpeeds: String,
-    val drivetrain: String,
-    val bodyStyle: String,
-    val cabStyle: String,
-    val bedLength: String,
-    val vin: String,
-    val color: String,
-    val miles: String,
-    val role: String,
-    val notes: String,
-    val severeDustyAreas: Boolean,
-    val severeTowing: Boolean,
-    val severeExtendedIdling: Boolean,
-    val severeLowSpeedColdWeather: Boolean,
-    val severeHeavyCityTrafficHot: Boolean,
-    val severeMountainousHot: Boolean,
-    val severeFrequentTowing: Boolean,
-    val severeDeepWater: Boolean,
-) {
-    val isPickup get() = bodyStyle.equals("Pickup", ignoreCase = true)
-    val isElectric get() = fuelType.equals("Electric", ignoreCase = true)
-
-    /** Overwrites only what [spec] actually knew, so a lookup never blanks a typed value. */
-    fun apply(spec: CatalogSpec): VehicleFormState = copy(
-        year = spec.year?.toString() ?: year,
-        make = spec.make ?: make,
-        model = spec.model ?: model,
-        trim = spec.trim ?: trim,
-        bodyStyle = spec.bodyStyle ?: bodyStyle,
-        transmissionType = spec.transmissionType ?: transmissionType,
-        transmissionSpeeds = spec.transmissionSpeeds?.toString() ?: transmissionSpeeds,
-        cylinders = spec.cylinders?.toString() ?: cylinders,
-        displacementL = spec.displacementL?.let(::formatLiters) ?: displacementL,
-        fuelType = spec.fuelType ?: fuelType,
-        aspiration = spec.aspiration ?: aspiration,
-        drivetrain = spec.drivetrain ?: drivetrain,
-    )
-
-    companion object {
-        fun from(v: VehicleEntity?) = VehicleFormState(
-            name = v?.name ?: "",
-            year = v?.year?.toString() ?: "",
-            make = v?.make ?: "",
-            model = v?.model ?: "",
-            trim = v?.trim ?: "",
-            engine = v?.engine ?: "",
-            displacementL = v?.displacementL?.let(::formatLiters) ?: "",
-            cylinders = v?.cylinders?.toString() ?: "",
-            aspiration = v?.aspiration ?: "",
-            fuelType = v?.fuelType ?: "",
-            transmissionType = v?.transmissionType ?: "",
-            transmissionSpeeds = v?.transmissionSpeeds?.toString() ?: "",
-            drivetrain = normalizeDrivetrain(v?.drivetrain ?: ""),
-            bodyStyle = v?.bodyStyle ?: "",
-            cabStyle = v?.cabStyle ?: "",
-            bedLength = v?.bedLength ?: "",
-            vin = v?.vin ?: "",
-            color = v?.color ?: "",
-            miles = v?.miles?.toString() ?: "",
-            role = v?.role ?: "",
-            notes = v?.notes ?: "",
-            severeDustyAreas = v?.severeDustyAreas ?: false,
-            severeTowing = v?.severeTowing ?: false,
-            severeExtendedIdling = v?.severeExtendedIdling ?: false,
-            severeLowSpeedColdWeather = v?.severeLowSpeedColdWeather ?: false,
-            severeHeavyCityTrafficHot = v?.severeHeavyCityTrafficHot ?: false,
-            severeMountainousHot = v?.severeMountainousHot ?: false,
-            severeFrequentTowing = v?.severeFrequentTowing ?: false,
-            severeDeepWater = v?.severeDeepWater ?: false,
-        )
-    }
-}
-
-private val TRANSMISSION_TYPES = listOf("Automatic", "Manual", "CVT")
-private val DRIVETRAINS = listOf("RWD", "FWD", "AWD", "4WD")
-private val BODY_STYLES = listOf("Pickup", "SUV", "Sedan", "Coupe", "Hatchback", "Wagon", "Minivan", "Van", "Convertible")
-private val CAB_STYLES = listOf("Regular cab", "Extended cab", "Crew cab")
-private val BED_LENGTHS = listOf("Short bed", "Standard bed", "Long bed")
-private val FUEL_TYPES = listOf("Gasoline", "Diesel", "Hybrid", "Plug-in hybrid", "Electric", "Flex fuel", "CNG")
-private val ASPIRATIONS = listOf("Naturally aspirated", "Turbocharged", "Twin-turbo", "Supercharged")
-private val CYLINDERS = listOf("3", "4", "5", "6", "8", "10", "12")
-
-/** Manuals top out around 7 speeds; modern automatics run to 10. */
-private fun speedOptions(type: String): List<String> = when (type) {
-    "Manual" -> (3..7).map { it.toString() }
-    "CVT" -> emptyList()
-    else -> (3..10).map { it.toString() }
-}
-
-/** Older entries were free text ("4x4"); map the common spellings onto the picker's options. */
-private fun normalizeDrivetrain(raw: String): String = when (raw.trim().lowercase()) {
-    "4x4", "4wd", "four wheel drive" -> "4WD"
-    "4x2", "2wd", "rwd" -> "RWD"
-    "fwd" -> "FWD"
-    "awd" -> "AWD"
-    else -> raw.trim()
-}
 
 @Composable
 fun VehicleFormSheet(
     vehicle: VehicleEntity?,
-    viewModel: GarageLogViewModel,
+    records: RecordsViewModel = viewModel(factory = RecordsViewModel.Factory),
+    bob: BobViewModel = viewModel(factory = BobViewModel.Factory),
     onDismiss: () -> Unit,
     onSave: (VehicleEntity, List<MaintenanceScheduleEntity>) -> Unit,
     onDelete: (String) -> Unit,
@@ -262,7 +145,7 @@ fun VehicleFormSheet(
             // A pending photo replacing an already-saved one leaves the old file orphaned on
             // disk once this commits — clean it up now that it's actually being superseded.
             if (pendingPhotoPath != null && currentPhotoPath != null && pendingPhotoPath != currentPhotoPath) {
-                viewModel.deletePhotoFile(currentPhotoPath!!)
+                records.deletePhotoFile(currentPhotoPath!!)
             }
             val entity = buildEntity()
             val now = System.currentTimeMillis()
@@ -273,12 +156,12 @@ fun VehicleFormSheet(
         VehiclePhotoPicker(
             photoPath = pendingPhotoPath ?: currentPhotoPath,
             onPhotoPicked = { uri ->
-                viewModel.copyPhotoToAppStorage(uri) { copied -> if (copied != null) pendingPhotoPath = copied }
+                records.copyPhotoToAppStorage(uri) { copied -> if (copied != null) pendingPhotoPath = copied }
             },
             onRemovePhoto = {
-                pendingPhotoPath?.let { viewModel.deletePhotoFile(it) }
+                pendingPhotoPath?.let { records.deletePhotoFile(it) }
                 pendingPhotoPath = null
-                if (currentPhotoPath != null) vehicle?.let { viewModel.removeVehiclePhoto(it) }
+                if (currentPhotoPath != null) vehicle?.let { records.removeVehiclePhoto(it) }
                 currentPhotoPath = null
             },
         )
@@ -290,10 +173,10 @@ fun VehicleFormSheet(
             capitalization = KeyboardCapitalization.Words,
         )
 
-        VinLookup(viewModel, form.vin, onVinChange = { form = form.copy(vin = it) }, onDecoded = { form = form.apply(it) })
+        VinLookup(records.vehicleCatalog, form.vin, onVinChange = { form = form.copy(vin = it) }, onDecoded = { form = form.apply(it) })
 
         SectionLabel("Vehicle")
-        IdentityPickers(viewModel, form, onChange = { form = it })
+        IdentityPickers(records.vehicleCatalog, form, onChange = { form = it })
         LabeledTextField("Trim", form.trim, { form = form.copy(trim = it) }, capitalization = KeyboardCapitalization.Words)
         LabeledTextField("Current mileage", form.miles, { form = form.copy(miles = it.filter(Char::isDigit)) }, keyboardType = KeyboardType.Number)
 
@@ -408,11 +291,11 @@ fun VehicleFormSheet(
                 color = garageColors.textMuted,
             )
             BobScheduleButton(
-                viewModel = viewModel,
+                bob = bob,
                 runKey = scheduleKey(stableId),
                 ready = form.year.isNotBlank() && form.make.isNotBlank() && form.model.isNotBlank(),
                 onRun = {
-                    viewModel.suggestSchedule(buildEntity(), alreadyTracked = emptyList()) { suggestions ->
+                    bob.suggestSchedule(buildEntity(), alreadyTracked = emptyList()) { suggestions ->
                         services = suggestions.map {
                             ServiceDraft(
                                 name = it.name,
@@ -435,130 +318,6 @@ fun VehicleFormSheet(
  * fueleconomy.gov lists for that model. Picking a combination fills the spec fields below it.
  * Lookups are debounced so typing "Silverado" doesn't fire nine requests.
  */
-@Composable
-private fun IdentityPickers(viewModel: GarageLogViewModel, form: VehicleFormState, onChange: (VehicleFormState) -> Unit) {
-    val catalog = viewModel.vehicleCatalog
-    val focusManager = LocalFocusManager.current
-    val scope = rememberCoroutineScope()
-    val year = form.year.toIntOrNull()?.takeIf { it in 1900..2100 }
-    var makes by remember { mutableStateOf(emptyList<String>()) }
-    var models by remember { mutableStateOf(emptyList<String>()) }
-    var configs by remember { mutableStateOf(emptyList<CatalogConfig>()) }
-    var loadingModels by remember { mutableStateOf(false) }
-    var chosenConfig by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(year) {
-        makes = if (year == null) emptyList() else catalog.makes(year)
-    }
-    LaunchedEffect(year, form.make) {
-        models = emptyList()
-        if (year == null || form.make.isBlank()) return@LaunchedEffect
-        delay(350)
-        loadingModels = true
-        models = catalog.models(year, form.make)
-        loadingModels = false
-    }
-    LaunchedEffect(year, form.make, form.model) {
-        configs = emptyList()
-        if (year == null || form.make.isBlank() || form.model.isBlank()) return@LaunchedEffect
-        delay(350)
-        configs = catalog.configurations(year, form.make, form.model)
-    }
-
-    SuggestField(
-        "Year",
-        form.year,
-        { onChange(form.copy(year = it.filter(Char::isDigit).take(4))) },
-        catalog.years().map { it.toString() },
-        keyboardType = KeyboardType.Number,
-    )
-    SuggestField(
-        "Make",
-        form.make,
-        { onChange(form.copy(make = it)) },
-        makes,
-        supportingText = if (year == null) "Pick a year first to narrow the list." else null,
-    )
-    SuggestField(
-        "Model",
-        form.model,
-        { onChange(form.copy(model = it)) },
-        models,
-        loading = loadingModels,
-    )
-    if (configs.isNotEmpty()) {
-        ReadOnlyDropdownField(
-            displayValue = chosenConfig ?: "",
-            options = configs,
-            optionLabel = { it.label },
-            onSelect = { config ->
-                chosenConfig = config.label
-                focusManager.clearFocus()
-                scope.launch {
-                    catalog.configurationSpec(config.id)?.let { spec ->
-                        // Keep a more specific typed model ("Tacoma TRD") over the EPA base name.
-                        val keepModel = spec.model != null && form.model.startsWith(spec.model, ignoreCase = true)
-                        onChange(form.apply(if (keepModel) spec.copy(model = null) else spec))
-                    }
-                }
-            },
-            label = "Engine / transmission",
-        )
-        Text(
-            "Pick one to fill in the engine, transmission and drivetrain below.",
-            style = MaterialTheme.typography.bodySmall,
-            color = garageColors.textMuted,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun VinLookup(
-    viewModel: GarageLogViewModel,
-    vin: String,
-    onVinChange: (String) -> Unit,
-    onDecoded: (CatalogSpec) -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    var decoding by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        LabeledTextField(
-            "VIN",
-            vin,
-            { onVinChange(it.uppercase().filter(Char::isLetterOrDigit).take(17)); status = null },
-            capitalization = KeyboardCapitalization.Characters,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(10.dp))
-        Box(modifier = Modifier.padding(top = 10.dp), contentAlignment = Alignment.Center) {
-            if (decoding) {
-                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-            } else {
-                ActionLink("Decode", onClick = {
-                    if (vin.length != 17) {
-                        status = "A VIN is 17 characters — this one is ${vin.length}."
-                        return@ActionLink
-                    }
-                    decoding = true
-                    scope.launch {
-                        val spec = viewModel.vehicleCatalog.decodeVin(vin)
-                        decoding = false
-                        status = if (spec == null) {
-                            "Couldn't decode that VIN (offline, or NHTSA doesn't know it). Fill it in below."
-                        } else {
-                            onDecoded(spec)
-                            "Filled in from NHTSA. Check it over; older vehicles often decode partly."
-                        }
-                    }
-                })
-            }
-        }
-    }
-    status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted, modifier = Modifier.padding(top = 4.dp)) }
-}
-
 @Composable
 private fun SectionLabel(text: String) {
     Text(text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 20.dp))

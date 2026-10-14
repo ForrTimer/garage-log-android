@@ -18,9 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.cloud.GarageCloud
 import com.garagelog.app.data.cloud.GarageSetupOutcome
-import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.theme.garageColors
 
@@ -29,12 +29,16 @@ import com.garagelog.app.ui.theme.garageColors
  * members and permissions.
  */
 @Composable
-fun SharedGarageSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
+fun SharedGarageSection(
+    onOpenMembers: () -> Unit,
+    modifier: Modifier = Modifier,
+    garage: SharedGarageViewModel = viewModel(factory = SharedGarageViewModel.Factory),
+) {
     val activity = LocalActivity.current
-    val membership by viewModel.garageMembership.collectAsStateWithLifecycle()
-    val running by viewModel.garageSetupRunning.collectAsStateWithLifecycle()
-    val lastSetup by viewModel.lastGarageSetup.collectAsStateWithLifecycle()
-    val pendingInvite by viewModel.pendingInvite.collectAsStateWithLifecycle()
+    val membership by garage.membership.collectAsStateWithLifecycle()
+    val running by garage.setupRunning.collectAsStateWithLifecycle()
+    val lastSetup by garage.lastSetup.collectAsStateWithLifecycle()
+    val pendingInvite by garage.pendingInvite.collectAsStateWithLifecycle()
 
     GarageCard(modifier = modifier) {
         Text("Shared garage", style = MaterialTheme.typography.titleMedium)
@@ -65,12 +69,12 @@ fun SharedGarageSection(viewModel: GarageLogViewModel, modifier: Modifier = Modi
         }
 
         if (membership.isAdmin) {
-            Button(onClick = viewModel::openMembers, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            Button(onClick = onOpenMembers, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
                 Text("Members & permissions")
             }
         }
         OutlinedButton(
-            onClick = { activity?.let { viewModel.setUpSharedGarage(it) } },
+            onClick = { activity?.let { garage.setUp(it) } },
             enabled = !running,
             modifier = Modifier.fillMaxWidth().padding(top = if (membership.isAdmin) 6.dp else 10.dp),
         ) {
@@ -84,7 +88,7 @@ fun SharedGarageSection(viewModel: GarageLogViewModel, modifier: Modifier = Modi
         }
     }
 
-    pendingInvite?.let { JoinDialog(it, viewModel) }
+    pendingInvite?.let { JoinDialog(it, garage) }
 }
 
 /**
@@ -93,23 +97,23 @@ fun SharedGarageSection(viewModel: GarageLogViewModel, modifier: Modifier = Modi
  * before the phone switches over to only what they were given.
  */
 @Composable
-private fun JoinDialog(pending: GarageSetupOutcome.Invited, viewModel: GarageLogViewModel) {
+private fun JoinDialog(pending: GarageSetupOutcome.Invited, garage: SharedGarageViewModel) {
     val context = LocalContext.current
     val invite = pending.invite
     val asAdmin = invite.role == GarageCloud.ROLE_ADMIN
-    val garage = invite.garageName.ifBlank { "a shared garage" }
+    val garageName = invite.garageName.ifBlank { "a shared garage" }
     val from = invite.invitedByName.ifBlank { "Someone" }
     val count = pending.localVehicleCount
     val vehicles = if (count == 1) "1 vehicle" else "$count vehicles"
 
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         val stream = uri?.let { context.contentResolver.openOutputStream(it) }
-        if (stream != null) viewModel.acceptInvite(clearLocal = true, backupTo = stream)
+        if (stream != null) garage.acceptInvite(clearLocal = true, backupTo = stream)
     }
 
     AlertDialog(
-        onDismissRequest = viewModel::dismissInvite,
-        title = { Text("Join $garage?") },
+        onDismissRequest = garage::dismissInvite,
+        title = { Text("Join $garageName?") },
         text = {
             Column {
                 Text("$from invited you as ${if (asAdmin) "an admin" else "a Standard member"}.")
@@ -129,14 +133,14 @@ private fun JoinDialog(pending: GarageSetupOutcome.Invited, viewModel: GarageLog
             Column {
                 if (!asAdmin && count > 0) {
                     TextButton(onClick = { backupLauncher.launch("garage-log-backup.json") }) { Text("Back up, then join") }
-                    TextButton(onClick = { viewModel.acceptInvite(clearLocal = true) }) {
+                    TextButton(onClick = { garage.acceptInvite(clearLocal = true) }) {
                         Text("Join without a backup", color = garageColors.alarmText)
                     }
                 } else {
-                    TextButton(onClick = { viewModel.acceptInvite(clearLocal = !asAdmin) }) { Text("Join") }
+                    TextButton(onClick = { garage.acceptInvite(clearLocal = !asAdmin) }) { Text("Join") }
                 }
             }
         },
-        dismissButton = { TextButton(onClick = viewModel::dismissInvite) { Text("Not now") } },
+        dismissButton = { TextButton(onClick = garage::dismissInvite) { Text("Not now") } },
     )
 }

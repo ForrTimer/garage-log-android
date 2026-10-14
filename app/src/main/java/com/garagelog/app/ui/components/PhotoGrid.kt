@@ -28,7 +28,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,25 +45,29 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.garagelog.app.data.entity.PhotoEntity
 import com.garagelog.app.data.entity.PhotoOwnerType
-import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.RecordsViewModel
 import com.garagelog.app.ui.theme.garageColors
 import java.io.File
 
 @Composable
 fun PhotoGridSection(
-    viewModel: GarageLogViewModel,
+    records: RecordsViewModel = viewModel(factory = RecordsViewModel.Factory),
     ownerType: PhotoOwnerType,
     ownerId: String,
 ) {
-    val photos by viewModel.observePhotosForOwner(ownerType, ownerId).collectAsState(initial = emptyList())
+    // Remembered: a new Flow each recomposition would drop and re-subscribe the Room query every time.
+    val photosFlow = remember(ownerType, ownerId) { records.observePhotosForOwner(ownerType, ownerId) }
+    val photos by photosFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var photoPendingDelete by remember { mutableStateOf<PhotoEntity?>(null) }
     var viewingPhoto by remember { mutableStateOf<PhotoEntity?>(null) }
 
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        if (uri != null) viewModel.addPhoto(ownerType, ownerId, uri)
+        if (uri != null) records.addPhoto(ownerType, ownerId, uri)
     }
 
     Text("Photos", style = MaterialTheme.typography.labelMedium, color = garageColors.textMuted, modifier = Modifier.padding(top = 12.dp))
@@ -111,7 +114,7 @@ fun PhotoGridSection(
         ConfirmDialog(
             title = "Delete photo?",
             message = "This can't be undone.",
-            onConfirm = { viewModel.deletePhoto(photo) },
+            onConfirm = { records.deletePhoto(photo) },
             onDismiss = { photoPendingDelete = null },
         )
     }

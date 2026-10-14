@@ -26,11 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.cloud.GarageCloud
 import com.garagelog.app.data.cloud.GarageMember
 import com.garagelog.app.data.cloud.StandardPermissions
 import com.garagelog.app.data.entity.VehicleEntity
-import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.GarageCard
@@ -47,13 +47,16 @@ private const val STANDARD = "Standard"
 
 /** Admins only: who's in the shared garage, who's invited, and what Standard members may do. */
 @Composable
-fun MembersScreen(vehicles: List<VehicleEntity>, viewModel: GarageLogViewModel) {
-    val page by viewModel.membersPage.collectAsStateWithLifecycle()
-    val busy by viewModel.membersBusy.collectAsStateWithLifecycle()
+fun MembersScreen(
+    vehicles: List<VehicleEntity>,
+    garage: SharedGarageViewModel = viewModel(factory = SharedGarageViewModel.Factory),
+) {
+    val page by garage.membersPage.collectAsStateWithLifecycle()
+    val busy by garage.membersBusy.collectAsStateWithLifecycle()
     var inviting by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<GarageMember?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.loadMembers() }
+    LaunchedEffect(Unit) { garage.loadMembers() }
 
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     fun vehicleNames(ids: List<String>) =
@@ -124,7 +127,7 @@ fun MembersScreen(vehicles: List<VehicleEntity>, viewModel: GarageLogViewModel) 
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
-                            ActionLink("Withdraw", onClick = { viewModel.withdrawInvite(invite.email) }, tint = garageColors.alarmText)
+                            ActionLink("Withdraw", onClick = { garage.withdrawInvite(invite.email) }, tint = garageColors.alarmText)
                         }
                     }
                 }
@@ -132,7 +135,7 @@ fun MembersScreen(vehicles: List<VehicleEntity>, viewModel: GarageLogViewModel) 
         }
 
         item {
-            PermissionsCard(current.permissions, enabled = !busy, onChange = viewModel::saveStandardPermissions)
+            PermissionsCard(current.permissions, enabled = !busy, onChange = garage::saveStandardPermissions)
         }
     }
 
@@ -144,7 +147,7 @@ fun MembersScreen(vehicles: List<VehicleEntity>, viewModel: GarageLogViewModel) 
             initialRole = GarageCloud.ROLE_STANDARD,
             initialVehicleIds = emptyList(),
             onDismiss = { inviting = false },
-            onSave = { email, role, ids -> viewModel.inviteMember(email, role, ids); inviting = false },
+            onSave = { email, role, ids -> garage.inviteMember(email, role, ids); inviting = false },
         )
     }
     editing?.let { member ->
@@ -155,8 +158,8 @@ fun MembersScreen(vehicles: List<VehicleEntity>, viewModel: GarageLogViewModel) 
             initialRole = member.role,
             initialVehicleIds = member.vehicleIds,
             onDismiss = { editing = null },
-            onSave = { _, role, ids -> viewModel.updateMember(member.uid, role, ids); editing = null },
-            onRemove = { viewModel.removeMember(member.uid); editing = null },
+            onSave = { _, role, ids -> garage.updateMember(member.uid, role, ids); editing = null },
+            onRemove = { garage.removeMember(member.uid); editing = null },
         )
     }
 }

@@ -19,12 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.PhotoOwnerType
 import com.garagelog.app.data.entity.VehicleEntity
-import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.RecordsViewModel
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.FormSheetScaffold
@@ -65,7 +66,7 @@ fun LogFormSheet(
     vehicles: List<VehicleEntity>,
     schedules: List<MaintenanceScheduleEntity>,
     defaultVehicleId: String?,
-    viewModel: GarageLogViewModel,
+    records: RecordsViewModel = viewModel(factory = RecordsViewModel.Factory),
     onDismiss: () -> Unit,
     onSave: (LogEntryEntity) -> Unit,
     onDelete: (String) -> Unit,
@@ -116,7 +117,7 @@ fun LogFormSheet(
             // A new entry's photos were written straight to the DB the moment they were picked
             // (see PhotoGridSection), since attaching a photo needs a real owner id right away —
             // if the entry itself is never saved, clean those up rather than leaving them orphaned.
-            if (entry == null) viewModel.discardPhotosForOwner(PhotoOwnerType.LOG, stableId)
+            if (entry == null) records.discardPhotosForOwner(PhotoOwnerType.LOG, stableId)
             onDismiss()
         },
         showDelete = entry != null && canDelete,
@@ -220,7 +221,7 @@ fun LogFormSheet(
         LabeledTextField("Notes", form.notes, { form = form.copy(notes = it) }, singleLine = false, minLines = 2)
 
         if (!isQuickCategory(form.category)) {
-            PhotoGridSection(viewModel = viewModel, ownerType = PhotoOwnerType.LOG, ownerId = stableId)
+            PhotoGridSection(records = records, ownerType = PhotoOwnerType.LOG, ownerId = stableId)
         }
     }
 }

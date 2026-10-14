@@ -64,34 +64,26 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.entity.AiChatMessageEntity
-import com.garagelog.app.data.entity.IssueEntity
 import com.garagelog.app.data.entity.LogCategory
-import com.garagelog.app.data.entity.LogEntryEntity
-import com.garagelog.app.data.entity.MaintenanceScheduleEntity
-import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.ai.AiChatScreen
 import com.garagelog.app.ui.ai.AiDiagnosisScreen
+import com.garagelog.app.ui.ai.BobViewModel
 import com.garagelog.app.ui.components.GarageDrawer
 import com.garagelog.app.ui.components.VehiclePickerRow
 import com.garagelog.app.ui.dashboard.DashboardScreen
 import com.garagelog.app.ui.dashboard.VehicleReorderScreen
-import com.garagelog.app.ui.issues.IssueFormSheet
 import com.garagelog.app.ui.issues.IssuesScreen
-import com.garagelog.app.ui.log.LogFormSheet
 import com.garagelog.app.ui.log.LogScreen
-import com.garagelog.app.ui.schedule.BobScheduleSheet
-import com.garagelog.app.ui.schedule.ScheduleFormSheet
 import com.garagelog.app.ui.schedule.ScheduleScreen
 import com.garagelog.app.ui.settings.ManageVehiclesScreen
 import com.garagelog.app.ui.settings.MembersScreen
 import com.garagelog.app.ui.settings.SettingsScreen
-import com.garagelog.app.ui.settings.VehicleFormSheet
 import com.garagelog.app.ui.theme.GarageFabShape
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.ui.trends.TrendsScreen
-import com.garagelog.app.util.todayIso
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -133,23 +125,16 @@ private fun AppTab.icon(): ImageVector = when (this) {
     AppTab.Trends -> Icons.AutoMirrored.Filled.ShowChart
 }
 
-private sealed class Sheet {
-    data object None : Sheet()
-    data class VehicleForm(val vehicle: VehicleEntity?) : Sheet()
-    data class LogForm(val entry: LogEntryEntity?, val prefill: LogEntryEntity? = null) : Sheet()
-    data class IssueForm(val issue: IssueEntity?) : Sheet()
-    data class ScheduleForm(val schedule: MaintenanceScheduleEntity?) : Sheet()
-    data class BobSchedule(val vehicle: VehicleEntity) : Sheet()
-}
-
 @Composable
-fun GarageLogApp(viewModel: GarageLogViewModel) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
-    val diagnoses by viewModel.diagnoses.collectAsStateWithLifecycle()
-    val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
-    val hasAiKey by viewModel.hasAiKey.collectAsStateWithLifecycle()
-    val access by viewModel.access.collectAsStateWithLifecycle()
+fun GarageLogApp(shell: GarageLogViewModel) {
+    val records: RecordsViewModel = viewModel(factory = RecordsViewModel.Factory)
+    val bob: BobViewModel = viewModel(factory = BobViewModel.Factory)
+    val uiState by shell.uiState.collectAsStateWithLifecycle()
+    val syncStatus by shell.syncStatus.collectAsStateWithLifecycle()
+    val diagnoses by bob.diagnoses.collectAsStateWithLifecycle()
+    val chatMessages by bob.chatMessages.collectAsStateWithLifecycle()
+    val hasApiKey by bob.hasApiKey.collectAsStateWithLifecycle()
+    val access by shell.access.collectAsStateWithLifecycle()
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
     var reorderMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -162,7 +147,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     }
 
     LaunchedEffect(Unit) {
-        viewModel.messages.collectLatest { msg ->
+        shell.messages.collectLatest { msg ->
             android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
@@ -183,10 +168,10 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 Lifecycle.Event.ON_STOP -> stoppedAtMillis = System.currentTimeMillis()
                 Lifecycle.Event.ON_START -> {
                     // Pick up what other people in a shared garage changed while this was closed.
-                    viewModel.syncNow()
+                    shell.syncNow()
                     val stoppedAt = stoppedAtMillis
                     if (stoppedAt == null || System.currentTimeMillis() - stoppedAt > HOME_RESET_AWAY_THRESHOLD_MS) {
-                        viewModel.resetToHome()
+                        shell.resetToHome()
                     }
                 }
                 else -> Unit
@@ -204,7 +189,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     // needs a mounted HorizontalPager to actually scroll against, and calling it while the pager
     // isn't composed (because we're showing VehicleReorderScreen instead) left it in a corrupted
     // state — settledPage would land on the wrong page once observed, which fed back into
-    // viewModel.selectTab with the WRONG tab, silently cancelling reorder mode via the "navigated
+    // shell.selectTab with the WRONG tab, silently cancelling reorder mode via the "navigated
     // away" effect above. Guarding both effects while reorderMode is true avoids ever touching
     // pagerState while it has nothing real to scroll.
     LaunchedEffect(uiState.currentTab) {
@@ -218,7 +203,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collectLatest { page ->
             if (reorderMode) return@collectLatest
-            mainTabs.getOrNull(page)?.let { tab -> if (tab != uiState.currentTab) viewModel.selectTab(tab) }
+            mainTabs.getOrNull(page)?.let { tab -> if (tab != uiState.currentTab) shell.selectTab(tab) }
         }
     }
     // The guard above means the pager can silently drift out of sync with currentTab for the
@@ -251,7 +236,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         when {
             drawerState.isOpen -> scope.launch { drawerState.close() }
             reorderMode -> reorderMode = false
-            else -> viewModel.closeSubScreen()
+            else -> shell.closeSubScreen()
         }
     }
 
@@ -273,10 +258,10 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
         gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             GarageDrawer(
-                onOpenSchedule = { viewModel.openSchedule() },
-                onOpenManageVehicles = { viewModel.openManageVehicles() },
-                onOpenSettings = { viewModel.openSettings() },
-                onOpenMembers = if (access.canManageMembers) { { viewModel.openMembers() } } else null,
+                onOpenSchedule = { shell.openSchedule() },
+                onOpenManageVehicles = { shell.openManageVehicles() },
+                onOpenSettings = { shell.openSettings() },
+                onOpenMembers = if (access.canManageMembers) { { shell.openMembers() } } else null,
                 onClose = { scope.launch { drawerState.close() } },
             )
         },
@@ -329,7 +314,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                 // way back belongs.
                                 if (showingSubScreen || reorderMode) {
                                     IconButton(onClick = {
-                                        if (reorderMode) reorderMode = false else viewModel.closeSubScreen()
+                                        if (reorderMode) reorderMode = false else shell.closeSubScreen()
                                     }) {
                                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                     }
@@ -354,7 +339,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                 vehicles = uiState.vehicles,
                                 // A chat belongs to one vehicle; its chip is the one lit.
                                 activeVehicleId = (subScreen as? SubScreen.Chat)?.vehicleId ?: uiState.activeVehicleId,
-                                onSelect = viewModel::selectVehicle,
+                                onSelect = shell::selectVehicle,
                             )
                         }
                         Spacer(Modifier.height(10.dp))
@@ -369,28 +354,28 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 NavigationBar(containerColor = garageColors.chrome) {
                     NavigationBarItem(
                         selected = uiState.currentTab == AppTab.Dashboard && !showingSubScreen,
-                        onClick = { viewModel.resetToHome() },
+                        onClick = { shell.resetToHome() },
                         icon = { Icon(Icons.Filled.Home, contentDescription = null) },
                         label = { Text("Home") },
                         colors = itemColors,
                     )
                     NavigationBarItem(
                         selected = uiState.currentTab == AppTab.Log && !showingSubScreen,
-                        onClick = { viewModel.selectTab(AppTab.Log) },
+                        onClick = { shell.selectTab(AppTab.Log) },
                         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
                         label = { Text("Log") },
                         colors = itemColors,
                     )
                     NavigationBarItem(
                         selected = uiState.currentTab == AppTab.Issues && !showingSubScreen,
-                        onClick = { viewModel.selectTab(AppTab.Issues) },
+                        onClick = { shell.selectTab(AppTab.Issues) },
                         icon = { Icon(Icons.Filled.Warning, contentDescription = null) },
                         label = { Text("Issues") },
                         colors = itemColors,
                     )
                     NavigationBarItem(
                         selected = uiState.currentTab == AppTab.Trends && !showingSubScreen,
-                        onClick = { viewModel.selectTab(AppTab.Trends) },
+                        onClick = { shell.selectTab(AppTab.Trends) },
                         icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, contentDescription = null) },
                         label = { Text("Trends") },
                         colors = itemColors,
@@ -425,17 +410,17 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             when {
                 reorderMode -> VehicleReorderScreen(
                     vehicles = uiState.vehicles,
-                    onReorderVehicles = viewModel::reorderVehicles,
+                    onReorderVehicles = records::reorderVehicles,
                     onDone = { reorderMode = false },
                 )
-                subScreen is SubScreen.Settings -> SettingsScreen(uiState = uiState, viewModel = viewModel)
-                subScreen is SubScreen.Members -> MembersScreen(vehicles = uiState.vehicles, viewModel = viewModel)
+                subScreen is SubScreen.Settings -> SettingsScreen(uiState = uiState, onOpenMembers = { shell.openMembers() })
+                subScreen is SubScreen.Members -> MembersScreen(vehicles = uiState.vehicles)
                 subScreen is SubScreen.ManageVehicles -> ManageVehiclesScreen(
                     vehicles = uiState.vehicles,
                     onAddVehicle = if (access.canAddVehicles) { { activeSheet = Sheet.VehicleForm(null) } } else null,
                     onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                     onReorderVehicles = {
-                        viewModel.resetToHome()
+                        shell.resetToHome()
                         reorderMode = true
                     },
                 )
@@ -444,68 +429,59 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     // The issue can vanish underneath this screen (deleted from another tab, or a
                     // sync merge), so fall back to closing rather than rendering a half-empty page.
                     if (issue == null) {
-                        LaunchedEffect(Unit) { viewModel.closeSubScreen() }
+                        LaunchedEffect(Unit) { shell.closeSubScreen() }
                     } else {
                         AiDiagnosisScreen(
                             issue = issue,
                             vehicleName = uiState.vehicleName(issue.vehicleId),
                             diagnosis = diagnoses[issue.id],
-                            runsFlow = viewModel.aiRuns,
-                            hasApiKey = hasAiKey,
-                            sourcesFor = viewModel::decodeAiSources,
-                            onRun = { viewModel.runDiagnosis(issue) },
-                            onStop = { viewModel.cancelDiagnosis(issue.id) },
-                            onOpenSettings = viewModel::openSettings,
-                            onAskFollowUp = if (access.canChatWithBob) { { viewModel.openChat(issue.vehicleId, issue.id) } } else null,
+                            runsFlow = bob.runs,
+                            hasApiKey = hasApiKey,
+                            sourcesFor = bob::decodeSources,
+                            onRun = { bob.runDiagnosis(issue) },
+                            onStop = { bob.cancelDiagnosis(issue.id) },
+                            onOpenSettings = shell::openSettings,
+                            onAskFollowUp = if (access.canChatWithBob) { { shell.openChat(issue.vehicleId, issue.id) } } else null,
                         )
                     }
                 }
                 subScreen is SubScreen.Chat -> {
                     val vehicle = uiState.vehicles.find { it.id == subScreen.vehicleId }
                     if (vehicle == null) {
-                        LaunchedEffect(Unit) { viewModel.closeSubScreen() }
+                        LaunchedEffect(Unit) { shell.closeSubScreen() }
                     } else {
                         val issueId = subScreen.issueId
                         val followedIssue = issueId?.let { id -> uiState.issues.find { it.id == id } }
                         AiChatScreen(
                             vehicleLabel = followedIssue?.let { "${vehicle.name} · ${it.title}" } ?: vehicle.name,
                             messages = chatMessages.filter { it.vehicleId == vehicle.id && it.issueId == issueId },
-                            runsFlow = viewModel.aiRuns,
+                            runsFlow = bob.runs,
                             runKey = AiChatMessageEntity.threadKey(vehicle.id, issueId),
-                            hasApiKey = hasAiKey,
-                            sourcesFor = viewModel::decodeAiSources,
+                            hasApiKey = hasApiKey,
+                            sourcesFor = bob::decodeSources,
                             onSend = {
-                                viewModel.sendChatMessage(vehicle.id, issueId, it, vehicle.name)
+                                bob.sendChatMessage(vehicle.id, issueId, it, vehicle.name)
                             },
-                            onStop = { viewModel.cancelChat(vehicle.id, issueId) },
-                            onClear = { viewModel.clearChat(vehicle.id, issueId) },
-                            onOpenSettings = viewModel::openSettings,
+                            onStop = { bob.cancelChat(vehicle.id, issueId) },
+                            onClear = { bob.clearChat(vehicle.id, issueId) },
+                            onOpenSettings = shell::openSettings,
                         )
                     }
                 }
                 subScreen is SubScreen.Schedule -> ScheduleScreen(
                     uiState = uiState,
-                    onBack = viewModel::closeSubScreen,
+                    onBack = shell::closeSubScreen,
                     onEdit = { activeSheet = Sheet.ScheduleForm(it) },
                     onAddNew = if (access.canEditSchedules) { { activeSheet = Sheet.ScheduleForm(null) } } else null,
-                    onMarkDone = viewModel::markScheduleDoneToday,
-                    onCopySchedule = if (access.canEditSchedules) { { from, to -> viewModel.copySchedulesToVehicle(from, to) } } else null,
+                    onMarkDone = records::markScheduleDoneToday,
+                    onCopySchedule = if (access.canEditSchedules) { { from, to -> records.copySchedulesToVehicle(from, to) } } else null,
                     onLogSchedule = { sched ->
-                        val vehicle = uiState.vehicles.find { it.id == sched.vehicleId }
-                        activeSheet = Sheet.LogForm(
-                            entry = null,
-                            prefill = LogEntryEntity(
-                                id = "",
-                                vehicleId = sched.vehicleId,
-                                date = todayIso(),
-                                mileage = vehicle?.miles,
-                                category = LogCategory.Routine.name,
-                                task = sched.taskName,
-                                cost = null,
-                                parts = "",
-                                notes = "",
-                                fulfillsScheduleId = sched.id,
-                            ),
+                        activeSheet = newLogSheet(
+                            vehicleId = sched.vehicleId,
+                            category = LogCategory.Routine,
+                            task = sched.taskName,
+                            mileage = uiState.vehicles.find { it.id == sched.vehicleId }?.miles,
+                            fulfillsScheduleId = sched.id,
                         )
                     },
                     onSuggestWithBob = if (access.canEditSchedules && access.canChatWithBob) { { activeSheet = Sheet.BobSchedule(it) } } else null,
@@ -515,46 +491,33 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         AppTab.Dashboard -> DashboardScreen(
                             uiState = uiState,
                             syncStatus = syncStatus,
-                            onRefresh = viewModel::syncNow,
+                            onRefresh = shell::syncNow,
                             onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                             onAddVehicle = if (access.canAddVehicles) { { activeSheet = Sheet.VehicleForm(null) } } else null,
-                            onOpenSchedule = viewModel::openSchedule,
-                            onUpdateMileage = viewModel::updateMileage,
-                            onOpenVehicleTab = viewModel::openVehicleTab,
+                            onOpenSchedule = shell::openSchedule,
+                            onUpdateMileage = records::updateMileage,
+                            onOpenVehicleTab = shell::openVehicleTab,
                             onAddFueling = { vehicle ->
-                                activeSheet = Sheet.LogForm(
-                                    entry = null,
-                                    prefill = LogEntryEntity(
-                                        id = "",
-                                        vehicleId = vehicle.id,
-                                        date = todayIso(),
-                                        // Deliberately not the vehicle's current miles: a fill-up
-                                        // is a fresh odometer reading, and prefilling the last one
-                                        // made it too easy to save a stale number without noticing.
-                                        mileage = null,
-                                        category = LogCategory.Fuel.name,
-                                        task = "Fuel",
-                                        cost = null,
-                                        parts = "",
-                                        notes = "",
-                                    ),
-                                )
+                                // Mileage deliberately blank, not the vehicle's current miles: a fill-up
+                                // is a fresh odometer reading, and prefilling the last one made it too
+                                // easy to save a stale number without noticing.
+                                activeSheet = newLogSheet(vehicle.id, LogCategory.Fuel, task = "Fuel", mileage = null)
                             },
-                            onSetVehiclePhoto = viewModel::setVehiclePhoto,
-                            onAskClaude = if (access.canChatWithBob) { { viewModel.openChat(it.id) } } else null,
+                            onSetVehiclePhoto = records::setVehiclePhoto,
+                            onAskClaude = if (access.canChatWithBob) { { shell.openChat(it.id) } } else null,
                         )
                         AppTab.Log -> LogScreen(
                             uiState = uiState,
                             onItemClick = { activeSheet = Sheet.LogForm(it) },
-                            onDelete = { viewModel.deleteLog(it.id) },
+                            onDelete = { records.deleteLog(it.id) },
                             canDelete = { access.canDeleteEntry(it.createdBy) },
                         )
                         AppTab.Issues -> IssuesScreen(
                             uiState = uiState,
                             diagnosedIssueIds = diagnoses.keys,
                             onItemClick = { activeSheet = Sheet.IssueForm(it) },
-                            onDiagnose = { viewModel.openDiagnosis(it.id) },
-                            onDelete = { viewModel.deleteIssue(it.id) },
+                            onDiagnose = { shell.openDiagnosis(it.id) },
+                            onDelete = { records.deleteIssue(it.id) },
                             canDelete = { access.canDeleteEntry(it.createdBy) },
                         )
                         AppTab.Trends -> TrendsScreen(uiState = uiState)
@@ -565,77 +528,5 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     }
     }
 
-    when (val sheet = activeSheet) {
-        is Sheet.None -> Unit
-        is Sheet.VehicleForm -> VehicleFormSheet(
-            vehicle = sheet.vehicle,
-            viewModel = viewModel,
-            onDismiss = { activeSheet = Sheet.None },
-            onSave = { v, starterSchedules ->
-                viewModel.saveVehicle(v)
-                viewModel.addSchedules(starterSchedules)
-                activeSheet = Sheet.None
-            },
-            onDelete = { viewModel.deleteVehicle(it); activeSheet = Sheet.None },
-            lockedReason = if (sheet.vehicle != null && !access.canEditVehicles) Access.VEHICLE_LOCKED else null,
-            canDelete = access.canDeleteVehicles,
-        )
-        is Sheet.LogForm -> LogFormSheet(
-            entry = sheet.entry,
-            prefill = sheet.prefill,
-            vehicles = uiState.vehicles,
-            schedules = uiState.schedules,
-            defaultVehicleId = uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id,
-            viewModel = viewModel,
-            onDismiss = { activeSheet = Sheet.None },
-            onSave = { viewModel.saveLog(it); activeSheet = Sheet.None },
-            onDelete = { viewModel.deleteLog(it); activeSheet = Sheet.None },
-            lockedReason = sheet.entry?.let { access.entryLockReason(it.createdBy) },
-            canDelete = sheet.entry?.let { access.canDeleteEntry(it.createdBy) } ?: true,
-        )
-        is Sheet.IssueForm -> IssueFormSheet(
-            issue = sheet.issue,
-            vehicles = uiState.vehicles,
-            defaultVehicleId = uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id,
-            viewModel = viewModel,
-            onDismiss = { activeSheet = Sheet.None },
-            onSave = { viewModel.saveIssue(it); activeSheet = Sheet.None },
-            onDelete = { viewModel.deleteIssue(it); activeSheet = Sheet.None },
-            lockedReason = sheet.issue?.let { access.entryLockReason(it.createdBy) },
-            canDelete = sheet.issue?.let { access.canDeleteEntry(it.createdBy) } ?: true,
-            onResolvedWithLog = { resolved ->
-                viewModel.saveIssue(resolved)
-                activeSheet = Sheet.LogForm(
-                    entry = null,
-                    prefill = LogEntryEntity(
-                        id = "",
-                        vehicleId = resolved.vehicleId,
-                        date = todayIso(),
-                        mileage = uiState.vehicles.find { it.id == resolved.vehicleId }?.miles,
-                        category = LogCategory.Repair.name,
-                        task = resolved.title,
-                        cost = null,
-                        parts = "",
-                        notes = "",
-                    ),
-                )
-            },
-        )
-        is Sheet.ScheduleForm -> ScheduleFormSheet(
-            schedule = sheet.schedule,
-            vehicles = uiState.vehicles,
-            defaultVehicleId = uiState.activeVehicleId ?: uiState.vehicles.firstOrNull()?.id,
-            onDismiss = { activeSheet = Sheet.None },
-            onSave = { viewModel.saveSchedule(it); activeSheet = Sheet.None },
-            onDelete = { viewModel.deleteSchedule(it); activeSheet = Sheet.None },
-            lockedReason = if (access.canEditSchedules) null else Access.SCHEDULE_LOCKED,
-        )
-        is Sheet.BobSchedule -> BobScheduleSheet(
-            vehicle = sheet.vehicle,
-            existing = uiState.schedules.filter { it.vehicleId == sheet.vehicle.id },
-            viewModel = viewModel,
-            onDismiss = { activeSheet = Sheet.None },
-            onAdd = { viewModel.addSchedules(it, announce = true); activeSheet = Sheet.None },
-        )
-    }
+    AppSheets(sheet = activeSheet, uiState = uiState, access = access, records = records, onShow = { activeSheet = it })
 }

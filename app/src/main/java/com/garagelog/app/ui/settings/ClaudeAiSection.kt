@@ -18,8 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.ai.ASSISTANT_NAME
-import com.garagelog.app.ui.GarageLogViewModel
+import com.garagelog.app.ui.ai.BobViewModel
 import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.GarageCard
 
@@ -28,8 +29,8 @@ import com.garagelog.app.ui.components.GarageCard
  * it is never written to the Room database, the JSON backup, or the Drive sync snapshot.
  */
 @Composable
-fun ClaudeAiSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
-    val hasKey by viewModel.hasAiKey.collectAsStateWithLifecycle()
+fun ClaudeAiSection(modifier: Modifier = Modifier, bob: BobViewModel = viewModel(factory = BobViewModel.Factory)) {
+    val hasKey by bob.hasApiKey.collectAsStateWithLifecycle()
     var draft by remember { mutableStateOf("") }
     var confirmingRemove by remember { mutableStateOf(false) }
 
@@ -38,7 +39,7 @@ fun ClaudeAiSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier
             title = "Remove API key?",
             message = "Diagnoses and chats already saved stay on this device, but you won't be able to run new ones until you add a key again.",
             confirmLabel = "Remove",
-            onConfirm = { viewModel.clearAiApiKey() },
+            onConfirm = { bob.clearApiKey() },
             onDismiss = { confirmingRemove = false },
         )
     }
@@ -48,7 +49,7 @@ fun ClaudeAiSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier
 
         if (hasKey) {
             Text(
-                "Connected with key ${viewModel.aiKeyHint() ?: ""}. Diagnose issues from the Issues tab, " +
+                "Connected with key ${bob.apiKeyHint() ?: ""}. Diagnose issues from the Issues tab, " +
                     "or ask about a vehicle from its card on Home.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
@@ -78,7 +79,7 @@ fun ClaudeAiSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier
             )
             Button(
                 onClick = {
-                    viewModel.setAiApiKey(draft)
+                    bob.setApiKey(draft)
                     draft = ""
                 },
                 enabled = draft.isNotBlank(),
