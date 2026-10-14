@@ -17,7 +17,13 @@ private val prettyFormat = SimpleDateFormat("MMM d, yyyy", Locale.US).apply {
     timeZone = TimeZone.getTimeZone("UTC")
 }
 
-fun todayIso(): String = isoFormat.format(Date())
+/**
+ * Today's calendar date where the owner is. Stored dates are zone-free calendar dates handled as
+ * UTC midnight (above), but "today" itself has to come from the device's zone: computing it in
+ * UTC made every evening entry in Alaska (UTC-8/-9) land on tomorrow, from 3-4 PM on. Built per
+ * call so a time-zone change while the app is open is picked up.
+ */
+fun todayIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
 fun formatDate(iso: String?): String {
     if (iso.isNullOrBlank()) return "—"
