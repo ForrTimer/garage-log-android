@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:width="240dp" android:height="240dp"
+    tools:ignore="VectorRaster"
     android:viewportWidth="36" android:viewportHeight="36">
+    <!-- 240dp is the size the splash screen API asks for, above lint's 200dp guideline; it's
+         drawn once at launch. -->
     <!-- The wrench path is drawn edge-to-edge in a 24x24 box; the splash screen API masks the
          icon to a centered "safe zone" circle, which was clipping the wrench's tips. Sizing the
          viewport to 36x36 and centering the same path in it (6dp margin each side, matching the

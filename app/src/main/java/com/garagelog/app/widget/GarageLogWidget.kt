@@ -24,10 +24,22 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
+import androidx.glance.color.ColorProvider
+import androidx.glance.unit.ColorProvider as GlanceColor
 import com.garagelog.app.GarageLogApplication
 import com.garagelog.app.MainActivity
-import com.garagelog.app.R
+import com.garagelog.app.ui.theme.DarkAlarm
+import com.garagelog.app.ui.theme.DarkOk
+import com.garagelog.app.ui.theme.DarkPanel
+import com.garagelog.app.ui.theme.DarkText
+import com.garagelog.app.ui.theme.DarkTextMuted
+import com.garagelog.app.ui.theme.DarkWarn
+import com.garagelog.app.ui.theme.LightAlarm
+import com.garagelog.app.ui.theme.LightOk
+import com.garagelog.app.ui.theme.LightPanel
+import com.garagelog.app.ui.theme.LightText
+import com.garagelog.app.ui.theme.LightTextMuted
+import com.garagelog.app.ui.theme.LightWarn
 import com.garagelog.app.util.DueStatus
 import com.garagelog.app.util.computeDueInfo
 
@@ -66,7 +78,7 @@ private fun WidgetContent(next: WidgetCandidate?, openAppIntent: Intent) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(ColorProvider(R.color.widget_background))
+            .background(WidgetColors.background)
             .cornerRadius(16.dp)
             .padding(14.dp)
             .clickable(actionStartActivity(openAppIntent)),
@@ -74,34 +86,47 @@ private fun WidgetContent(next: WidgetCandidate?, openAppIntent: Intent) {
     ) {
         Text(
             text = "GARAGE LOG",
-            style = TextStyle(color = ColorProvider(R.color.widget_text_muted), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(color = WidgetColors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold),
         )
         Spacer(modifier = GlanceModifier.height(6.dp))
         if (next == null) {
             Text(
                 text = "✓ All maintenance on track",
-                style = TextStyle(color = ColorProvider(R.color.widget_ok), fontSize = 15.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = WidgetColors.ok, fontSize = 15.sp, fontWeight = FontWeight.Bold),
             )
         } else {
-            val statusColor = if (next.status == DueStatus.OVERDUE) R.color.widget_overdue else R.color.widget_due_soon
+            val statusColor = if (next.status == DueStatus.OVERDUE) WidgetColors.overdue else WidgetColors.dueSoon
             Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Vertical.CenterVertically) {
                 Text(
                     text = if (next.status == DueStatus.OVERDUE) "OVERDUE" else "DUE SOON",
-                    style = TextStyle(color = ColorProvider(statusColor), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                    style = TextStyle(color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold),
                 )
             }
             Spacer(modifier = GlanceModifier.height(4.dp))
             Text(
                 text = "${next.vehicleName} — ${next.taskName}",
-                style = TextStyle(color = ColorProvider(R.color.widget_text), fontSize = 16.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = WidgetColors.text, fontSize = 16.sp, fontWeight = FontWeight.Bold),
                 maxLines = 2,
             )
             Spacer(modifier = GlanceModifier.height(2.dp))
             Text(
                 text = next.label,
-                style = TextStyle(color = ColorProvider(R.color.widget_text_muted), fontSize = 13.sp),
+                style = TextStyle(color = WidgetColors.textMuted, fontSize = 13.sp),
                 maxLines = 2,
             )
         }
     }
+}
+
+/**
+ * The app theme's own colors, day and night. Glance draws in the launcher's process, so it can't
+ * read GarageColors from a composition local, but it can take the same values as day/night pairs.
+ */
+private object WidgetColors {
+    val background: GlanceColor = ColorProvider(day = LightPanel, night = DarkPanel)
+    val text: GlanceColor = ColorProvider(day = LightText, night = DarkText)
+    val textMuted: GlanceColor = ColorProvider(day = LightTextMuted, night = DarkTextMuted)
+    val overdue: GlanceColor = ColorProvider(day = LightAlarm, night = DarkAlarm)
+    val dueSoon: GlanceColor = ColorProvider(day = LightWarn, night = DarkWarn)
+    val ok: GlanceColor = ColorProvider(day = LightOk, night = DarkOk)
 }

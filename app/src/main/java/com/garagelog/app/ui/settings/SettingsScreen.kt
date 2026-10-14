@@ -42,10 +42,6 @@ import com.garagelog.app.ui.theme.garageSwitchColors
 import com.garagelog.app.util.dayOfWeekName
 import com.garagelog.app.util.monthName
 import com.garagelog.app.util.todayIso
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import java.util.Calendar
 
 @Composable

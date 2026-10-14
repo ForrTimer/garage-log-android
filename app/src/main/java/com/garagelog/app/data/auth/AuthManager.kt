@@ -4,10 +4,13 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
+import androidx.core.content.edit
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.garagelog.app.BuildConfig
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
@@ -48,15 +51,8 @@ class AuthManager(context: Context) {
 
     /** Starts sign-in. May finish immediately, or may need [completeDriveConsent] after a consent screen. */
     suspend fun beginSignIn(activity: Activity): Result<SignInStep> = runCatching {
-        val option = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
-            .build()
-        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-        val response = credentialManager.getCredential(activity, request)
-        val credential = response.credential as CustomCredential
-        val idTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-        pendingEmail = idTokenCredential.id
+        val idTokenCredential = pickGoogleAccount(activity)
+        pendingEmail = idTokenCredential.email
         // Same Google account, same token: sign in to Firebase too, so a shared garage works without
         // a second prompt. Best effort — Drive sync doesn't depend on it.
         runCatching { firebaseSignIn(idTokenCredential.idToken) }
@@ -71,13 +67,29 @@ class AuthManager(context: Context) {
      */
     suspend fun signInToFirebase(activity: Activity): Result<FirebaseUser> = runCatching {
         FirebaseAuth.getInstance().currentUser?.let { return@runCatching it }
+        firebaseSignIn(pickGoogleAccount(activity).idToken)
+    }
+
+    /**
+     * Google's account picker, for an ID token. The two failures a person can cause get plain
+     * words instead of Credential Manager's: no Google account on the phone, and backing out.
+     */
+    private suspend fun pickGoogleAccount(activity: Activity): GoogleIdTokenCredential {
         val option = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
             .build()
         val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-        val credential = credentialManager.getCredential(activity, request).credential as CustomCredential
-        firebaseSignIn(GoogleIdTokenCredential.createFrom(credential.data).idToken)
+        val response = try {
+            credentialManager.getCredential(activity, request)
+        } catch (e: NoCredentialException) {
+            throw IllegalStateException("No Google account on this phone. Add one in Android Settings, then try again.", e)
+        } catch (e: GetCredentialCancellationException) {
+            throw IllegalStateException("Sign-in cancelled.", e)
+        }
+        val credential = response.credential as? CustomCredential
+            ?: error("Google didn't return an account.")
+        return GoogleIdTokenCredential.createFrom(credential.data)
     }
 
     private suspend fun firebaseSignIn(idToken: String): FirebaseUser {
@@ -114,7 +126,7 @@ class AuthManager(context: Context) {
         cachedAccessToken = accessToken
         cachedTokenExpiryMillis = System.currentTimeMillis() + TOKEN_LIFETIME_MILLIS
         _signedInEmail.value = email
-        prefs.edit().putString(KEY_EMAIL, email).apply()
+        prefs.edit { putString(KEY_EMAIL, email) }
     }
 
     /** Returns a Drive-scoped access token, silently refreshing if the cached one's stale. Null if signed out. */
@@ -143,7 +155,7 @@ class AuthManager(context: Context) {
         cachedAccessToken = null
         pendingEmail = null
         _signedInEmail.value = null
-        prefs.edit().remove(KEY_EMAIL).apply()
+        prefs.edit { remove(KEY_EMAIL) }
         FirebaseAuth.getInstance().signOut()
         runCatching { credentialManager.clearCredentialState(ClearCredentialStateRequest()) }
     }

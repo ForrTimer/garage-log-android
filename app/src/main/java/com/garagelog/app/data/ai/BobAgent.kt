@@ -1,6 +1,7 @@
 package com.garagelog.app.data.ai
 
 import android.content.Context
+import androidx.core.content.edit
 import com.garagelog.app.BuildConfig
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -49,11 +50,11 @@ class BobAgent(
 
     fun sessionFor(threadKey: String): String? = sessions.getString(threadKey, null)
 
-    fun adoptSession(threadKey: String, sessionId: String) = sessions.edit().putString(threadKey, sessionId).apply()
+    fun adoptSession(threadKey: String, sessionId: String) = sessions.edit { putString(threadKey, sessionId) }
 
-    fun forget(threadKey: String) = sessions.edit().remove(threadKey).apply()
+    fun forget(threadKey: String) = sessions.edit { remove(threadKey) }
 
-    fun forgetAll() = sessions.edit().clear().apply()
+    fun forgetAll() = sessions.edit { clear() }
 
     /**
      * Runs one turn in [threadKey]'s session, creating it if there isn't a usable one. [opening] is

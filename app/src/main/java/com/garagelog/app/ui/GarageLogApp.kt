@@ -18,8 +18,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,7 +45,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -76,7 +76,7 @@ import com.garagelog.app.ui.settings.VehicleFormSheet
 import com.garagelog.app.ui.trends.TrendsScreen
 import com.garagelog.app.util.todayIso
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
@@ -128,9 +128,9 @@ private fun SubScreen.icon(): ImageVector = when (this) {
 
 private fun AppTab.icon(): ImageVector = when (this) {
     AppTab.Dashboard -> Icons.Filled.Home
-    AppTab.Log -> Icons.Filled.MenuBook
+    AppTab.Log -> Icons.AutoMirrored.Filled.MenuBook
     AppTab.Issues -> Icons.Filled.Warning
-    AppTab.Trends -> Icons.Filled.ShowChart
+    AppTab.Trends -> Icons.AutoMirrored.Filled.ShowChart
 }
 
 private sealed class Sheet {
@@ -331,7 +331,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                     IconButton(onClick = {
                                         if (reorderMode) reorderMode = false else viewModel.closeSubScreen()
                                     }) {
-                                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                     }
                                 } else {
                                     IconButton(onClick = { scope.launch { drawerState.open() } }) {
@@ -377,7 +377,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     NavigationBarItem(
                         selected = uiState.currentTab == AppTab.Log && !showingSubScreen,
                         onClick = { viewModel.selectTab(AppTab.Log) },
-                        icon = { Icon(Icons.Filled.MenuBook, contentDescription = null) },
+                        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
                         label = { Text("Log") },
                         colors = itemColors,
                     )
@@ -391,7 +391,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     NavigationBarItem(
                         selected = uiState.currentTab == AppTab.Trends && !showingSubScreen,
                         onClick = { viewModel.selectTab(AppTab.Trends) },
-                        icon = { Icon(Icons.Filled.ShowChart, contentDescription = null) },
+                        icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, contentDescription = null) },
                         label = { Text("Trends") },
                         colors = itemColors,
                     )

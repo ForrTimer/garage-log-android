@@ -1,6 +1,7 @@
 package com.garagelog.app.data.cloud
 
 import android.content.Context
+import androidx.core.content.edit
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.ScheduleRepository
@@ -198,7 +199,7 @@ class GarageCloud(
         val local = localCounts()
         if (shouldUpload) {
             upload(garageId)
-            prefs.edit().putBoolean(uploadedKey(garageId), true).apply()
+            prefs.edit { putBoolean(uploadedKey(garageId), true) }
         }
         return GarageSetupOutcome.Ready(
             GarageSetupResult(
@@ -244,7 +245,7 @@ class GarageCloud(
 
         if (clearLocal) localData.clearAll()
         // Nothing to seed: sync takes it from here, in both directions.
-        prefs.edit().putBoolean(uploadedKey(invite.garageId), true).apply()
+        prefs.edit { putBoolean(uploadedKey(invite.garageId), true) }
         val garage = db.document("garages/${invite.garageId}").get().await()
         remember(
             GarageMembership(
@@ -426,7 +427,7 @@ class GarageCloud(
     suspend fun forgetGarage() {
         val garageId = _membership.value.garageId
         val uid = auth.currentUser?.uid
-        prefs.edit().remove(KEY_GARAGE).remove(KEY_ROLE).remove(KEY_VEHICLES).remove(KEY_PERMISSIONS).apply()
+        prefs.edit { remove(KEY_GARAGE); remove(KEY_ROLE); remove(KEY_VEHICLES); remove(KEY_PERMISSIONS) }
         _membership.value = GarageMembership(null, null, _membership.value.email)
         if (garageId != null && uid != null) runCatching { forgetGarageFor(uid, garageId) }
     }
@@ -441,14 +442,14 @@ class GarageCloud(
     }
 
     private fun save(membership: GarageMembership) {
-        prefs.edit()
-            .putString(KEY_GARAGE, membership.garageId)
-            .putString(KEY_ROLE, membership.role)
-            .putString(KEY_EMAIL, membership.email)
-            .putString(KEY_UID, membership.uid)
-            .putString(KEY_VEHICLES, membership.vehicleIds.joinToString(","))
-            .putString(KEY_PERMISSIONS, json.encodeToString(MapSerializer(String.serializer(), Boolean.serializer()), membership.permissions.toMap()))
-            .apply()
+        prefs.edit {
+            putString(KEY_GARAGE, membership.garageId)
+            putString(KEY_ROLE, membership.role)
+            putString(KEY_EMAIL, membership.email)
+            putString(KEY_UID, membership.uid)
+            putString(KEY_VEHICLES, membership.vehicleIds.joinToString(","))
+            putString(KEY_PERMISSIONS, json.encodeToString(MapSerializer(String.serializer(), Boolean.serializer()), membership.permissions.toMap()))
+        }
     }
 
     private fun storedMembership(): GarageMembership {

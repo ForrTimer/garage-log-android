@@ -1,10 +1,11 @@
 package com.garagelog.app.data.ai
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
-import android.content.pm.ServiceInfo
-import android.os.Build
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
@@ -20,6 +21,7 @@ import androidx.work.workDataOf
 import com.garagelog.app.MainActivity
 import com.garagelog.app.R
 import com.garagelog.app.notifications.AI_NOTIFICATION_CHANNEL_ID
+import com.garagelog.app.notifications.canPostNotifications
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -89,9 +91,11 @@ class AiWorker(
         }
     }
 
+    // canPostNotifications() runs first; lint can't see the check through the helper.
+    @SuppressLint("MissingPermission")
     private fun notify(title: String, body: String) {
         val context = applicationContext
-        if (NotificationManagerCompat.from(context).areNotificationsEnabled().not()) return
+        if (!canPostNotifications(context) || !NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         val openApp = PendingIntent.getActivity(
             context,
             0,
@@ -105,7 +109,7 @@ class AiWorker(
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .build()
-        runCatching { NotificationManagerCompat.from(context).notify(title.hashCode(), notification) }
+        NotificationManagerCompat.from(context).notify(title.hashCode(), notification)
     }
 
     companion object {

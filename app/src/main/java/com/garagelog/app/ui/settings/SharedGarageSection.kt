@@ -1,6 +1,6 @@
 package com.garagelog.app.ui.settings
 
-import android.app.Activity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -30,7 +30,7 @@ import com.garagelog.app.ui.theme.garageColors
  */
 @Composable
 fun SharedGarageSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     val membership by viewModel.garageMembership.collectAsState()
     val running by viewModel.garageSetupRunning.collectAsState()
     val lastSetup by viewModel.lastGarageSetup.collectAsState()

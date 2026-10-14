@@ -1,17 +1,14 @@
 package com.garagelog.app.notifications
 
-import android.Manifest
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.garagelog.app.GarageLogApplication
 import com.garagelog.app.MainActivity
 import com.garagelog.app.R
-import com.garagelog.app.GarageLogApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,12 +29,10 @@ class MileageReminderReceiver : BroadcastReceiver() {
         }
     }
 
+    // canPostNotifications() runs first; lint can't see the check through the helper.
+    @SuppressLint("MissingPermission")
     private fun showNotification(context: Context) {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
+        if (!canPostNotifications(context)) return
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }

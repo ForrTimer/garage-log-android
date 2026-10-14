@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,10 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.ShowChart
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,7 +38,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.LogCategory
-import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogUiState
@@ -52,9 +48,7 @@ import com.garagelog.app.ui.components.VehicleAvatar
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DrivingRate
-import com.garagelog.app.util.ProjectedService
 import com.garagelog.app.util.drivingRate
-import com.garagelog.app.util.projectSchedules
 import com.garagelog.app.util.fillUpMpg
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
@@ -175,7 +169,7 @@ private fun OdometerCard(logs: List<LogEntryEntity>) {
             .sortedBy { it.date }
             .map { it.date to it.mileage!!.toFloat() }
         if (points.size < 2) {
-            EmptyState("Log a couple of mileage readings to see this trend.", icon = Icons.Filled.ShowChart)
+            EmptyState("Log a couple of mileage readings to see this trend.", icon = Icons.AutoMirrored.Filled.ShowChart)
         } else {
             LineChart(
                 values = points.map { it.second },
@@ -198,7 +192,7 @@ private fun FuelEconomyCard(logs: List<LogEntryEntity>) {
         when {
             all.isEmpty() -> EmptyState(
                 "Log full-tank fill-ups to see MPG here — partial fills don't give an accurate reading.",
-                icon = Icons.Filled.ShowChart,
+                icon = Icons.AutoMirrored.Filled.ShowChart,
             )
             // One reading is a number, not a trend; drawing a single bar implies a shape that
             // isn't there yet.
@@ -239,7 +233,7 @@ private fun CostTrendCard(logs: List<LogEntryEntity>) {
     GarageCard {
         Text("Cost", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (costed.isEmpty()) {
-            EmptyState("No costed log entries yet.", icon = Icons.Filled.ShowChart)
+            EmptyState("No costed log entries yet.", icon = Icons.AutoMirrored.Filled.ShowChart)
         } else {
             // Two series, so each gets a named heading and its own colour. Blue and amber are
             // chosen as the pair because blue-vs-orange is the split every common form of colour

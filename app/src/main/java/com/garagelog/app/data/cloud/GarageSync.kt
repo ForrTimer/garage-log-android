@@ -1,6 +1,7 @@
 package com.garagelog.app.data.cloud
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.room.withTransaction
 import com.garagelog.app.data.db.AppDatabase
 import com.garagelog.app.data.entity.NotificationPrefsEntity
@@ -246,7 +247,7 @@ class GarageSync(
             }
         }
         // Everything considered this run is now either in the garage or came from it.
-        changed.maxOfOrNull { it.updatedAt }?.let { prefs.edit().putLong(cursorKey, it).apply() }
+        changed.maxOfOrNull { it.updatedAt }?.let { prefs.edit { putLong(cursorKey, it) } }
     }
 
     /** Reminder settings are per person, not per garage: users/{uid}/private/notificationPrefs. */
@@ -274,10 +275,10 @@ class GarageSync(
     }
 
     private fun setPullCursor(garageId: String, collection: String, at: Timestamp) {
-        prefs.edit()
-            .putLong("pull_${garageId}_${collection}_s", at.seconds)
-            .putInt("pull_${garageId}_${collection}_n", at.nanoseconds)
-            .apply()
+        prefs.edit {
+            putLong("pull_${garageId}_${collection}_s", at.seconds)
+            putInt("pull_${garageId}_${collection}_n", at.nanoseconds)
+        }
     }
 
     companion object {

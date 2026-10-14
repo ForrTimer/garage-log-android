@@ -1,6 +1,6 @@
 package com.garagelog.app.ui.settings
 
-import android.app.Activity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,7 +18,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import com.garagelog.app.ui.GarageLogViewModel
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.theme.garageColors
@@ -27,7 +26,7 @@ import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun AccountSection(viewModel: GarageLogViewModel, modifier: Modifier = Modifier) {
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     val email by viewModel.signedInEmail.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
 
