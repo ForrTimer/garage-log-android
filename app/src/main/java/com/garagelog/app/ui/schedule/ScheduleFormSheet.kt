@@ -33,6 +33,9 @@ fun ScheduleFormSheet(
     onDismiss: () -> Unit,
     onSave: (MaintenanceScheduleEntity) -> Unit,
     onDelete: (String) -> Unit,
+    /** See FormSheetScaffold; null = editable. */
+    lockedReason: String? = null,
+    canDelete: Boolean = true,
 ) {
     var form by remember(schedule?.id) {
         mutableStateOf(
@@ -50,7 +53,8 @@ fun ScheduleFormSheet(
     FormSheetScaffold(
         title = if (schedule == null) "New maintenance interval" else "Edit maintenance interval",
         onDismiss = onDismiss,
-        showDelete = schedule != null,
+        showDelete = schedule != null && canDelete,
+        lockedReason = lockedReason,
         deleteTitle = "Delete maintenance interval?",
         onDelete = { schedule?.let { onDelete(it.id) } },
         onSave = {

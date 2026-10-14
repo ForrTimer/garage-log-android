@@ -35,6 +35,8 @@ data class IssueEntity(
     val dateOpened: String,
     val dateResolved: String,
     val description: String,
+    // See LogEntryEntity.createdBy.
+    val createdBy: String = "",
     val updatedAt: Long = 0L,
     val deleted: Boolean = false,
 )

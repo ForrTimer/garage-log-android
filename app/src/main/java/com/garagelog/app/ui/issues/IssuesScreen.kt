@@ -61,6 +61,7 @@ fun IssuesScreen(
     onItemClick: (IssueEntity) -> Unit,
     onDiagnose: (IssueEntity) -> Unit,
     onDelete: (IssueEntity) -> Unit,
+    canDelete: (IssueEntity) -> Boolean = { true },
 ) {
     var statusFilter by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
@@ -102,6 +103,7 @@ fun IssuesScreen(
                             onClick = { onItemClick(issue) },
                             onDiagnose = { onDiagnose(issue) },
                             onDelete = { onDelete(issue) },
+                            deletable = canDelete(issue),
                         )
                         if (index != issues.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
@@ -119,8 +121,9 @@ private fun IssueRow(
     onClick: () -> Unit,
     onDiagnose: () -> Unit,
     onDelete: () -> Unit,
+    deletable: Boolean,
 ) {
-    SwipeToDeleteRow(deleteTitle = "Delete this issue?", onDelete = onDelete) {
+    SwipeToDeleteRow(deleteTitle = "Delete this issue?", onDelete = onDelete, enabled = deletable) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),

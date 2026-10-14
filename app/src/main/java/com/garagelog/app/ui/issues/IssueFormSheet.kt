@@ -47,6 +47,9 @@ fun IssueFormSheet(
     onDismiss: () -> Unit,
     onSave: (IssueEntity) -> Unit,
     onDelete: (String) -> Unit,
+    /** See FormSheetScaffold; null = editable. */
+    lockedReason: String? = null,
+    canDelete: Boolean = true,
     // Called instead of onSave when the user opts to log how a newly-Resolved issue was fixed —
     // saves the issue AND opens a pre-filled log entry for it, mirroring how marking a
     // maintenance schedule done opens a pre-filled log entry for that.
@@ -83,7 +86,8 @@ fun IssueFormSheet(
             if (issue == null) viewModel.discardPhotosForOwner(PhotoOwnerType.ISSUE, stableId)
             onDismiss()
         },
-        showDelete = issue != null,
+        showDelete = issue != null && canDelete,
+        lockedReason = lockedReason,
         deleteTitle = "Delete issue?",
         onDelete = { issue?.let { onDelete(it.id) } },
         onSave = {

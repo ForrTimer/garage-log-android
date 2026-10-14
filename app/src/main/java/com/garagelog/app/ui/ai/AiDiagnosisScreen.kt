@@ -55,7 +55,8 @@ fun AiDiagnosisScreen(
     onRun: () -> Unit,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit,
-    onAskFollowUp: () -> Unit,
+    // Null = hidden: follow-ups are Bob chat, which Standard members don't get.
+    onAskFollowUp: (() -> Unit)?,
 ) {
     val runs by runsFlow.collectAsState()
     val stream = runs[issue.id] ?: AiRunState()
@@ -132,7 +133,7 @@ fun AiDiagnosisScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.padding(top = 10.dp, bottom = 24.dp),
                     ) {
-                        ActionLink(text = "Ask a follow-up", onClick = onAskFollowUp)
+                        onAskFollowUp?.let { ActionLink(text = "Ask a follow-up", onClick = it) }
                         ActionLink(text = "Run again", onClick = onRun)
                     }
                 }

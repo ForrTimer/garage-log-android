@@ -67,14 +67,15 @@ fun ScheduleScreen(
     uiState: GarageLogUiState,
     onBack: () -> Unit,
     onEdit: (MaintenanceScheduleEntity) -> Unit,
-    onAddNew: () -> Unit,
+    // Null = hidden: schedules are admin-only for this person (shared-garage permissions).
+    onAddNew: (() -> Unit)?,
     onMarkDone: (MaintenanceScheduleEntity) -> Unit,
-    onCopySchedule: (sourceVehicleId: String, targetVehicleId: String) -> Unit,
+    onCopySchedule: ((sourceVehicleId: String, targetVehicleId: String) -> Unit)?,
     // A completed maintenance item is, functionally, a routine log entry — confirming "mark
     // done" opens the log form pre-filled with this schedule's task so the actual service
     // (cost, notes, photos) can be recorded, not just the tracker's due date silently bumped.
     onLogSchedule: (MaintenanceScheduleEntity) -> Unit,
-    onSuggestWithBob: (VehicleEntity) -> Unit,
+    onSuggestWithBob: ((VehicleEntity) -> Unit)?,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
@@ -94,14 +95,18 @@ fun ScheduleScreen(
             horizontalArrangement = Arrangement.End,
             modifier = Modifier.fillMaxWidth().padding(end = 8.dp, top = 4.dp),
         ) {
-            IconButton(onClick = onAddNew) { Icon(Icons.Filled.Add, contentDescription = "Add schedule") }
+            onAddNew?.let { add -> IconButton(onClick = add) { Icon(Icons.Filled.Add, contentDescription = "Add schedule") } }
         }
 
         LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
             if (vehicles.none { v -> uiState.schedules.any { it.vehicleId == v.id } }) {
                 item {
                     EmptyState(
-                        "No maintenance intervals tracked yet. Tap + to add one, or have $ASSISTANT_NAME suggest a schedule below.",
+                        if (onAddNew != null) {
+                            "No maintenance intervals tracked yet. Tap + to add one, or have $ASSISTANT_NAME suggest a schedule below."
+                        } else {
+                            "No maintenance intervals tracked yet."
+                        },
                         icon = Icons.Filled.Build,
                     )
                 }
@@ -127,8 +132,8 @@ fun ScheduleScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Box(modifier = Modifier.weight(1f)) { SectionTitle(v.name) }
-                        ActionLink("Suggest with $ASSISTANT_NAME", onClick = { onSuggestWithBob(v) })
-                        if (uiState.vehicles.size > 1 && schedules.isNotEmpty()) {
+                        onSuggestWithBob?.let { suggest -> ActionLink("Suggest with $ASSISTANT_NAME", onClick = { suggest(v) }) }
+                        if (onCopySchedule != null && uiState.vehicles.size > 1 && schedules.isNotEmpty()) {
                             ActionLink("Copy…", onClick = { copyFromVehicle = v })
                         }
                     }
@@ -172,7 +177,7 @@ fun ScheduleScreen(
     copyFromVehicle?.let { source ->
         CopyScheduleDialog(
             vehicles = uiState.vehicles.filter { it.id != source.id },
-            onPick = { target -> onCopySchedule(source.id, target.id); copyFromVehicle = null },
+            onPick = { target -> onCopySchedule?.invoke(source.id, target.id); copyFromVehicle = null },
             onDismiss = { copyFromVehicle = null },
         )
     }

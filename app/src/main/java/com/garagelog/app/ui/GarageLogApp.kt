@@ -80,6 +80,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerValue
@@ -90,6 +91,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.ui.components.GarageDrawer
 import com.garagelog.app.ui.settings.ManageVehiclesScreen
+import com.garagelog.app.ui.settings.MembersScreen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 
@@ -111,6 +113,7 @@ private fun SubScreen.label(): String = when (this) {
     SubScreen.Schedule -> "Maintenance"
     SubScreen.Settings -> "Settings"
     SubScreen.ManageVehicles -> "Vehicles"
+    SubScreen.Members -> "Members"
     is SubScreen.Diagnosis -> "Diagnosis"
     is SubScreen.Chat -> "Ask $ASSISTANT_NAME"
 }
@@ -119,6 +122,7 @@ private fun SubScreen.icon(): ImageVector = when (this) {
     SubScreen.Schedule -> Icons.Filled.Build
     SubScreen.Settings -> Icons.Filled.Settings
     SubScreen.ManageVehicles -> Icons.Filled.DirectionsCar
+    SubScreen.Members -> Icons.Filled.Group
     is SubScreen.Diagnosis, is SubScreen.Chat -> Icons.Filled.AutoAwesome
 }
 
@@ -145,6 +149,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     val diagnoses by viewModel.diagnoses.collectAsState()
     val chatMessages by viewModel.chatMessages.collectAsState()
     val hasAiKey by viewModel.hasAiKey.collectAsState()
+    val access by viewModel.access.collectAsState()
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
     var reorderMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -233,7 +238,9 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
     val subScreen = uiState.subScreen
     val showingSubScreen = subScreen != null
     val showFab = !showingSubScreen &&
-        uiState.currentTab != AppTab.Dashboard && uiState.currentTab != AppTab.Trends
+        uiState.currentTab != AppTab.Dashboard && uiState.currentTab != AppTab.Trends &&
+        // With no vehicles the FAB adds one, which a Standard member can't.
+        (uiState.vehicles.isNotEmpty() || access.canAddVehicles)
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -269,6 +276,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 onOpenSchedule = { viewModel.openSchedule() },
                 onOpenManageVehicles = { viewModel.openManageVehicles() },
                 onOpenSettings = { viewModel.openSettings() },
+                onOpenMembers = if (access.canManageMembers) { { viewModel.openMembers() } } else null,
                 onClose = { scope.launch { drawerState.close() } },
             )
         },
@@ -344,7 +352,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                         if (!reorderMode && (subScreen?.usesVehicleFilter != false)) {
                             VehiclePickerRow(
                                 vehicles = uiState.vehicles,
-                                activeVehicleId = uiState.activeVehicleId,
+                                // A chat belongs to one vehicle; its chip is the one lit.
+                                activeVehicleId = (subScreen as? SubScreen.Chat)?.vehicleId ?: uiState.activeVehicleId,
                                 onSelect = viewModel::selectVehicle,
                             )
                         }
@@ -420,9 +429,10 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     onDone = { reorderMode = false },
                 )
                 subScreen is SubScreen.Settings -> SettingsScreen(uiState = uiState, viewModel = viewModel)
+                subScreen is SubScreen.Members -> MembersScreen(vehicles = uiState.vehicles, viewModel = viewModel)
                 subScreen is SubScreen.ManageVehicles -> ManageVehiclesScreen(
                     vehicles = uiState.vehicles,
-                    onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
+                    onAddVehicle = if (access.canAddVehicles) { { activeSheet = Sheet.VehicleForm(null) } } else null,
                     onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
                     onReorderVehicles = {
                         viewModel.resetToHome()
@@ -446,7 +456,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onRun = { viewModel.runDiagnosis(issue) },
                             onStop = { viewModel.cancelDiagnosis(issue.id) },
                             onOpenSettings = viewModel::openSettings,
-                            onAskFollowUp = { viewModel.openChat(issue.vehicleId, issue.id) },
+                            onAskFollowUp = if (access.canChatWithBob) { { viewModel.openChat(issue.vehicleId, issue.id) } } else null,
                         )
                     }
                 }
@@ -477,9 +487,9 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                     uiState = uiState,
                     onBack = viewModel::closeSubScreen,
                     onEdit = { activeSheet = Sheet.ScheduleForm(it) },
-                    onAddNew = { activeSheet = Sheet.ScheduleForm(null) },
+                    onAddNew = if (access.canEditSchedules) { { activeSheet = Sheet.ScheduleForm(null) } } else null,
                     onMarkDone = viewModel::markScheduleDoneToday,
-                    onCopySchedule = viewModel::copySchedulesToVehicle,
+                    onCopySchedule = if (access.canEditSchedules) { { from, to -> viewModel.copySchedulesToVehicle(from, to) } } else null,
                     onLogSchedule = { sched ->
                         val vehicle = uiState.vehicles.find { it.id == sched.vehicleId }
                         activeSheet = Sheet.LogForm(
@@ -498,7 +508,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             ),
                         )
                     },
-                    onSuggestWithBob = { activeSheet = Sheet.BobSchedule(it) },
+                    onSuggestWithBob = if (access.canEditSchedules && access.canChatWithBob) { { activeSheet = Sheet.BobSchedule(it) } } else null,
                 )
                 else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     when (mainTabs[page]) {
@@ -507,7 +517,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             syncStatus = syncStatus,
                             onRefresh = viewModel::syncNow,
                             onEditVehicle = { activeSheet = Sheet.VehicleForm(it) },
-                            onAddVehicle = { activeSheet = Sheet.VehicleForm(null) },
+                            onAddVehicle = if (access.canAddVehicles) { { activeSheet = Sheet.VehicleForm(null) } } else null,
                             onOpenSchedule = viewModel::openSchedule,
                             onUpdateMileage = viewModel::updateMileage,
                             onOpenVehicleTab = viewModel::openVehicleTab,
@@ -531,12 +541,13 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                                 )
                             },
                             onSetVehiclePhoto = viewModel::setVehiclePhoto,
-                            onAskClaude = { viewModel.openChat(it.id) },
+                            onAskClaude = if (access.canChatWithBob) { { viewModel.openChat(it.id) } } else null,
                         )
                         AppTab.Log -> LogScreen(
                             uiState = uiState,
                             onItemClick = { activeSheet = Sheet.LogForm(it) },
                             onDelete = { viewModel.deleteLog(it.id) },
+                            canDelete = { access.canDeleteEntry(it.createdBy) },
                         )
                         AppTab.Issues -> IssuesScreen(
                             uiState = uiState,
@@ -544,6 +555,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                             onItemClick = { activeSheet = Sheet.IssueForm(it) },
                             onDiagnose = { viewModel.openDiagnosis(it.id) },
                             onDelete = { viewModel.deleteIssue(it.id) },
+                            canDelete = { access.canDeleteEntry(it.createdBy) },
                         )
                         AppTab.Trends -> TrendsScreen(uiState = uiState)
                     }
@@ -565,6 +577,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
                 activeSheet = Sheet.None
             },
             onDelete = { viewModel.deleteVehicle(it); activeSheet = Sheet.None },
+            lockedReason = if (sheet.vehicle != null && !access.canEditVehicles) Access.VEHICLE_LOCKED else null,
+            canDelete = access.canDeleteVehicles,
         )
         is Sheet.LogForm -> LogFormSheet(
             entry = sheet.entry,
@@ -576,6 +590,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             onDismiss = { activeSheet = Sheet.None },
             onSave = { viewModel.saveLog(it); activeSheet = Sheet.None },
             onDelete = { viewModel.deleteLog(it); activeSheet = Sheet.None },
+            lockedReason = sheet.entry?.let { access.entryLockReason(it.createdBy) },
+            canDelete = sheet.entry?.let { access.canDeleteEntry(it.createdBy) } ?: true,
         )
         is Sheet.IssueForm -> IssueFormSheet(
             issue = sheet.issue,
@@ -585,6 +601,8 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             onDismiss = { activeSheet = Sheet.None },
             onSave = { viewModel.saveIssue(it); activeSheet = Sheet.None },
             onDelete = { viewModel.deleteIssue(it); activeSheet = Sheet.None },
+            lockedReason = sheet.issue?.let { access.entryLockReason(it.createdBy) },
+            canDelete = sheet.issue?.let { access.canDeleteEntry(it.createdBy) } ?: true,
             onResolvedWithLog = { resolved ->
                 viewModel.saveIssue(resolved)
                 activeSheet = Sheet.LogForm(
@@ -610,6 +628,7 @@ fun GarageLogApp(viewModel: GarageLogViewModel) {
             onDismiss = { activeSheet = Sheet.None },
             onSave = { viewModel.saveSchedule(it); activeSheet = Sheet.None },
             onDelete = { viewModel.deleteSchedule(it); activeSheet = Sheet.None },
+            lockedReason = if (access.canEditSchedules) null else Access.SCHEDULE_LOCKED,
         )
         is Sheet.BobSchedule -> BobScheduleSheet(
             vehicle = sheet.vehicle,

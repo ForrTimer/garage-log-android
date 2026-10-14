@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -31,6 +32,8 @@ fun GarageDrawer(
     onOpenSchedule: () -> Unit,
     onOpenManageVehicles: () -> Unit,
     onOpenSettings: () -> Unit,
+    // Null = not an admin of a shared garage.
+    onOpenMembers: (() -> Unit)?,
     onClose: () -> Unit,
 ) {
     ModalDrawerSheet(drawerContainerColor = garageColors.chrome) {
@@ -50,6 +53,12 @@ fun GarageDrawer(
             DrawerLink("Manage vehicles", Icons.Filled.DirectionsCar) {
                 onOpenManageVehicles()
                 onClose()
+            }
+            onOpenMembers?.let { open ->
+                DrawerLink("Members", Icons.Filled.Group) {
+                    open()
+                    onClose()
+                }
             }
             DrawerLink("Settings", Icons.Filled.Settings) {
                 onOpenSettings()

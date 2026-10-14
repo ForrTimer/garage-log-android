@@ -45,7 +45,12 @@ private fun categoryTone(category: String): PillTone = when (category) {
 }
 
 @Composable
-fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit, onDelete: (LogEntryEntity) -> Unit) {
+fun LogScreen(
+    uiState: GarageLogUiState,
+    onItemClick: (LogEntryEntity) -> Unit,
+    onDelete: (LogEntryEntity) -> Unit,
+    canDelete: (LogEntryEntity) -> Boolean = { true },
+) {
     var categoryFilter by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     val logs = uiState.logsFor(uiState.activeVehicleId)
@@ -87,7 +92,7 @@ fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit, 
                     )
                 } else {
                     logs.forEachIndexed { index, entry ->
-                        LogRow(entry, uiState, onClick = { onItemClick(entry) }, onDelete = { onDelete(entry) })
+                        LogRow(entry, uiState, onClick = { onItemClick(entry) }, onDelete = { onDelete(entry) }, deletable = canDelete(entry))
                         if (index != logs.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
@@ -97,8 +102,8 @@ fun LogScreen(uiState: GarageLogUiState, onItemClick: (LogEntryEntity) -> Unit, 
 }
 
 @Composable
-private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: () -> Unit, onDelete: () -> Unit) {
-    SwipeToDeleteRow(deleteTitle = "Delete this log entry?", onDelete = onDelete) {
+private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: () -> Unit, onDelete: () -> Unit, deletable: Boolean) {
+    SwipeToDeleteRow(deleteTitle = "Delete this log entry?", onDelete = onDelete, enabled = deletable) {
         Row(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 11.dp),
         ) {

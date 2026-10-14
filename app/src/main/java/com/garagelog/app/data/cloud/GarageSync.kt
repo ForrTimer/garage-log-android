@@ -23,6 +23,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
@@ -59,6 +60,7 @@ class GarageSync(
     context: Context,
     private val database: AppDatabase,
     private val cloud: GarageCloud,
+    private val localData: LocalGarageData,
     private val vehicleRepository: VehicleRepository,
     private val logRepository: LogRepository,
     private val issueRepository: IssueRepository,
@@ -82,12 +84,25 @@ class GarageSync(
         val uid = auth.currentUser?.uid ?: return
         val garageId = cloud.membership.value.garageId ?: return
 
-        // Re-read membership every run: an admin may have changed this person's role or vehicles.
+        // Re-read membership every run: an admin may have changed this person's role or vehicles,
+        // what Standard members may do, or removed them.
         val member = db.document("garages/$garageId/members/$uid").get(Source.SERVER).await()
-        val role = member.getString("role") ?: error("No longer a member of this garage.")
-        val vehicleIds = (member.get("vehicleIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
-        cloud.updateRole(role)
+        val role = member.getString("role")
+        if (role == null) {
+            // Removed. A Standard member's copy of someone else's vehicles goes with them; an
+            // admin's records stay (they may have brought most of them).
+            if (cloud.membership.value.isStandard) localData.clearAll()
+            cloud.forgetGarage()
+            error("You're no longer a member of the shared garage.")
+        }
+        val vehicleIds = member.stringList("vehicleIds")
+        val permissions = StandardPermissions.from(
+            db.document("garages/$garageId").get(Source.SERVER).await().get("standardPermissions") as? Map<*, *>,
+        )
+        cloud.updateAccess(role, vehicleIds, permissions)
         val scope = if (role == GarageCloud.ROLE_ADMIN) Scope.All else Scope.Vehicles(vehicleIds)
+        // A vehicle an admin took away leaves this phone, records and all.
+        if (scope is Scope.Vehicles) localData.keepOnlyVehicles(vehicleIds)
 
         // Pull everything first, apply it in one transaction (one Room invalidation, one UI
         // recompute — the lesson from the Drive sync's row-at-a-time freeze), then push.
@@ -99,10 +114,18 @@ class GarageSync(
         )
         apply(pulled)
 
-        push(garageId, GarageCloud.VEHICLES, vehicleRepository.getAllForSync().map { it.toSync() }, pulled.vehicles, scope, SyncVehicle.serializer(), VEHICLE_MASK) { it.id }
-        push(garageId, GarageCloud.SCHEDULES, scheduleRepository.getAllForSync().map { it.toSync() }, pulled.schedules, scope, SyncSchedule.serializer(), SCHEDULE_MASK) { it.vehicleId }
-        push(garageId, GarageCloud.LOGS, logRepository.getAllForSync().map { it.toSync() }, pulled.logs, scope, SyncLog.serializer(), null) { it.vehicleId }
-        push(garageId, GarageCloud.ISSUES, issueRepository.getAllForSync().map { it.toSync() }, pulled.issues, scope, SyncIssue.serializer(), null) { it.vehicleId }
+        // What a Standard member may write on vehicles and schedules; null = whole records.
+        val vehicleMask = if (scope is Scope.Vehicles && !permissions.editVehicles) VEHICLE_MASK else null
+        val scheduleMask = if (scope is Scope.Vehicles && !permissions.editSchedules) SCHEDULE_MASK else null
+        val localVehicles = vehicleRepository.getAllForSync().associateBy { it.id }
+        push(garageId, GarageCloud.VEHICLES, localVehicles.values.map { it.toSync() }, pulled.vehicles, scope, SyncVehicle.serializer(), vehicleMask,
+            restore = { vehicleRepository.upsert(it.toEntity().copy(photoPath = localVehicles[it.id]?.photoPath)) }) { it.id }
+        push(garageId, GarageCloud.SCHEDULES, scheduleRepository.getAllForSync().map { it.toSync() }, pulled.schedules, scope, SyncSchedule.serializer(), scheduleMask,
+            restore = { scheduleRepository.upsert(it.toEntity()) }) { it.vehicleId }
+        push(garageId, GarageCloud.LOGS, logRepository.getAllForSync().map { it.toSync() }, pulled.logs, scope, SyncLog.serializer(), null,
+            restore = { logRepository.upsert(it.toEntity()) }) { it.vehicleId }
+        push(garageId, GarageCloud.ISSUES, issueRepository.getAllForSync().map { it.toSync() }, pulled.issues, scope, SyncIssue.serializer(), null,
+            restore = { issueRepository.upsert(it.toEntity()) }) { it.vehicleId }
 
         syncNotificationPrefs(uid)
     }
@@ -166,6 +189,12 @@ class GarageSync(
      * [vehicleOf] gives the vehicle a record belongs to (a vehicle's own id for vehicles), for
      * scoping a Standard member's pushes. [mask] is the fields a Standard member may write on this
      * collection, or null if they may write whole records.
+     *
+     * A Standard member's writes go one at a time rather than batched: the rules may refuse one
+     * (an admin switched a permission off while this phone had an edit waiting), and a refused
+     * batch would refuse everything with it, every sync, forever. A refused record is put back the
+     * way the garage has it via [restore], so the phone shows what's true instead of an edit that
+     * will never land.
      */
     private suspend fun <T : Syncable> push(
         garageId: String,
@@ -175,6 +204,7 @@ class GarageSync(
         scope: Scope,
         serializer: KSerializer<T>,
         mask: List<String>?,
+        restore: suspend (T) -> Unit,
         vehicleOf: (T) -> String,
     ) {
         val cursorKey = "push_${garageId}_$collection"
@@ -189,17 +219,31 @@ class GarageSync(
             .distinctBy { it.id }
             .filter { scope !is Scope.Vehicles || vehicleOf(it) in scope.ids }
         val ref = db.collection("garages/$garageId/$collection")
-        toSend.chunked(BATCH_SIZE).forEach { chunk ->
-            val batch = db.batch()
-            chunk.forEach { record ->
-                val fields = json.encodeToJsonElement(serializer, record).toFirestore().asMap()
-                if (scope is Scope.Vehicles && mask != null) {
-                    batch.update(ref.document(record.id), fields.filterKeys { it in mask } + (SERVER_UPDATED_AT to FieldValue.serverTimestamp()))
-                } else {
-                    batch.set(ref.document(record.id), fields + (SERVER_UPDATED_AT to FieldValue.serverTimestamp()))
+        fun fieldsOf(record: T) =
+            json.encodeToJsonElement(serializer, record).toFirestore().asMap() + (SERVER_UPDATED_AT to FieldValue.serverTimestamp())
+        if (scope is Scope.All) {
+            toSend.chunked(BATCH_SIZE).forEach { chunk ->
+                val batch = db.batch()
+                chunk.forEach { record -> batch.set(ref.document(record.id), fieldsOf(record)) }
+                batch.commit().await()
+            }
+        } else {
+            toSend.forEach { record ->
+                val doc = ref.document(record.id)
+                try {
+                    when {
+                        mask != null -> doc.update(fieldsOf(record).filterKeys { it in mask || it == SERVER_UPDATED_AT }).await()
+                        // Their vehicles' sort order is their own phone's business, and a vehicle
+                        // is only ever deleted by an admin.
+                        collection == GarageCloud.VEHICLES -> doc.update(fieldsOf(record) - "sortOrder" - "deleted").await()
+                        else -> doc.set(fieldsOf(record)).await()
+                    }
+                } catch (e: FirebaseFirestoreException) {
+                    if (e.code != FirebaseFirestoreException.Code.PERMISSION_DENIED) throw e
+                    android.util.Log.d("GarageSync", "refused $collection/${record.id}; restoring the garage's copy")
+                    doc.get(Source.SERVER).await().data?.let { decode(it, serializer) }?.let { restore(it) }
                 }
             }
-            batch.commit().await()
         }
         // Everything considered this run is now either in the garage or came from it.
         changed.maxOfOrNull { it.updatedAt }?.let { prefs.edit().putLong(cursorKey, it).apply() }

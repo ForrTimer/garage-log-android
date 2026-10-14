@@ -5,11 +5,15 @@ rules_version = '2';
 // queries: who may read a vehicle's data, and which fields a Standard member may change.
 //
 // Roles, per garage (garages/{g}/members/{uid}.role):
-//   admin    — everything in the garage: vehicles, schedules, members, invites.
-//   standard — only the vehicles in their member doc's vehicleIds. May add and edit logs and
-//              issues (fuel, mileage, service, repairs) and photos on them. On the vehicle itself
-//              may only move the odometer; on a schedule only the "last done" fields — both are
-//              side effects of saving a log, never edited directly.
+//   admin    — everything in the garage: vehicles, schedules, members, invites, permissions.
+//   standard — only the vehicles in their member doc's vehicleIds. Always: add logs and issues,
+//              edit their own, move a vehicle's odometer and a schedule's "last done" (side effects
+//              of saving a log). The rest is up to the admins, per garage, in
+//              garages/{g}.standardPermissions:
+//                deleteEntries      (default false) delete logs and issues they may edit
+//                editOthersEntries  (default true)  edit logs and issues someone else created
+//                editSchedules      (default false) add, edit and delete schedules
+//                editVehicles       (default false) edit vehicle details (never add or delete)
 //
 // Nothing is ever hard-deleted from the app; a delete is an update setting `deleted`.
 // Paste into Firebase console -> Firestore -> Rules, or deploy with the Firebase CLI.
@@ -20,6 +24,7 @@ service cloud.firestore {
     function uid() { return request.auth.uid; }
     function myEmail() { return request.auth.token.email.lower(); }
 
+    function garage(g) { return get(/databases/$(database)/documents/garages/$(g)).data; }
     function memberPath(g) { return /databases/$(database)/documents/garages/$(g)/members/$(uid()); }
     function isMember(g) { return signedIn() && exists(memberPath(g)); }
     function me(g) { return get(memberPath(g)).data; }
@@ -27,13 +32,38 @@ service cloud.firestore {
     function canSee(g, vehicleId) {
       return isMember(g) && (me(g).role == 'admin' || vehicleId in me(g).vehicleIds);
     }
-    function onlyChanges(keys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    function allowed(g, key, byDefault) {
+      return garage(g).get('standardPermissions', {}).get(key, byDefault);
     }
+
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function onlyChanges(keys) { return changed().hasOnly(keys); }
+    function keeps(keys) { return !changed().hasAny(keys); }
+    function deleting() {
+      return request.resource.data.get('deleted', false) == true && resource.data.get('deleted', false) != true;
+    }
+
+    function invite() { return get(/databases/$(database)/documents/invites/$(myEmail())).data; }
 
     // Per-person data: reminder settings and which garages they belong to. Nobody else's business.
     match /users/{userId}/{document=**} {
       allow read, write: if signedIn() && uid() == userId;
+    }
+
+    // Keyed by the invitee's lower-cased email. Top level rather than under the garage so the
+    // invitee can find theirs with one read, before they're a member of anything.
+    match /invites/{email} {
+      allow read: if signedIn() && (email == myEmail() || isAdmin(resource.data.garageId));
+      allow create: if isAdmin(request.resource.data.garageId)
+        && request.resource.data.email == email
+        && request.resource.data.role in ['admin', 'standard'];
+      // An admin can re-send it, but not take over another garage's invite.
+      allow update: if isAdmin(resource.data.garageId)
+        && isAdmin(request.resource.data.garageId)
+        && request.resource.data.email == email
+        && request.resource.data.role in ['admin', 'standard'];
+      // The invitee removes it once accepted (or to decline); an admin can withdraw it.
+      allow delete: if signedIn() && (email == myEmail() || isAdmin(resource.data.garageId));
     }
 
     match /garages/{g} {
@@ -49,55 +79,56 @@ service cloud.firestore {
           isAdmin(g)
           // The garage's creator makes themself its first admin.
           || (signedIn() && memberId == uid()
-              && get(/databases/$(database)/documents/garages/$(g)).data.createdBy == uid()
+              && garage(g).createdBy == uid()
               && request.resource.data.role == 'admin')
           // Someone accepts their invite, with exactly the role and vehicles it offered.
           || (signedIn() && memberId == uid()
-              && exists(/databases/$(database)/documents/garages/$(g)/invites/$(myEmail()))
-              && request.resource.data.role
-                   == get(/databases/$(database)/documents/garages/$(g)/invites/$(myEmail())).data.role
-              && request.resource.data.vehicleIds
-                   == get(/databases/$(database)/documents/garages/$(g)/invites/$(myEmail())).data.vehicleIds);
-        allow update, delete: if isAdmin(g);
-      }
-
-      // Keyed by the invitee's lower-cased email.
-      match /invites/{email} {
-        allow read: if isAdmin(g) || (signedIn() && email == myEmail());
-        allow create, update: if isAdmin(g) && request.resource.data.email == email;
-        // The invitee removes it once accepted (or to decline).
-        allow delete: if isAdmin(g) || (signedIn() && email == myEmail());
+              && exists(/databases/$(database)/documents/invites/$(myEmail()))
+              && invite().garageId == g
+              && request.resource.data.role == invite().role
+              && request.resource.data.vehicleIds == invite().vehicleIds);
+        // The creator can't be demoted or removed, so a garage always keeps its owner.
+        allow update: if isAdmin(g)
+          && (memberId != garage(g).createdBy || request.resource.data.role == 'admin');
+        allow delete: if memberId != garage(g).createdBy
+          && (isAdmin(g) || (signedIn() && memberId == uid()));
       }
 
       match /vehicles/{vehicleId} {
         allow read: if canSee(g, vehicleId);
         allow create: if isAdmin(g);
         allow update: if isAdmin(g)
-          || (canSee(g, vehicleId) && onlyChanges(['miles', 'milesDate', 'updatedAt', 'serverUpdatedAt']));
+          || (canSee(g, vehicleId)
+              && (onlyChanges(['miles', 'milesDate', 'updatedAt', 'serverUpdatedAt'])
+                  || (allowed(g, 'editVehicles', false) && keeps(['deleted', 'sortOrder']))));
       }
 
       match /schedules/{id} {
         allow read: if canSee(g, resource.data.vehicleId);
-        allow create: if isAdmin(g);
+        allow create: if isAdmin(g)
+          || (canSee(g, request.resource.data.vehicleId) && allowed(g, 'editSchedules', false));
         allow update: if isAdmin(g)
           || (canSee(g, resource.data.vehicleId)
-              && onlyChanges(['lastDoneMileage', 'lastDoneDate', 'updatedAt', 'serverUpdatedAt']));
+              && (onlyChanges(['lastDoneMileage', 'lastDoneDate', 'updatedAt', 'serverUpdatedAt'])
+                  || (allowed(g, 'editSchedules', false) && keeps(['vehicleId']))));
       }
 
       // Logs, issues and photos all carry vehicleId. A record can't be moved onto a vehicle the
-      // member can't see, and an existing one can't be pulled off one.
+      // member can't see, and an existing one can't be pulled off one. createdBy is the Firebase
+      // uid of whoever first saved it ("" for records from before shared garages).
       match /{kind}/{id} {
         allow read: if kind in ['logs', 'issues', 'photos'] && canSee(g, resource.data.vehicleId);
-        allow create: if kind in ['logs', 'issues', 'photos'] && canSee(g, request.resource.data.vehicleId);
+        allow create: if kind in ['logs', 'issues', 'photos']
+          && canSee(g, request.resource.data.vehicleId)
+          && (isAdmin(g) || request.resource.data.get('createdBy', '') == uid());
         allow update: if kind in ['logs', 'issues', 'photos']
           && canSee(g, resource.data.vehicleId)
-          && canSee(g, request.resource.data.vehicleId);
+          && canSee(g, request.resource.data.vehicleId)
+          && (isAdmin(g)
+              || (request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+                  && (resource.data.get('createdBy', '') == uid() || allowed(g, 'editOthersEntries', true))
+                  && (!deleting() || allowed(g, 'deleteEntries', false))));
       }
-    }
-
-    // Finding your invites before you're in the garage: a collection-group query on `email`.
-    match /{path=**}/invites/{email} {
-      allow read: if signedIn() && email == myEmail();
     }
   }
 }

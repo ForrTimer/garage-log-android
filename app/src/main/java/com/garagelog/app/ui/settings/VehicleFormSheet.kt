@@ -184,6 +184,9 @@ fun VehicleFormSheet(
     onDismiss: () -> Unit,
     onSave: (VehicleEntity, List<MaintenanceScheduleEntity>) -> Unit,
     onDelete: (String) -> Unit,
+    /** See FormSheetScaffold; null = editable. */
+    lockedReason: String? = null,
+    canDelete: Boolean = true,
 ) {
     // A freshly-picked photo is copied into app storage the instant it's picked (see
     // onPhotoPicked below) rather than saved to the DB right away — writing straight to the DB
@@ -251,7 +254,8 @@ fun VehicleFormSheet(
     FormSheetScaffold(
         title = if (vehicle == null) "Add vehicle" else "Edit vehicle",
         onDismiss = onDismiss,
-        showDelete = vehicle != null,
+        showDelete = vehicle != null && canDelete,
+        lockedReason = lockedReason,
         deleteTitle = "Delete vehicle?",
         deleteMessage = "This will also delete all of its logs, issues, and maintenance schedules. This can't be undone.",
         onDelete = { vehicle?.let { onDelete(it.id) } },

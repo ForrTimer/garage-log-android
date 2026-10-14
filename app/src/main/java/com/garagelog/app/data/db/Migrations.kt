@@ -170,3 +170,11 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         db.execSQL("ALTER TABLE vehicles ADD COLUMN displacementL REAL DEFAULT NULL")
     }
 }
+
+/** Who first saved each log entry and issue (Firebase uid), for Standard members' permissions. Additive. */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE log_entries ADD COLUMN createdBy TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE issues ADD COLUMN createdBy TEXT NOT NULL DEFAULT ''")
+    }
+}

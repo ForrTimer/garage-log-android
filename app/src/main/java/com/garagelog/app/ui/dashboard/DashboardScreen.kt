@@ -95,12 +95,13 @@ fun DashboardScreen(
     syncStatus: SyncStatus,
     onRefresh: () -> Unit,
     onEditVehicle: (VehicleEntity) -> Unit,
-    onAddVehicle: () -> Unit,
+    // Null = hidden (a Standard member of a shared garage).
+    onAddVehicle: (() -> Unit)?,
     onOpenSchedule: () -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onAddFueling: (VehicleEntity) -> Unit,
-    onAskClaude: (VehicleEntity) -> Unit,
+    onAskClaude: ((VehicleEntity) -> Unit)?,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
@@ -111,7 +112,9 @@ fun DashboardScreen(
             if (vehicles.isEmpty()) {
                 item {
                     EmptyState("No vehicles yet.", icon = Icons.Filled.DirectionsCar)
-                    OutlinedButton(onClick = onAddVehicle, modifier = Modifier.fillMaxWidth()) { Text("Add a vehicle") }
+                    onAddVehicle?.let { add ->
+                        OutlinedButton(onClick = add, modifier = Modifier.fillMaxWidth()) { Text("Add a vehicle") }
+                    }
                 }
             }
             items(vehicles, key = { it.id }) { v ->
@@ -142,7 +145,7 @@ private fun VehicleDashboardCard(
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onAddFueling: (VehicleEntity) -> Unit,
-    onAskClaude: (VehicleEntity) -> Unit,
+    onAskClaude: ((VehicleEntity) -> Unit)?,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
 ) {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
@@ -259,8 +262,10 @@ private fun VehicleDashboardCard(
             ActionLink("Update mileage", onClick = { showMileageDialog = true })
             Spacer(Modifier.width(8.dp))
             ActionLink("Add fueling", onClick = { onAddFueling(v) })
-            Spacer(Modifier.width(8.dp))
-            ActionLink("Ask $ASSISTANT_NAME", onClick = { onAskClaude(v) })
+            onAskClaude?.let { ask ->
+                Spacer(Modifier.width(8.dp))
+                ActionLink("Ask $ASSISTANT_NAME", onClick = { ask(v) })
+            }
         }
 
         Text(

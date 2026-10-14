@@ -55,6 +55,8 @@ fun FormSheetScaffold(
     deleteMessage: String = "This can't be undone.",
     /** Gates Save on the form's own validity; defaults to always-enabled for forms with no rule. */
     saveEnabled: Boolean = true,
+    /** Non-null = this person may look but not change it (a shared garage's permissions); says why. */
+    lockedReason: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sheetState = rememberHardToDismissSheetState()
@@ -91,14 +93,26 @@ fun FormSheetScaffold(
                 content()
             }
 
+            if (lockedReason != null) {
+                Text(
+                    lockedReason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = GarageDimens.sheetButtonRowTop),
+                )
+            }
             Row(modifier = Modifier.fillMaxWidth().padding(top = GarageDimens.sheetButtonRowTop, bottom = GarageDimens.sheetButtonRowBottom)) {
-                if (showDelete) {
+                if (lockedReason != null) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Close") }
+                } else if (showDelete) {
                     OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f)) {
                         Text("Delete", color = garageColors.alarmText)
                     }
                     Spacer(Modifier.width(GarageDimens.sheetButtonSpacing))
                 }
-                Button(onClick = onSave, enabled = saveEnabled, modifier = Modifier.weight(1f)) { Text("Save") }
+                if (lockedReason == null) {
+                    Button(onClick = onSave, enabled = saveEnabled, modifier = Modifier.weight(1f)) { Text("Save") }
+                }
             }
         }
     }

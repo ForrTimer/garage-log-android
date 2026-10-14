@@ -33,4 +33,8 @@ class PhotoStore(private val context: Context) {
     fun delete(filePath: String) {
         runCatching { File(filePath).delete() }
     }
+
+    fun deleteAll() {
+        runCatching { photosDir.listFiles()?.forEach { it.delete() } }
+    }
 }

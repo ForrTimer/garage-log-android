@@ -12,6 +12,7 @@ import com.garagelog.app.data.ai.GarageMirror
 import com.garagelog.app.data.ai.ManagedAgentsApi
 import com.garagelog.app.data.auth.AuthManager
 import com.garagelog.app.data.cloud.GarageCloud
+import com.garagelog.app.data.cloud.LocalGarageData
 import com.garagelog.app.data.cloud.GarageSync
 import com.garagelog.app.data.backup.BackupManager
 import com.garagelog.app.data.catalog.VehicleCatalog
@@ -25,6 +26,7 @@ import com.garagelog.app.data.db.MIGRATION_6_7
 import com.garagelog.app.data.db.MIGRATION_7_8
 import com.garagelog.app.data.db.MIGRATION_8_9
 import com.garagelog.app.data.db.MIGRATION_9_10
+import com.garagelog.app.data.db.MIGRATION_10_11
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
@@ -61,7 +63,7 @@ class ServiceLocator(context: Context) {
         AppDatabase.DATABASE_NAME,
     ).addMigrations(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
     ).build()
 
     val vehicleRepository: VehicleRepository = RoomVehicleRepository(database.vehicleDao())
@@ -104,12 +106,14 @@ class ServiceLocator(context: Context) {
     )
 
     val authManager = AuthManager(appContext)
+    private val localGarageData = LocalGarageData(database, photoStore)
     val garageCloud = GarageCloud(
         context = appContext,
         vehicleRepository = vehicleRepository,
         logRepository = logRepository,
         issueRepository = issueRepository,
         scheduleRepository = scheduleRepository,
+        localData = localGarageData,
     )
     private val driveApiClient = DriveApiClient()
     val syncStatusHolder = SyncStatusHolder()
@@ -117,6 +121,7 @@ class ServiceLocator(context: Context) {
         context = appContext,
         database = database,
         cloud = garageCloud,
+        localData = localGarageData,
         vehicleRepository = vehicleRepository,
         logRepository = logRepository,
         issueRepository = issueRepository,
@@ -160,7 +165,9 @@ class ServiceLocator(context: Context) {
     }
 
     suspend fun seedIfEmpty() {
-        if (vehicleRepository.count() > 0) return
+        // In a shared garage an empty phone is waiting for its first sync, and demo vehicles would
+        // be pushed into everyone's garage.
+        if (vehicleRepository.count() > 0 || garageCloud.membership.value.garageId != null) return
         SeedData.vehicles().forEach { vehicleRepository.upsert(it) }
         SeedData.logEntries().forEach { logRepository.upsert(it) }
         SeedData.issues().forEach { issueRepository.upsert(it) }

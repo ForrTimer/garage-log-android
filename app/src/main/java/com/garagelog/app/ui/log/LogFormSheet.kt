@@ -69,6 +69,9 @@ fun LogFormSheet(
     onDismiss: () -> Unit,
     onSave: (LogEntryEntity) -> Unit,
     onDelete: (String) -> Unit,
+    /** See FormSheetScaffold; null = editable. */
+    lockedReason: String? = null,
+    canDelete: Boolean = true,
     // Seeds a brand-new entry's fields (e.g. from "mark maintenance done") without treating it as
     // an existing, editable/deletable entry the way a non-null `entry` would.
     prefill: LogEntryEntity? = null,
@@ -116,7 +119,8 @@ fun LogFormSheet(
             if (entry == null) viewModel.discardPhotosForOwner(PhotoOwnerType.LOG, stableId)
             onDismiss()
         },
-        showDelete = entry != null,
+        showDelete = entry != null && canDelete,
+        lockedReason = lockedReason,
         saveEnabled = !mileageRequired || hasMileage,
         deleteTitle = "Delete log entry?",
         onDelete = { entry?.let { onDelete(it.id) } },

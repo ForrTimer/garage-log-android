@@ -30,7 +30,7 @@ import com.garagelog.app.ui.theme.GarageDimens
 @Composable
 fun ManageVehiclesScreen(
     vehicles: List<VehicleEntity>,
-    onAddVehicle: () -> Unit,
+    onAddVehicle: (() -> Unit)?,
     onEditVehicle: (VehicleEntity) -> Unit,
     onReorderVehicles: () -> Unit,
 ) {
@@ -65,7 +65,9 @@ fun ManageVehiclesScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                     ) {
-                        OutlinedButton(onClick = onAddVehicle, modifier = Modifier.weight(1f)) { Text("+ Add vehicle") }
+                        onAddVehicle?.let { add ->
+                            OutlinedButton(onClick = add, modifier = Modifier.weight(1f)) { Text("+ Add vehicle") }
+                        }
                         if (vehicles.size > 1) {
                             OutlinedButton(onClick = onReorderVehicles, modifier = Modifier.weight(1f)) {
                                 Text("Reorder")

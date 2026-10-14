@@ -24,7 +24,10 @@ import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.data.auth.SignInStep
 import com.garagelog.app.data.cloud.GarageMembership
+import com.garagelog.app.data.cloud.GarageSetupOutcome
 import com.garagelog.app.data.cloud.GarageSetupResult
+import com.garagelog.app.data.cloud.MembersPage
+import com.garagelog.app.data.cloud.StandardPermissions
 import com.garagelog.app.di.ServiceLocator
 import com.garagelog.app.notifications.MileageReminderScheduler
 import com.garagelog.app.util.todayIso
@@ -39,6 +42,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
@@ -55,12 +59,13 @@ sealed interface SubScreen {
     data object Schedule : SubScreen
     data object Settings : SubScreen
     data object ManageVehicles : SubScreen
+    data object Members : SubScreen
     data class Diagnosis(val issueId: String) : SubScreen
     /** [issueId] non-null = the follow-up thread on that issue's diagnosis. */
     data class Chat(val vehicleId: String, val issueId: String? = null) : SubScreen
 
     /** The vehicle filter in the header means nothing on these, so it's hidden for them. */
-    val usesVehicleFilter: Boolean get() = this !is Settings && this !is ManageVehicles
+    val usesVehicleFilter: Boolean get() = this !is Settings && this !is ManageVehicles && this !is Members
 }
 
 data class GarageLogUiState(
@@ -166,7 +171,15 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GarageLogUiState())
 
-    fun selectVehicle(id: String?) { activeVehicleId.value = id }
+    fun selectVehicle(id: String?) {
+        // On a chat the chips pick whose chat it is; "All" has no chat of its own, so it leaves it.
+        val open = subScreen.value
+        if (open is SubScreen.Chat) {
+            if (id != null && id != open.vehicleId) subScreen.value = SubScreen.Chat(id)
+            return
+        }
+        activeVehicleId.value = id
+    }
     fun selectTab(tab: AppTab) {
         currentTab.value = tab
         subScreen.value = null
@@ -262,6 +275,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
                 cost = null,
                 parts = "",
                 notes = "",
+                createdBy = locator.garageCloud.currentUid,
                 updatedAt = System.currentTimeMillis(),
             ),
         )
@@ -342,7 +356,9 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun saveLog(entry: LogEntryEntity) = viewModelScope.launch {
-        locator.logRepository.upsert(entry.copy(updatedAt = System.currentTimeMillis()))
+        // The forms rebuild the entity, so who created it comes from the stored row, not the form.
+        val createdBy = locator.logRepository.getAllForSync().find { it.id == entry.id }?.createdBy ?: locator.garageCloud.currentUid
+        locator.logRepository.upsert(entry.copy(createdBy = createdBy, updatedAt = System.currentTimeMillis()))
         val mileage = entry.mileage
         if (mileage != null) {
             locator.vehicleRepository.bumpMileageIfHigher(entry.vehicleId, mileage, entry.date)
@@ -388,7 +404,8 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun saveIssue(issue: IssueEntity) = viewModelScope.launch {
-        locator.issueRepository.upsert(issue.copy(updatedAt = System.currentTimeMillis()))
+        val createdBy = locator.issueRepository.getAllForSync().find { it.id == issue.id }?.createdBy ?: locator.garageCloud.currentUid
+        locator.issueRepository.upsert(issue.copy(createdBy = createdBy, updatedAt = System.currentTimeMillis()))
         requestSync()
     }
 
@@ -577,7 +594,14 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
                 _messages.emit("Couldn't sign in for the shared garage: ${it.message}")
                 return@launch
             }
-            val result = locator.garageCloud.setUpGarage()
+            val result = when (val outcome = locator.garageCloud.setUpGarage()) {
+                is GarageSetupOutcome.Invited -> {
+                    // Nothing joined yet: the invite dialog asks first.
+                    _pendingInvite.value = outcome
+                    return@launch
+                }
+                is GarageSetupOutcome.Ready -> outcome.result
+            }
             _lastGarageSetup.value = result
             requestSync()
             _messages.emit(
@@ -593,6 +617,83 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
             _messages.emit("Shared garage setup failed: ${e.message}")
         } finally {
             _garageSetupRunning.value = false
+        }
+    }
+
+    val access: StateFlow<Access> = garageMembership.map { Access(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Access(garageMembership.value))
+
+    private val _pendingInvite = MutableStateFlow<GarageSetupOutcome.Invited?>(null)
+    val pendingInvite: StateFlow<GarageSetupOutcome.Invited?> = _pendingInvite
+
+    fun dismissInvite() { _pendingInvite.value = null }
+
+    /**
+     * Joins the pending invite's garage. [backupTo] = export this phone's records there first (a
+     * Standard member's own vehicles are about to be removed from the phone); [clearLocal] = remove
+     * them. The export finishes before anything is cleared, and a failed export stops the join.
+     */
+    fun acceptInvite(clearLocal: Boolean, backupTo: OutputStream? = null) = viewModelScope.launch {
+        val pending = _pendingInvite.value ?: return@launch
+        _garageSetupRunning.value = true
+        try {
+            if (backupTo != null) {
+                locator.backupManager.exportToStream(backupTo)
+                _messages.emit("Backup exported.")
+            }
+            locator.garageCloud.acceptInvite(pending.invite, clearLocal)
+            _pendingInvite.value = null
+            requestSync()
+            _messages.emit("Joined ${pending.invite.garageName.ifBlank { "the shared garage" }}.")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _messages.emit("Couldn't join: ${e.message}")
+        } finally {
+            _garageSetupRunning.value = false
+        }
+    }
+
+    // ---- Members screen (admins) ----
+
+    fun openMembers() { subScreen.value = SubScreen.Members }
+
+    private val _membersPage = MutableStateFlow<MembersPage?>(null)
+    val membersPage: StateFlow<MembersPage?> = _membersPage
+
+    private val _membersBusy = MutableStateFlow(false)
+    val membersBusy: StateFlow<Boolean> = _membersBusy
+
+    fun loadMembers() = membersAction(null) { }
+
+    fun inviteMember(email: String, role: String, vehicleIds: List<String>) =
+        membersAction("Invite saved. They join the next time they sign in to the shared garage.") {
+            locator.garageCloud.invite(email, role, vehicleIds)
+        }
+
+    fun withdrawInvite(email: String) = membersAction("Invite withdrawn.") { locator.garageCloud.withdrawInvite(email) }
+
+    fun updateMember(uid: String, role: String, vehicleIds: List<String>) =
+        membersAction("Saved. Their phone picks it up on its next sync.") { locator.garageCloud.updateMember(uid, role, vehicleIds) }
+
+    fun removeMember(uid: String) = membersAction("Removed from the garage.") { locator.garageCloud.removeMember(uid) }
+
+    fun saveStandardPermissions(permissions: StandardPermissions) =
+        membersAction(null) { locator.garageCloud.savePermissions(permissions) }
+
+    /** Runs one admin action, then re-reads the page so it shows what the garage now holds. */
+    private fun membersAction(done: String?, action: suspend () -> Unit) = viewModelScope.launch {
+        _membersBusy.value = true
+        try {
+            action()
+            _membersPage.value = locator.garageCloud.loadMembersPage()
+            done?.let { _messages.emit(it) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _messages.emit("Couldn't update the garage: ${e.message}")
+        } finally {
+            _membersBusy.value = false
         }
     }
 

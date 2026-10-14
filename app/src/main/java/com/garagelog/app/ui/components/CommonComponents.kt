@@ -297,8 +297,14 @@ fun ConfirmDialog(
 fun SwipeToDeleteRow(
     deleteTitle: String = "Delete this entry?",
     onDelete: () -> Unit,
+    // False = a plain row: this person may not delete it (shared-garage permissions).
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    if (!enabled) {
+        content()
+        return
+    }
     var showConfirm by remember { mutableStateOf(false) }
     val dismissState = rememberSwipeToDismissBoxState()
     val scope = rememberCoroutineScope()

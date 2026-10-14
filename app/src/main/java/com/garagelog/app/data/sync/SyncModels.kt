@@ -109,6 +109,7 @@ data class SyncLog(
     val fulfillsScheduleId: String? = null,
     val gallons: Double? = null,
     val fullTank: Boolean = false,
+    val createdBy: String = "",
     override val updatedAt: Long,
     override val deleted: Boolean,
 ) : Syncable
@@ -123,6 +124,7 @@ data class SyncIssue(
     val dateOpened: String,
     val dateResolved: String,
     val description: String,
+    val createdBy: String = "",
     override val updatedAt: Long,
     override val deleted: Boolean,
 ) : Syncable
@@ -167,25 +169,25 @@ fun SyncVehicle.toEntity() = VehicleEntity(
 fun LogEntryEntity.toSync() = SyncLog(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage, category = category, task = task,
     cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId,
-    gallons = gallons, fullTank = fullTank, updatedAt = updatedAt, deleted = deleted,
+    gallons = gallons, fullTank = fullTank, createdBy = createdBy, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun SyncLog.toEntity() = LogEntryEntity(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage, category = category, task = task,
     cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId,
-    gallons = gallons, fullTank = fullTank, updatedAt = updatedAt, deleted = deleted,
+    gallons = gallons, fullTank = fullTank, createdBy = createdBy, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun IssueEntity.toSync() = SyncIssue(
     id = id, vehicleId = vehicleId, title = title, status = status, priority = priority,
     dateOpened = dateOpened, dateResolved = dateResolved, description = description,
-    updatedAt = updatedAt, deleted = deleted,
+    createdBy = createdBy, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun SyncIssue.toEntity() = IssueEntity(
     id = id, vehicleId = vehicleId, title = title, status = status, priority = priority,
     dateOpened = dateOpened, dateResolved = dateResolved, description = description,
-    updatedAt = updatedAt, deleted = deleted,
+    createdBy = createdBy, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun MaintenanceScheduleEntity.toSync() = SyncSchedule(

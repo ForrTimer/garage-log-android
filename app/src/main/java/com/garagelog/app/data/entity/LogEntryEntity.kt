@@ -26,6 +26,9 @@ data class LogEntryEntity(
     // partial fill breaks the "miles since last full tank / gallons since last full tank" math).
     val gallons: Double? = null,
     val fullTank: Boolean = false,
+    // Firebase uid of whoever first saved this in a shared garage; "" = before shared garages, or
+    // never in one. Gates a Standard member editing someone else's entry (firestore.rules).
+    val createdBy: String = "",
     val updatedAt: Long = 0L,
     val deleted: Boolean = false,
 )
