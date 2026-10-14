@@ -31,8 +31,8 @@ data class RemoteMemory(val id: String, val path: String, val sha256: String)
 
 /**
  * Raw HTTP for the parts of the Managed Agents API the app uses: sessions, their events, and
- * memory stores. Hand-rolled on OkHttp for the same reason as [DirectClaudeClient] — the Java SDK
- * works on Android but adds ~6.6 MB for a handful of JSON calls.
+ * memory stores. Hand-rolled on OkHttp rather than the Anthropic Java SDK, which works on
+ * Android but adds ~6.6 MB (Jackson, kotlin-reflect, HttpClient5) for a handful of JSON calls.
  *
  * Everything here is one request; the conversation logic lives in [BobAgent].
  */

@@ -27,7 +27,7 @@ import kotlinx.serialization.json.Json
  *
  * Bob runs as a Managed Agent ([BobAgent]): the vehicle's records live in a memory store he looks
  * things up in ([GarageMirror]), so each message carries the question and which vehicle, not the
- * whole history. [DirectClaudeClient] is no longer used here; it stays as the fallback path.
+ * whole history.
  */
 class AiRepository(
     private val bob: BobAgent,
@@ -231,7 +231,7 @@ class AiRepository(
                 followUp = message,
                 onCustomTool = { _, _ -> "Received. The owner will review these before anything is saved." },
             )
-            val input = turn.toolInputs[AiPrompts.PROPOSE_SCHEDULE_TOOL.name]
+            val input = turn.toolInputs[BobAgent.PROPOSE_SCHEDULE_TOOL]
                 ?: throw if (turn.budgetReached) budgetSpent()
                 // Bob declines rather than inventing intervals (a made-up vehicle, one with no published
                 // schedule); his reason is more use to the owner than a generic failure.

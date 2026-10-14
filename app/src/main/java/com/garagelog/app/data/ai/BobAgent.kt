@@ -389,6 +389,9 @@ class BobAgent(
          * Sonnet. Diagnosis and schedules keep the agent's own model and effort (bob.agent.yaml).
          */
         val CHAT_MODEL = BobModel(id = "claude-haiku-5-5", effort = "low")
+
+        /** The custom tool Bob answers a schedule request with; its schema is in bob.agent.yaml. */
+        const val PROPOSE_SCHEDULE_TOOL = "propose_schedule"
     }
 }
 

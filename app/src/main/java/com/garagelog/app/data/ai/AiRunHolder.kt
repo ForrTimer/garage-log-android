@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.update
 data class AiRunState(
     val running: Boolean = false,
     val searching: Boolean = false,
-    val retrying: Boolean = false,
     /** Bob has finished researching and is writing a structured answer (a tool call). */
     val writing: Boolean = false,
     /** Bob is looking things up in the app's records or his own notes. */
@@ -21,7 +20,6 @@ data class AiRunState(
     /** What the spinner says while this is running. */
     val statusText: String
         get() = when {
-            retrying -> "$ASSISTANT_NAME is busy. Retrying…"
             writing -> "Putting it together…"
             searching -> "Searching the web…"
             reading -> "Checking your records…"
@@ -57,9 +55,6 @@ class AiRunHolder {
 
     fun markWriting(key: String) = update(key) { it.copy(running = true, searching = false, writing = true) }
 
-    /** Waiting out an "overloaded" response before trying again; any partial answer is dropped. */
-    fun markRetrying(key: String) = update(key) { AiRunState(running = true, retrying = true) }
-
     fun finish(key: String) { _runs.update { it - key } }
 
     fun fail(key: String, message: String, declined: Boolean = false) = update(key) {
@@ -69,8 +64,6 @@ class AiRunHolder {
     fun clearError(key: String) {
         if (_runs.value[key]?.error != null) finish(key)
     }
-
-    fun isRunning(key: String): Boolean = _runs.value[key]?.running == true
 
     private fun update(key: String, transform: (AiRunState) -> AiRunState) {
         _runs.update { current -> current + (key to transform(current[key] ?: AiRunState())) }

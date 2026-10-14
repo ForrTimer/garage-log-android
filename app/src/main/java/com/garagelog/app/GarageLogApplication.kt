@@ -3,7 +3,6 @@ package com.garagelog.app
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.os.Build
 import androidx.work.Configuration
 import androidx.work.DelegatingWorkerFactory
 import com.garagelog.app.data.ai.ASSISTANT_NAME
@@ -51,7 +50,6 @@ class GarageLogApplication : Application(), Configuration.Provider {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT < 26) return
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
             "Mileage reminders",

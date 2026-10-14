@@ -43,9 +43,6 @@ interface AiChatDao {
     @Query("DELETE FROM ai_chat_messages WHERE vehicleId = :vehicleId AND issueId IS :issueId")
     suspend fun deleteForThread(vehicleId: String, issueId: String?)
 
-    @Query("DELETE FROM ai_chat_messages WHERE id = :id")
-    suspend fun deleteById(id: String)
-
     @Query("DELETE FROM ai_chat_messages WHERE vehicleId = :vehicleId")
     suspend fun deleteForVehicle(vehicleId: String)
 
