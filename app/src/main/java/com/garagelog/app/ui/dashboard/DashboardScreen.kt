@@ -184,15 +184,17 @@ private fun cardData(v: VehicleEntity, uiState: GarageLogUiState): CardData {
 
 /**
  * Spend per month across [logs] (already limited to the last 12 months), averaged over the
- * months they actually span up to today — a vehicle added in August isn't averaged as if it had
- * been fueled at $0 since last October.
+ * time they actually span up to today — a vehicle added in August isn't averaged as if it had
+ * been fueled at $0 since last October. Fractional months, not rounded up: five weeks of
+ * fill-ups divided by a whole 2 months halved the real rate. At least one month, so a single
+ * recent fill-up doesn't read as a huge monthly figure.
  */
 private fun averagePerMonth(logs: List<LogEntryEntity>): Double? {
     val first = logs.minOfOrNull { it.date } ?: return null
     val firstMillis = isoToUtcMillis(first) ?: return null
     val todayMillis = isoToUtcMillis(todayIso()) ?: return null
     val days = (todayMillis - firstMillis) / 86_400_000.0
-    val months = kotlin.math.ceil(days / 30.44).coerceIn(1.0, 12.0)
+    val months = (days / 30.44).coerceIn(1.0, 12.0)
     return logs.sumOf { it.cost ?: 0.0 } / months
 }
 
