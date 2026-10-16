@@ -41,6 +41,18 @@ private val DarkScheme = darkColorScheme(
     outlineVariant = DarkRule,
     error = DarkAlarm,
     onError = DarkOnAccent,
+    primaryContainer = DarkAccentContainer,
+    onPrimaryContainer = DarkOnAccentContainer,
+    secondaryContainer = DarkAccentContainer,
+    onSecondaryContainer = DarkOnAccentContainer,
+    surfaceTint = DarkPanel, // no blue wash on elevated surfaces
+    surfaceDim = DarkBg,
+    surfaceBright = DarkContainerHighest,
+    surfaceContainerLowest = DarkBg,
+    surfaceContainerLow = DarkContainerLow,
+    surfaceContainer = DarkContainer,
+    surfaceContainerHigh = DarkContainerHigh,
+    surfaceContainerHighest = DarkContainerHighest,
 )
 
 private val LightScheme = lightColorScheme(
@@ -60,6 +72,18 @@ private val LightScheme = lightColorScheme(
     outlineVariant = LightRule,
     error = LightAlarm,
     onError = LightOnAccent,
+    primaryContainer = LightAccentContainer,
+    onPrimaryContainer = LightOnAccentContainer,
+    secondaryContainer = LightAccentContainer,
+    onSecondaryContainer = LightOnAccentContainer,
+    surfaceTint = LightPanel, // no blue wash on elevated surfaces
+    surfaceDim = LightBg,
+    surfaceBright = Color.White,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = LightContainerLow,
+    surfaceContainer = LightContainer,
+    surfaceContainerHigh = LightContainerHigh,
+    surfaceContainerHighest = LightContainerHighest,
 )
 
 /**
