@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
@@ -50,6 +52,7 @@ import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DueStatus
 import com.garagelog.app.util.computeDueInfo
+import com.garagelog.app.util.formatMiles
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -74,6 +77,8 @@ fun ScheduleScreen(
     // (cost, notes, photos) can be recorded, not just the tracker's due date silently bumped.
     onLogSchedule: (MaintenanceScheduleEntity) -> Unit,
     onSuggestWithBob: ((VehicleEntity) -> Unit)?,
+    /** A schedule item to scroll to and highlight on arrival, e.g. an overdue one tapped on Home. */
+    focusId: String? = null,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
@@ -147,6 +152,7 @@ fun ScheduleScreen(
                                     onEdit = { onEdit(sched) },
                                     onMarkDone = { confirmingSchedule = sched },
                                     justCompleted = sched.id == justCompletedId,
+                                    focused = sched.id == focusId,
                                 )
                                 if (index != schedules.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             }
@@ -210,6 +216,7 @@ private fun ScheduleRow(
     onEdit: () -> Unit,
     onMarkDone: () -> Unit,
     justCompleted: Boolean,
+    focused: Boolean = false,
 ) {
     val info = computeDueInfo(schedule, currentMiles, severeDuty)
     val tone = when (info.status) {
@@ -232,7 +239,20 @@ private fun ScheduleRow(
         }
     }
 
-    Box {
+    // Arriving from a tapped item on Home: bring this row on screen and pulse it, so it's clear
+    // which one was meant (rows for one vehicle share a card, so the list can't scroll to it alone).
+    val focusGlow = remember { Animatable(0f) }
+    val bringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(focused) {
+        if (focused) {
+            delay(150) // let the list lay out first
+            bringIntoView.bringIntoView()
+            focusGlow.snapTo(1f)
+            focusGlow.animateTo(0f, animationSpec = tween(1600, easing = LinearOutSlowInEasing))
+        }
+    }
+
+    Box(modifier = Modifier.bringIntoViewRequester(bringIntoView)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -255,7 +275,7 @@ private fun ScheduleRow(
                 }
                 Text(info.label, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 val interval = buildList {
-                    schedule.intervalMiles?.let { add("every $it mi") }
+                    schedule.intervalMiles?.let { add("every ${formatMiles(it)}") }
                     schedule.intervalMonths?.let { add("every $it mo") }
                 }.joinToString(" · ")
                 if (interval.isNotBlank()) {
@@ -263,6 +283,13 @@ private fun ScheduleRow(
                 }
                 ActionLink("Mark done today", onClick = onMarkDone, modifier = Modifier.padding(top = 6.dp))
             }
+        }
+        if (focusGlow.value > 0f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(garageColors.info.copy(alpha = 0.24f * focusGlow.value)),
+            )
         }
         if (highlight.value > 0f) {
             Box(

@@ -101,14 +101,14 @@ private fun BackupVehicle.toEntity(sortOrder: Int) = VehicleEntity(
 private fun LogEntryEntity.toBackup() = BackupLog(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage?.toString(), category = category,
     task = task, cost = cost?.toString(), parts = parts, notes = notes,
-    gallons = gallons?.toString(), fullTank = fullTank,
+    gallons = gallons?.toString(), fullTank = fullTank, missedFillUp = missedFillUp,
 )
 
 private fun BackupLog.toEntity() = LogEntryEntity(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage?.trim()?.toDoubleOrNull()?.toInt(),
     category = category, task = task.ifBlank { "Untitled entry" },
     cost = cost?.trim()?.toDoubleOrNull(), parts = parts, notes = notes,
-    gallons = gallons?.trim()?.toDoubleOrNull(), fullTank = fullTank,
+    gallons = gallons?.trim()?.toDoubleOrNull(), fullTank = fullTank, missedFillUp = missedFillUp,
     updatedAt = System.currentTimeMillis(),
 )
 

@@ -102,7 +102,7 @@ private fun AppTab.label(): String = when (this) {
 }
 
 private fun SubScreen.label(): String = when (this) {
-    SubScreen.Schedule -> "Maintenance"
+    is SubScreen.Schedule -> "Maintenance"
     SubScreen.Settings -> "Settings"
     SubScreen.ManageVehicles -> "Vehicles"
     SubScreen.Members -> "Members"
@@ -111,7 +111,7 @@ private fun SubScreen.label(): String = when (this) {
 }
 
 private fun SubScreen.icon(): ImageVector = when (this) {
-    SubScreen.Schedule -> Icons.Filled.Build
+    is SubScreen.Schedule -> Icons.Filled.Build
     SubScreen.Settings -> Icons.Filled.Settings
     SubScreen.ManageVehicles -> Icons.Filled.DirectionsCar
     SubScreen.Members -> Icons.Filled.Group
@@ -485,6 +485,7 @@ fun GarageLogApp(shell: GarageLogViewModel) {
                         )
                     },
                     onSuggestWithBob = if (access.canEditSchedules && access.canChatWithBob) { { activeSheet = Sheet.BobSchedule(it) } } else null,
+                    focusId = subScreen.focusId,
                 )
                 else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     when (mainTabs[page]) {

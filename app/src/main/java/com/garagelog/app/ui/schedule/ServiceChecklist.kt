@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.ui.components.LabeledTextField
+import com.garagelog.app.ui.components.MileageField
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.CommonServiceTemplate
 import java.util.UUID
@@ -97,11 +98,10 @@ fun ServiceChecklist(
             AnimatedVisibility(visible = draft.checked && !tracked) {
                 Column(modifier = Modifier.padding(start = 48.dp, bottom = 6.dp)) {
                     Row {
-                        LabeledTextField(
+                        MileageField(
                             "Every (miles)",
                             draft.miles,
-                            { v -> update { it.copy(miles = v.filter(Char::isDigit)) } },
-                            keyboardType = KeyboardType.Number,
+                            { v -> update { it.copy(miles = v) } },
                             modifier = Modifier.weight(1f),
                         )
                         Spacer(Modifier.width(10.dp))

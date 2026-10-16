@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.DragHandle
@@ -35,7 +34,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -52,7 +50,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.garagelog.app.data.ai.ASSISTANT_NAME
@@ -68,6 +65,7 @@ import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
+import com.garagelog.app.ui.components.MileageField
 import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
 import com.garagelog.app.ui.components.StatGrid
@@ -77,12 +75,15 @@ import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DueStatus
 import com.garagelog.app.util.ProjectedService
 import com.garagelog.app.util.ScheduleDueInfo
+import com.garagelog.app.util.addMonthsToIso
 import com.garagelog.app.util.computeDueInfo
 import com.garagelog.app.util.drivingRate
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
+import com.garagelog.app.util.isoToUtcMillis
 import com.garagelog.app.util.projectSchedules
+import com.garagelog.app.util.todayIso
 import com.garagelog.app.util.vehicleSpecLines
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,7 +95,8 @@ fun DashboardScreen(
     onEditVehicle: (VehicleEntity) -> Unit,
     // Null = hidden (a Standard member of a shared garage).
     onAddVehicle: (() -> Unit)?,
-    onOpenSchedule: () -> Unit,
+    // null = the whole schedule; an id = scroll to and highlight that item.
+    onOpenSchedule: (focusId: String?) -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onAddFueling: (VehicleEntity) -> Unit,
@@ -137,8 +139,10 @@ fun DashboardScreen(
 private class CardData(
     val logs: List<LogEntryEntity>,
     val openIssues: List<IssueEntity>,
-    val serviceSpent: Double,
-    val fuelSpent: Double,
+    /** Service and repair spend over the last 12 months. */
+    val serviceSpent12Months: Double,
+    /** Fuel spend per month, averaged over the last 12 months (or the months it has, if fewer); null = none. */
+    val fuelPerMonth: Double?,
     val lastLog: LogEntryEntity?,
     val schedules: List<MaintenanceScheduleEntity>,
     val dueItems: List<Pair<MaintenanceScheduleEntity, ScheduleDueInfo>>,
@@ -150,7 +154,10 @@ private fun cardData(v: VehicleEntity, uiState: GarageLogUiState): CardData {
     val logs = uiState.logs.filter { it.vehicleId == v.id }
     // Fuel is an ongoing running cost, not money spent on the vehicle's condition — mixing the two
     // made "logged spend" drift upward with every fill-up and hid what maintenance actually cost.
-    val (fuelLogs, serviceLogs) = logs.partition { it.category == LogCategory.Fuel.name }
+    // A rolling year rather than all-time: totals only ever grew, and a year is what an owner
+    // budgets in. Rolling rather than calendar, so it doesn't drop to $0 every January.
+    val yearAgo = addMonthsToIso(todayIso(), -12) ?: ""
+    val (fuelLogs, serviceLogs) = logs.filter { it.date >= yearAgo }.partition { it.category == LogCategory.Fuel.name }
     val schedules = uiState.schedules.filter { it.vehicleId == v.id }
     val dueItems = schedules
         .map { it to computeDueInfo(it, v.miles, v.isSevereDuty) }
@@ -162,8 +169,8 @@ private fun cardData(v: VehicleEntity, uiState: GarageLogUiState): CardData {
     return CardData(
         logs = logs,
         openIssues = uiState.issues.filter { it.vehicleId == v.id && it.status != IssueStatus.Resolved.label },
-        serviceSpent = serviceLogs.sumOf { it.cost ?: 0.0 },
-        fuelSpent = fuelLogs.sumOf { it.cost ?: 0.0 },
+        serviceSpent12Months = serviceLogs.sumOf { it.cost ?: 0.0 },
+        fuelPerMonth = averagePerMonth(fuelLogs),
         lastLog = logs.maxByOrNull { it.date },
         schedules = schedules,
         dueItems = dueItems,
@@ -175,12 +182,27 @@ private fun cardData(v: VehicleEntity, uiState: GarageLogUiState): CardData {
     )
 }
 
+/**
+ * Spend per month across [logs] (already limited to the last 12 months), averaged over the
+ * months they actually span up to today — a vehicle added in August isn't averaged as if it had
+ * been fueled at $0 since last October.
+ */
+private fun averagePerMonth(logs: List<LogEntryEntity>): Double? {
+    val first = logs.minOfOrNull { it.date } ?: return null
+    val firstMillis = isoToUtcMillis(first) ?: return null
+    val todayMillis = isoToUtcMillis(todayIso()) ?: return null
+    val days = (todayMillis - firstMillis) / 86_400_000.0
+    val months = kotlin.math.ceil(days / 30.44).coerceIn(1.0, 12.0)
+    return logs.sumOf { it.cost ?: 0.0 } / months
+}
+
 @Composable
 private fun VehicleDashboardCard(
     uiState: GarageLogUiState,
     v: VehicleEntity,
     onEditVehicle: (VehicleEntity) -> Unit,
-    onOpenSchedule: () -> Unit,
+    // null = the whole schedule; an id = scroll to and highlight that item.
+    onOpenSchedule: (focusId: String?) -> Unit,
     onUpdateMileage: (VehicleEntity, Int) -> Unit,
     onOpenVehicleTab: (String, AppTab) -> Unit,
     onAddFueling: (VehicleEntity) -> Unit,
@@ -192,8 +214,6 @@ private fun VehicleDashboardCard(
     val card = remember(v, uiState.logs, uiState.issues, uiState.schedules) { cardData(v, uiState) }
     val logs = card.logs
     val openIssues = card.openIssues
-    val serviceSpent = card.serviceSpent
-    val fuelSpent = card.fuelSpent
     val lastLog = card.lastLog
     val schedulesForVehicle = card.schedules
     val dueItems = card.dueItems
@@ -230,15 +250,20 @@ private fun VehicleDashboardCard(
                 listOfNotNull(v.year?.toString(), v.model.ifBlank { null }).joinToString(" ")
             }
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            ActionLink("Edit", onClick = { onEditVehicle(v) })
+            // Asking Bob is the everyday action; editing the vehicle lives under its details.
+            onAskClaude?.let { ask -> ActionLink("Ask $ASSISTANT_NAME", onClick = { ask(v) }) }
         }
 
         // Maintenance alerts lead the card — this is the thing an owner actually opens the app
-        // to check, so it shouldn't be buried below static vehicle specs.
-        Column(modifier = Modifier.padding(top = 10.dp).fillMaxWidth().clickable(onClick = onOpenSchedule)) {
+        // to check, so it shouldn't be buried below static vehicle specs. Each due item opens that
+        // item in Maintenance; the rest of the block opens the whole schedule.
+        Column(modifier = Modifier.padding(top = 10.dp).fillMaxWidth().clickable { onOpenSchedule(null) }) {
             if (dueItems.isNotEmpty()) {
                 dueItems.forEach { (sched, info) ->
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { onOpenSchedule(sched.id) }.padding(vertical = 2.dp),
+                    ) {
                         PillBadge(
                             text = if (info.status == DueStatus.OVERDUE) "Overdue" else "Due soon",
                             tone = if (info.status == DueStatus.OVERDUE) PillTone.Open else PillTone.Progress,
@@ -278,8 +303,8 @@ private fun VehicleDashboardCard(
                 // already says what the unit is.
                 formatMiles(v.miles).removeSuffix(" mi") to "current miles",
                 openIssues.size.toString() to "open issues",
-                formatMoney(serviceSpent) to "service spend",
-                formatMoney(fuelSpent) to "fuel spend",
+                formatMoney(card.serviceSpent12Months) to "service, last 12 mo",
+                (card.fuelPerMonth?.let { formatMoney(it) } ?: "—") to "fuel per month",
             ),
             onItemClick = { index ->
                 when (index) {
@@ -294,10 +319,6 @@ private fun VehicleDashboardCard(
             ActionLink("Update mileage", onClick = { showMileageDialog = true })
             Spacer(Modifier.width(8.dp))
             ActionLink("Add fueling", onClick = { onAddFueling(v) })
-            onAskClaude?.let { ask ->
-                Spacer(Modifier.width(8.dp))
-                ActionLink("Ask $ASSISTANT_NAME", onClick = { ask(v) })
-            }
         }
 
         Text(
@@ -331,6 +352,7 @@ private fun VehicleDashboardCard(
                         Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     }
                 }
+                ActionLink("Edit vehicle", onClick = { onEditVehicle(v) }, modifier = Modifier.padding(top = 8.dp))
             }
         }
     }
@@ -350,15 +372,7 @@ private fun UpdateMileageDialog(currentMiles: Int?, onConfirm: (Int) -> Unit, on
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Update mileage") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text("Current mileage") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-            )
-        },
+        text = { MileageField("Current mileage", text, { text = it }) },
         confirmButton = {
             TextButton(onClick = {
                 text.trim().toIntOrNull()?.let(onConfirm)

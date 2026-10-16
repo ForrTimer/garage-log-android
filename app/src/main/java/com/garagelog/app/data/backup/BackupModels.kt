@@ -73,6 +73,7 @@ data class BackupLog(
     val notes: String = "",
     val gallons: String? = null,
     val fullTank: Boolean = false,
+    val missedFillUp: Boolean = false,
 )
 
 @Serializable

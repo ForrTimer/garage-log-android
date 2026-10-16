@@ -39,16 +39,16 @@ fun computeDueInfo(schedule: MaintenanceScheduleEntity, currentMiles: Int?, seve
         mileageOverdue || dateOverdue -> ScheduleDueInfo(
             DueStatus.OVERDUE,
             buildString {
-                if (mileageOverdue) append("Overdue by ${-mileageRemaining} mi")
+                if (mileageOverdue) append("Overdue by ${formatMiles(-mileageRemaining)}")
                 if (mileageOverdue && dateOverdue) append(" · ")
                 if (dateOverdue) append("overdue since ${formatDate(dueDate)}")
             },
             mileageRemaining,
         )
-        mileageDueSoon -> ScheduleDueInfo(DueStatus.DUE_SOON, "Due in $mileageRemaining mi", mileageRemaining)
+        mileageDueSoon -> ScheduleDueInfo(DueStatus.DUE_SOON, "Due in ${formatMiles(mileageRemaining)}", mileageRemaining)
         mileageRemaining != null -> ScheduleDueInfo(
             DueStatus.OK,
-            "Due in $mileageRemaining mi" + (dueDate?.let { " (or by ${formatDate(it)})" } ?: ""),
+            "Due in ${formatMiles(mileageRemaining)}" + (dueDate?.let { " (or by ${formatDate(it)})" } ?: ""),
             mileageRemaining,
         )
         dueDate != null -> ScheduleDueInfo(DueStatus.OK, "Due by ${formatDate(dueDate)}")

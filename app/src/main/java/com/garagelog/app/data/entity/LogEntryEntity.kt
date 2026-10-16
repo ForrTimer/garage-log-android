@@ -26,6 +26,9 @@ data class LogEntryEntity(
     // partial fill breaks the "miles since last full tank / gallons since last full tank" math).
     val gallons: Double? = null,
     val fullTank: Boolean = false,
+    // category == Fuel only: the owner skipped logging at least one fill-up before this one, so the
+    // fuel burned since the previous entry is unknown and this stretch can't give an MPG figure.
+    val missedFillUp: Boolean = false,
     // Firebase uid of whoever first saved this in a shared garage; "" = before shared garages, or
     // never in one. Gates a Standard member editing someone else's entry (firestore.rules).
     val createdBy: String = "",

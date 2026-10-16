@@ -11,6 +11,7 @@ import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.ScheduleRepository
 import com.garagelog.app.data.repository.VehicleRepository
 import com.garagelog.app.util.computeDueInfo
+import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.todayIso
 import com.garagelog.app.util.vehicleSpecLines
 import java.security.MessageDigest
@@ -102,7 +103,7 @@ class GarageMirror(
         if (schedules.isEmpty()) appendLine("No maintenance schedule set up.")
         schedules.sortedBy { it.taskName.lowercase() }.forEach { schedule ->
             val due = computeDueInfo(schedule, vehicle.miles, vehicle.isSevereDuty)
-            val interval = listOfNotNull(schedule.intervalMiles?.let { "$it mi" }, schedule.intervalMonths?.let { "$it mo" })
+            val interval = listOfNotNull(schedule.intervalMiles?.let { formatMiles(it) }, schedule.intervalMonths?.let { "$it mo" })
                 .joinToString(" / ").ifEmpty { "no interval" }
             val lastDone = if (schedule.lastDoneDate != null || schedule.lastDoneMileage != null) {
                 "last done ${schedule.lastDoneDate ?: "?"} at ${schedule.lastDoneMileage?.toString() ?: "?"} mi"
@@ -140,6 +141,7 @@ class GarageMirror(
             if (entry.category == LogCategory.Fuel.name) {
                 entry.gallons?.let { append(" — ${"%.2f".format(it)} gal") }
                 append(if (entry.fullTank) " (full tank)" else " (partial)")
+                if (entry.missedFillUp) append(" (a fill-up before this one wasn't logged)")
                 entry.cost?.let { append(" — \$${"%.2f".format(it)}") }
             } else {
                 append(" — odometer reading")

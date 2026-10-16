@@ -88,7 +88,10 @@ fun FormSheetScaffold(
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f)
                     .nestedScroll(SwallowUpwardOverscroll)
-                    .verticalScroll(scrollState),
+                    // No stretch overscroll: in a sheet, Android 12+'s stretch at the end of the form (or
+                    // on any drag of a form short enough not to scroll, like Add fueling) springs back
+                    // and reads as the sheet bouncing.
+                    .verticalScroll(scrollState, overscrollEffect = null),
             ) {
                 content()
             }

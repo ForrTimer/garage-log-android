@@ -1,5 +1,6 @@
 package com.garagelog.app.ui.log
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -30,6 +31,7 @@ import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
+import com.garagelog.app.ui.components.MileageField
 import com.garagelog.app.ui.components.PhotoGridSection
 import com.garagelog.app.ui.components.ReadOnlyDropdownField
 import com.garagelog.app.ui.components.SegmentedControl
@@ -50,6 +52,7 @@ private data class LogFormState(
     val fulfillsScheduleId: String?,
     val gallons: String,
     val fullTank: Boolean,
+    val missedFillUp: Boolean,
 )
 
 /** Categories light enough that a photo grid/parts list would just be clutter, not a real need. */
@@ -97,7 +100,9 @@ fun LogFormSheet(
                 notes = source?.notes ?: "",
                 fulfillsScheduleId = source?.fulfillsScheduleId,
                 gallons = source?.gallons?.toString() ?: "",
-                fullTank = source?.fullTank ?: false,
+                // Most fill-ups fill the tank: a new one starts on, an existing one keeps what it saved.
+                fullTank = entry?.fullTank ?: true,
+                missedFillUp = source?.missedFillUp ?: false,
             ),
         )
     }
@@ -146,6 +151,7 @@ fun LogFormSheet(
                     fulfillsScheduleId = if (form.category == LogCategory.Routine.name) form.fulfillsScheduleId else null,
                     gallons = if (form.category == LogCategory.Fuel.name) form.gallons.trim().toDoubleOrNull() else null,
                     fullTank = form.category == LogCategory.Fuel.name && form.fullTank,
+                    missedFillUp = form.category == LogCategory.Fuel.name && form.missedFillUp,
                 ),
             )
         },
@@ -155,11 +161,10 @@ fun LogFormSheet(
             form = form.copy(vehicleId = it, fulfillsScheduleId = null)
         }
         DateField("Date", form.date) { form = form.copy(date = it) }
-        LabeledTextField(
+        MileageField(
             if (mileageRequired) "Mileage (required)" else "Mileage",
             form.mileage,
             { form = form.copy(mileage = it) },
-            keyboardType = KeyboardType.Number,
         )
 
         Text("Category", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 14.dp))
@@ -171,15 +176,21 @@ fun LogFormSheet(
 
         when (form.category) {
             LogCategory.Fuel.name -> {
-                LabeledTextField("Gallons", form.gallons, { form = form.copy(gallons = it) }, keyboardType = KeyboardType.Decimal)
+                // Cost first, then gallons: the order a pump's display reads.
                 LabeledTextField("Total cost (\$)", form.cost, { form = form.copy(cost = it) }, keyboardType = KeyboardType.Decimal)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 12.dp),
-                ) {
-                    Switch(checked = form.fullTank, onCheckedChange = { form = form.copy(fullTank = it) }, colors = garageSwitchColors())
-                    Text("Full tank", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 10.dp))
-                }
+                LabeledTextField("Gallons", form.gallons, { form = form.copy(gallons = it) }, keyboardType = KeyboardType.Decimal)
+                FuelSwitch(
+                    label = "Full tank",
+                    note = "Off for a partial fill. MPG is measured between full tanks.",
+                    checked = form.fullTank,
+                    onCheckedChange = { form = form.copy(fullTank = it) },
+                )
+                FuelSwitch(
+                    label = "Skipped logging a fill-up before this one",
+                    note = "The missed fuel is unknown, so MPG starts counting again from here.",
+                    checked = form.missedFillUp,
+                    onCheckedChange = { form = form.copy(missedFillUp = it) },
+                )
             }
             LogCategory.Mileage.name -> Unit
             else -> {
@@ -226,3 +237,14 @@ fun LogFormSheet(
     }
 }
 
+
+@Composable
+private fun FuelSwitch(label: String, note: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = garageSwitchColors())
+        Column(modifier = Modifier.padding(start = 10.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}

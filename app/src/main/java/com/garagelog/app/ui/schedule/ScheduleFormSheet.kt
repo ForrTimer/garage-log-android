@@ -12,6 +12,7 @@ import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
+import com.garagelog.app.ui.components.MileageField
 import com.garagelog.app.ui.components.VehicleDropdown
 import com.garagelog.app.ui.components.capitalizeWords
 import java.util.UUID
@@ -78,9 +79,9 @@ fun ScheduleFormSheet(
             { form = form.copy(taskName = capitalizeWords(it)) },
             capitalization = KeyboardCapitalization.Words,
         )
-        LabeledTextField("Interval (miles)", form.intervalMiles, { form = form.copy(intervalMiles = it) }, keyboardType = KeyboardType.Number)
+        MileageField("Interval (miles)", form.intervalMiles, { form = form.copy(intervalMiles = it) })
         LabeledTextField("Interval (months)", form.intervalMonths, { form = form.copy(intervalMonths = it) }, keyboardType = KeyboardType.Number)
-        LabeledTextField("Last done — mileage", form.lastDoneMileage, { form = form.copy(lastDoneMileage = it) }, keyboardType = KeyboardType.Number)
+        MileageField("Last done — mileage", form.lastDoneMileage, { form = form.copy(lastDoneMileage = it) })
         DateField("Last done — date", form.lastDoneDate) { form = form.copy(lastDoneDate = it) }
     }
 }

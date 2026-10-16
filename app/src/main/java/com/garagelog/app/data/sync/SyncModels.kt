@@ -109,6 +109,7 @@ data class SyncLog(
     val fulfillsScheduleId: String? = null,
     val gallons: Double? = null,
     val fullTank: Boolean = false,
+    val missedFillUp: Boolean = false,
     val createdBy: String = "",
     override val updatedAt: Long,
     override val deleted: Boolean,
@@ -169,13 +170,13 @@ fun SyncVehicle.toEntity() = VehicleEntity(
 fun LogEntryEntity.toSync() = SyncLog(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage, category = category, task = task,
     cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId,
-    gallons = gallons, fullTank = fullTank, createdBy = createdBy, updatedAt = updatedAt, deleted = deleted,
+    gallons = gallons, fullTank = fullTank, missedFillUp = missedFillUp, createdBy = createdBy, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun SyncLog.toEntity() = LogEntryEntity(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage, category = category, task = task,
     cost = cost, parts = parts, notes = notes, fulfillsScheduleId = fulfillsScheduleId,
-    gallons = gallons, fullTank = fullTank, createdBy = createdBy, updatedAt = updatedAt, deleted = deleted,
+    gallons = gallons, fullTank = fullTank, missedFillUp = missedFillUp, createdBy = createdBy, updatedAt = updatedAt, deleted = deleted,
 )
 
 fun IssueEntity.toSync() = SyncIssue(

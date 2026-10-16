@@ -178,3 +178,10 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         db.execSQL("ALTER TABLE issues ADD COLUMN createdBy TEXT NOT NULL DEFAULT ''")
     }
 }
+
+/** A fuel entry can say a fill-up before it went unlogged, which breaks the MPG chain there. Additive. */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE log_entries ADD COLUMN missedFillUp INTEGER NOT NULL DEFAULT 0")
+    }
+}

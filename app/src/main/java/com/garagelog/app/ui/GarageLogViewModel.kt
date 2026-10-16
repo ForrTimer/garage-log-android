@@ -29,7 +29,8 @@ enum class AppTab { Dashboard, Log, Issues, Trends }
  * they're mutually exclusive by nature, and a bool each drifted out of sync as they multiplied.
  */
 sealed interface SubScreen {
-    data object Schedule : SubScreen
+    /** [focusId]: a schedule item to scroll to and highlight (tapped from a vehicle card). */
+    data class Schedule(val focusId: String? = null) : SubScreen
     data object Settings : SubScreen
     data object ManageVehicles : SubScreen
     data object Members : SubScreen
@@ -147,7 +148,7 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
         subScreen.value = null
     }
 
-    fun openSchedule() { subScreen.value = SubScreen.Schedule }
+    fun openSchedule(focusId: String? = null) { subScreen.value = SubScreen.Schedule(focusId) }
     fun openSettings() { subScreen.value = SubScreen.Settings }
     fun openManageVehicles() { subScreen.value = SubScreen.ManageVehicles }
     fun openMembers() { subScreen.value = SubScreen.Members }

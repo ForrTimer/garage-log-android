@@ -8,6 +8,7 @@ import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.util.computeDueInfo
 import com.garagelog.app.util.fillUpMpg
+import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.vehicleSpecLines
 
 /**
@@ -52,7 +53,7 @@ object GarageContext {
             schedules.forEach { schedule ->
                 val due = computeDueInfo(schedule, vehicle.miles, vehicle.isSevereDuty)
                 val interval = listOfNotNull(
-                    schedule.intervalMiles?.let { "$it mi" },
+                    schedule.intervalMiles?.let { formatMiles(it) },
                     schedule.intervalMonths?.let { "$it mo" },
                 ).joinToString(" / ").ifEmpty { "no interval" }
                 val lastDone = if (schedule.lastDoneDate != null || schedule.lastDoneMileage != null) {

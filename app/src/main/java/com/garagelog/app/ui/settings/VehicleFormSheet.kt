@@ -46,6 +46,7 @@ import com.garagelog.app.ui.ai.BobViewModel
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
+import com.garagelog.app.ui.components.MileageField
 import com.garagelog.app.ui.components.SegmentedControl
 import com.garagelog.app.ui.components.SuggestField
 import com.garagelog.app.ui.schedule.BobScheduleButton
@@ -178,7 +179,7 @@ fun VehicleFormSheet(
         SectionLabel("Vehicle")
         IdentityPickers(records.vehicleCatalog, form, onChange = { form = it })
         LabeledTextField("Trim", form.trim, { form = form.copy(trim = it) }, capitalization = KeyboardCapitalization.Words)
-        LabeledTextField("Current mileage", form.miles, { form = form.copy(miles = it.filter(Char::isDigit)) }, keyboardType = KeyboardType.Number)
+        MileageField("Current mileage", form.miles, { form = form.copy(miles = it) })
 
         SectionLabel("Body")
         SuggestField("Body style", form.bodyStyle, { form = form.copy(bodyStyle = it) }, BODY_STYLES)

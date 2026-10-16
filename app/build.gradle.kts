@@ -116,4 +116,6 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.security.crypto)
+
+    testImplementation(libs.junit)
 }

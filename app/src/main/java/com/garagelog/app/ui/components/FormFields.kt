@@ -33,8 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.util.formatDate
@@ -62,6 +66,59 @@ fun LabeledTextField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, capitalization = capitalization),
         modifier = modifier.fillMaxWidth().padding(top = 10.dp),
     )
+}
+
+/**
+ * A whole-number mileage field shown with thousands commas ("204,571") while storing only the
+ * digits, so [value] parses with toIntOrNull() everywhere it's read. The commas are display only
+ * (a VisualTransformation), so typing, deleting and the cursor behave as if they weren't there.
+ */
+@Composable
+fun MileageField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { typed -> onValueChange(typed.filter(Char::isDigit).take(MAX_MILEAGE_DIGITS)) },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        visualTransformation = ThousandsSeparatorTransformation,
+        modifier = modifier.fillMaxWidth().padding(top = 10.dp),
+    )
+}
+
+// Nine digits is 999,999,999 mi: past any odometer, and well inside an Int.
+private const val MAX_MILEAGE_DIGITS = 9
+
+/** Shows a digits-only string with commas every three digits from the right. */
+object ThousandsSeparatorTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val digits = text.text
+        val out = StringBuilder()
+        digits.forEachIndexed { i, c ->
+            if (i > 0 && (digits.length - i) % 3 == 0) out.append(',')
+            out.append(c)
+        }
+        val mapping = object : OffsetMapping {
+            // Commas before original position [offset]: one per full group of three to its left,
+            // counted from the right end.
+            private fun commasBefore(offset: Int): Int =
+                (0 until offset).count { i -> i > 0 && (digits.length - i) % 3 == 0 }
+
+            override fun originalToTransformed(offset: Int): Int = offset + commasBefore(offset)
+
+            override fun transformedToOriginal(offset: Int): Int {
+                var original = 0
+                while (original < digits.length && originalToTransformed(original + 1) <= offset) original++
+                return original
+            }
+        }
+        return TransformedText(AnnotatedString(out.toString()), mapping)
+    }
 }
 
 /** Capitalizes the first letter of every word as the user types, leaving the rest of each word untouched. */
