@@ -6,7 +6,9 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.garagelog.app.data.ai.AiRunState
 import com.garagelog.app.data.ai.ClaudeSource
+import com.garagelog.app.data.ai.HowToVideo
 import com.garagelog.app.data.ai.ScheduleSuggestion
+import com.garagelog.app.data.ai.howToKey
 import com.garagelog.app.data.ai.scheduleKey
 import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.AiDiagnosisEntity
@@ -83,6 +85,21 @@ class BobViewModel(private val locator: ServiceLocator) : ViewModel() {
             throw e
         } catch (e: Exception) {
             // Already recorded on the run holder for the screen; nothing else to do.
+        }
+    }
+
+    /**
+     * Asks Bob for the best how-to video for [task] on [vehicle]. Progress shows through [runs]
+     * under [howToKey]; the pick comes back through [onResult]. Nothing is saved.
+     */
+    fun findHowTo(vehicle: VehicleEntity, task: String, onResult: (HowToVideo) -> Unit) = viewModelScope.launch {
+        locator.aiRunHolder.clearError(howToKey(vehicle.id, task))
+        try {
+            onResult(locator.aiRepository.findHowTo(vehicle, task))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Already recorded on the run holder for the dialog; nothing else to do.
         }
     }
 

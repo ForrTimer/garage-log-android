@@ -393,6 +393,9 @@ class BobAgent(
 
         /** The custom tool Bob answers a schedule request with; its schema is in bob.agent.yaml. */
         const val PROPOSE_SCHEDULE_TOOL = "propose_schedule"
+
+        /** The custom tool Bob answers a how-to request with; its schema is in bob.agent.yaml. */
+        const val RECOMMEND_VIDEO_TOOL = "recommend_video"
     }
 }
 

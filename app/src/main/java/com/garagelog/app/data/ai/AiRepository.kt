@@ -7,6 +7,8 @@ import com.garagelog.app.data.entity.AiDiagnosisEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.VehicleRepository
+import com.garagelog.app.util.formatLiters
+import com.garagelog.app.util.isYouTubeVideoUrl
 import com.garagelog.app.util.todayIso
 import android.util.Log
 import java.util.UUID
@@ -243,6 +245,40 @@ class AiRepository(
     }
 
     /**
+     * Asks Bob for the single best how-to video for [task] on [vehicle]. A one-off session on the
+     * cheap chat model (a search and a pick, no reasoning to speak of), nothing persisted. The link
+     * is only returned if it's a real YouTube video URL; anything else counts as "nothing found".
+     */
+    suspend fun findHowTo(vehicle: VehicleEntity, task: String): HowToVideo {
+        val key = howToKey(vehicle.id, task)
+        return reporting(key) {
+            val message = buildString {
+                appendLine("Kind: HowTo")
+                appendLine(vehicleLine(vehicle))
+                appendLine("Engine: ${vehicle.engine.ifBlank { vehicle.displacementL?.let { "${formatLiters(it)} L" } ?: "unknown" }}")
+                appendLine("Job: $task")
+            }
+            val turn = bob.runTurn(
+                runKey = key,
+                threadKey = null,
+                title = "How-to: $task",
+                opening = { message },
+                followUp = message,
+                onCustomTool = { _, _ -> "Received." },
+                model = BobAgent.CHAT_MODEL,
+            )
+            val input = turn.toolInputs[BobAgent.RECOMMEND_VIDEO_TOOL]
+                ?: throw if (turn.text.isNotBlank()) ClaudeException(ClaudeErrorKind.Other, turn.text, fromAssistant = true)
+                else ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME didn't find a video. Try the YouTube search.")
+            val video = runCatching { json.decodeFromString(HowToVideo.serializer(), input) }.getOrNull()
+            if (video == null || !isYouTubeVideoUrl(video.url)) {
+                throw ClaudeException(ClaudeErrorKind.Other, "$ASSISTANT_NAME's link didn't check out. Try the YouTube search.")
+            }
+            video
+        }
+    }
+
+    /**
      * Records a failure against [key] so whichever screen is watching can show it. Being stopped
      * is not a failure and must never be shown as one — that's what made a backgrounded request
      * once report "couldn't reach Bob".
@@ -297,3 +333,10 @@ private data class ProposedSchedule(val services: List<ScheduleSuggestion> = emp
 
 /** [AiRunHolder] key for a schedule suggestion; distinct from issue ids and chat thread keys. */
 fun scheduleKey(vehicleId: String) = "schedule/$vehicleId"
+
+/** One how-to video Bob picked for a maintenance job. */
+@Serializable
+data class HowToVideo(val title: String, val url: String, val channel: String = "", val why: String = "")
+
+/** [AiRunHolder] key for a how-to lookup. */
+fun howToKey(vehicleId: String, task: String) = "howto/$vehicleId/${task.trim().lowercase()}"

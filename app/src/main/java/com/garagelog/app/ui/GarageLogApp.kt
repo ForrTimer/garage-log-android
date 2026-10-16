@@ -486,6 +486,7 @@ fun GarageLogApp(shell: GarageLogViewModel) {
                     },
                     onSuggestWithBob = if (access.canEditSchedules && access.canChatWithBob) { { activeSheet = Sheet.BobSchedule(it) } } else null,
                     focusId = subScreen.focusId,
+                    canAskBob = access.canChatWithBob,
                 )
                 else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     when (mainTabs[page]) {

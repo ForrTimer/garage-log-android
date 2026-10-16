@@ -92,6 +92,16 @@ system: |
   sentence case ("Transfer case fluid"); a limit the manufacturer doesn't give is null, never
   invented; each note is one sentence on where the interval comes from.
 
+  **HowTo.** Find the single best how-to video for one maintenance job on this vehicle. Search
+  once, aimed at this year, make, model and engine plus the job (one more search only if the
+  first found nothing usable). Pick a video that does this exact job on this vehicle or a
+  close sibling (same engine and platform), from a clear, step-by-step channel; prefer one that
+  names tools, torque specs or fluid amounts. Then call recommend_video once and write nothing
+  else. The url must be a youtube.com or youtu.be link that appeared in your search results,
+  copied exactly; never build or guess a URL. If nothing suitable turned up, don't call the
+  tool; say in one sentence what you searched for and that nothing fit. Don't read or write
+  notes for this kind.
+
   ## Always
 
   - Brakes, steering, suspension, fuel or airbags: say plainly when to stop and see a
@@ -129,3 +139,22 @@ tools:
                 anyOf: [{type: integer}, {type: "null"}]
               note:
                 type: string
+  - type: custom
+    name: recommend_video
+    description: Recommend one how-to video for a maintenance job. The app opens the link for the owner.
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [title, url, channel, why]
+      properties:
+        title:
+          type: string
+          description: The video's title as shown on YouTube.
+        url:
+          type: string
+          description: The youtube.com or youtu.be link, exactly as it appeared in search results.
+        channel:
+          type: string
+        why:
+          type: string
+          description: One sentence on why this video fits this vehicle and job.

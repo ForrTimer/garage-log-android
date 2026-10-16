@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +20,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -79,12 +81,15 @@ fun ScheduleScreen(
     onSuggestWithBob: ((VehicleEntity) -> Unit)?,
     /** A schedule item to scroll to and highlight on arrival, e.g. an overdue one tapped on Home. */
     focusId: String? = null,
+    /** Bob can pick the best how-to video (admins; Standard members get the free search only). */
+    canAskBob: Boolean = false,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
     var confirmingSchedule by remember { mutableStateOf<MaintenanceScheduleEntity?>(null) }
     var justCompletedId by remember { mutableStateOf<String?>(null) }
     var copyFromVehicle by remember { mutableStateOf<VehicleEntity?>(null) }
+    var howTo by remember { mutableStateOf<Pair<VehicleEntity, MaintenanceScheduleEntity>?>(null) }
 
     LaunchedEffect(justCompletedId) {
         if (justCompletedId != null) {
@@ -153,6 +158,7 @@ fun ScheduleScreen(
                                     onMarkDone = { confirmingSchedule = sched },
                                     justCompleted = sched.id == justCompletedId,
                                     focused = sched.id == focusId,
+                                    onHowTo = { howTo = v to sched },
                                 )
                                 if (index != schedules.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             }
@@ -176,6 +182,10 @@ fun ScheduleScreen(
             },
             onDismiss = { confirmingSchedule = null },
         )
+    }
+
+    howTo?.let { (vehicle, sched) ->
+        HowToDialog(vehicle = vehicle, task = sched.taskName, canAskBob = canAskBob, onDismiss = { howTo = null })
     }
 
     copyFromVehicle?.let { source ->
@@ -217,6 +227,7 @@ private fun ScheduleRow(
     onMarkDone: () -> Unit,
     justCompleted: Boolean,
     focused: Boolean = false,
+    onHowTo: () -> Unit = {},
 ) {
     val info = computeDueInfo(schedule, currentMiles, severeDuty)
     val tone = when (info.status) {
@@ -281,7 +292,13 @@ private fun ScheduleRow(
                 if (interval.isNotBlank()) {
                     Text(interval, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
-                ActionLink("Mark done today", onClick = onMarkDone, modifier = Modifier.padding(top = 6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                    ActionLink("Mark done today", onClick = onMarkDone)
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onHowTo) {
+                        Icon(Icons.Filled.OndemandVideo, contentDescription = "How-to video", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
         }
         if (focusGlow.value > 0f) {
