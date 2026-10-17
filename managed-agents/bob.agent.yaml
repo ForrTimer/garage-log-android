@@ -155,6 +155,7 @@ tools:
           description: The youtube.com or youtu.be link, exactly as it appeared in search results.
         channel:
           type: string
+          description: The channel name as the results showed it, or an empty string if they didn't.
         why:
           type: string
           description: One sentence on why this video fits this vehicle and job.

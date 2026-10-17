@@ -256,6 +256,14 @@ class AiRepository(
                 appendLine("Kind: HowTo")
                 appendLine(vehicleLine(vehicle))
                 appendLine("Engine: ${vehicle.engine.ifBlank { vehicle.displacementL?.let { "${formatLiters(it)} L" } ?: "unknown" }}")
+                // The details that pick the right video: a 4WD crew cab and a 2WD regular cab of the
+                // same model can need different jobs entirely.
+                listOfNotNull(
+                    vehicle.trim.takeIf { it.isNotBlank() }?.let { "Trim: $it" },
+                    vehicle.drivetrain.takeIf { it.isNotBlank() }?.let { "Drivetrain: $it" },
+                    vehicle.transmissionType.takeIf { it.isNotBlank() }?.let { "Transmission: $it" },
+                    listOf(vehicle.bodyStyle, vehicle.cabStyle).filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }?.let { "Body: $it" },
+                ).forEach { appendLine(it) }
                 appendLine("Job: $task")
             }
             val turn = bob.runTurn(
