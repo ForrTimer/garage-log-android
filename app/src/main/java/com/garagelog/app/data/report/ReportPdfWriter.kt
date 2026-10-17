@@ -491,12 +491,18 @@ class ReportPdfWriter {
  */
 internal fun markdownToStyled(markdown: String): CharSequence {
     val out = SpannableStringBuilder()
-    markdown.trim().lines().forEachIndexed { index, raw ->
-        if (index > 0) out.append('\n')
+    var afterHeading = false
+    var first = true
+    markdown.trim().lines().forEach { raw ->
         val line = raw.trimEnd()
+        // The heading's own spacing is enough; a blank line under it reads as a gap.
+        if (afterHeading && line.isBlank()) return@forEach
+        if (!first) out.append('\n')
+        first = false
+        afterHeading = line.startsWith("#")
         val bullet = line.trimStart().let { it.startsWith("- ") || it.startsWith("* ") }
         when {
-            line.startsWith("#") -> {
+            afterHeading -> {
                 val start = out.length
                 appendInline(out, line.trimStart('#').trim())
                 out.setSpan(StyleSpan(Typeface.BOLD), start, out.length, 0)
@@ -512,21 +518,20 @@ internal fun markdownToStyled(markdown: String): CharSequence {
     return out
 }
 
-/** Appends [text], turning **bold** into a bold span and [label](url) into just the label. */
+/** **bold**, then *italic*; a lone asterisk (like "5 * 2") has no partner on the line and stays. */
+private val inlineEmphasis = Regex("""\*\*(.+?)\*\*|\*(\S(?:.*?\S)?)\*""")
+
+/** Appends [text], turning **bold** and *italic* into spans and [label](url) into just the label. */
 private fun appendInline(out: SpannableStringBuilder, text: String) {
-    val withoutLinks = text.replace(Regex("""\[([^\]]+)]\([^)]*\)"""), "$1")
-    var rest = withoutLinks
-    while (true) {
-        val open = rest.indexOf("**")
-        val close = if (open >= 0) rest.indexOf("**", open + 2) else -1
-        if (open < 0 || close < 0) {
-            out.append(rest)
-            return
-        }
-        out.append(rest, 0, open)
-        val boldStart = out.length
-        out.append(rest, open + 2, close)
-        out.setSpan(StyleSpan(Typeface.BOLD), boldStart, out.length, 0)
-        rest = rest.substring(close + 2)
+    val plain = text.replace(Regex("""\[([^\]]+)]\([^)]*\)"""), "$1")
+    var last = 0
+    inlineEmphasis.findAll(plain).forEach { match ->
+        out.append(plain, last, match.range.first)
+        val bold = match.groups[1]
+        val start = out.length
+        out.append(bold?.value ?: match.groupValues[2])
+        out.setSpan(StyleSpan(if (bold != null) Typeface.BOLD else Typeface.ITALIC), start, out.length, 0)
+        last = match.range.last + 1
     }
+    out.append(plain, last, plain.length)
 }
