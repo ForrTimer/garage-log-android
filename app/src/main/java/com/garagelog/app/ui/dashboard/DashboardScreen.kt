@@ -102,6 +102,7 @@ fun DashboardScreen(
     onAddFueling: (VehicleEntity) -> Unit,
     onAskClaude: ((VehicleEntity) -> Unit)?,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
+    onExportReport: (VehicleEntity) -> Unit = {},
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
@@ -127,6 +128,7 @@ fun DashboardScreen(
                     onAddFueling = onAddFueling,
                     onAskClaude = onAskClaude,
                     onSetVehiclePhoto = onSetVehiclePhoto,
+                    onExportReport = onExportReport,
                 )
                 Spacer(Modifier.padding(bottom = 12.dp))
             }
@@ -210,6 +212,7 @@ private fun VehicleDashboardCard(
     onAddFueling: (VehicleEntity) -> Unit,
     onAskClaude: ((VehicleEntity) -> Unit)?,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
+    onExportReport: (VehicleEntity) -> Unit,
 ) {
     // Recomputed only when this vehicle or the records change, not on every recomposition of the
     // card (a dialog opening, a photo loading, the pager settling).
@@ -354,7 +357,11 @@ private fun VehicleDashboardCard(
                         Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     }
                 }
-                ActionLink("Edit vehicle", onClick = { onEditVehicle(v) }, modifier = Modifier.padding(top = 8.dp))
+                Row(modifier = Modifier.padding(top = 8.dp)) {
+                    ActionLink("Edit vehicle", onClick = { onEditVehicle(v) })
+                    Spacer(Modifier.width(8.dp))
+                    ActionLink("Export report", onClick = { onExportReport(v) })
+                }
             }
         }
     }

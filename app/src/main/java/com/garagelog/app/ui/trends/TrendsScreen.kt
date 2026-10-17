@@ -1,6 +1,5 @@
 package com.garagelog.app.ui.trends
 
-import java.util.Locale
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -17,8 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,16 +30,17 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.GarageLogUiState
+import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.EmptyState
 import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.StatGrid
@@ -48,17 +48,19 @@ import com.garagelog.app.ui.components.VehicleAvatar
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DrivingRate
+import com.garagelog.app.util.categoryTotals
+import com.garagelog.app.util.compactMoney
 import com.garagelog.app.util.drivingRate
 import com.garagelog.app.util.fillUpMpg
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
 import com.garagelog.app.util.formatMoney
-import com.garagelog.app.util.monthName
-import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.floor
-import kotlin.math.log10
-import kotlin.math.pow
+import com.garagelog.app.util.formatTick
+import com.garagelog.app.util.monthLabel
+import com.garagelog.app.util.monthlyTotals
+import com.garagelog.app.util.monthsSpanned
+import com.garagelog.app.util.niceTicks
+import com.garagelog.app.util.odometerPoints
 import kotlin.math.roundToInt
 
 /**
@@ -73,7 +75,7 @@ import kotlin.math.roundToInt
  * trend to draw, and inventing one would put a confident wrong number on the screen.
  */
 @Composable
-fun TrendsScreen(uiState: GarageLogUiState) {
+fun TrendsScreen(uiState: GarageLogUiState, onExportReport: (VehicleEntity) -> Unit = {}) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
     LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
@@ -85,7 +87,7 @@ fun TrendsScreen(uiState: GarageLogUiState) {
             val rate = drivingRate(logs)
             // Pinned while its own cards scroll past, so it's always clear whose numbers these are —
             // a small muted section label was easy to scroll straight past between vehicles.
-            stickyHeader(key = "header-${v.id}") { VehicleHeader(v) }
+            stickyHeader(key = "header-${v.id}") { VehicleHeader(v, onExportReport = { onExportReport(v) }) }
             item { RunningCostCard(vehicle = v, logs = logs, rate = rate) }
             item { CostTrendCard(logs) }
             item { FuelEconomyCard(logs) }
@@ -95,7 +97,7 @@ fun TrendsScreen(uiState: GarageLogUiState) {
 }
 
 @Composable
-private fun VehicleHeader(vehicle: VehicleEntity) {
+private fun VehicleHeader(vehicle: VehicleEntity, onExportReport: () -> Unit) {
     val identity = listOfNotNull(vehicle.year?.toString(), vehicle.make.ifBlank { null }, vehicle.model.ifBlank { null })
         .joinToString(" ")
     Row(
@@ -107,12 +109,14 @@ private fun VehicleHeader(vehicle: VehicleEntity) {
     ) {
         VehicleAvatar(vehicle.photoPath, size = 40.dp)
         Spacer(Modifier.width(12.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(vehicle.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             if (identity.isNotBlank() && identity != vehicle.name) {
                 Text(identity, style = MaterialTheme.typography.bodySmall, color = garageColors.textMuted)
             }
         }
+        // A shareable PDF of everything below, plus the full history and issues.
+        ActionLink("Export report", onClick = onExportReport)
     }
 }
 
@@ -165,9 +169,7 @@ private fun RunningCostCard(vehicle: VehicleEntity, logs: List<LogEntryEntity>, 
 private fun OdometerCard(logs: List<LogEntryEntity>) {
     GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
         Text("Odometer", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        val points = logs.filter { it.mileage != null }
-            .sortedBy { it.date }
-            .map { it.date to it.mileage!!.toFloat() }
+        val points = odometerPoints(logs)
         if (points.size < 2) {
             EmptyState("Log a couple of mileage readings to see this trend.", icon = Icons.AutoMirrored.Filled.ShowChart)
         } else {
@@ -269,26 +271,6 @@ private fun CostTrendCard(logs: List<LogEntryEntity>) {
     }
 }
 
-/** Distinct calendar months with activity — the denominator for a per-month average. */
-private fun monthsSpanned(logs: List<LogEntryEntity>): Int =
-    logs.filter { it.date.length >= 7 }.map { it.date.substring(0, 7) }.distinct().size
-
-private fun monthlyTotals(logs: List<LogEntryEntity>): List<Pair<String, Double>> {
-    return logs.filter { it.date.length >= 7 }
-        .groupBy { it.date.substring(0, 7) }
-        .mapValues { (_, entries) -> entries.sumOf { it.cost ?: 0.0 } }
-        .toSortedMap()
-        .toList()
-        .takeLast(6)
-}
-
-private fun monthLabel(yyyyMm: String): String {
-    val parts = yyyyMm.split("-")
-    if (parts.size != 2) return yyyyMm
-    val monthIndex = parts[1].toIntOrNull()?.minus(1) ?: return yyyyMm
-    return monthName(monthIndex).take(3)
-}
-
 /**
  * A coloured swatch beside the series name, so the chart's colour has a stated meaning — plus a
  * per-month average, which is the figure that makes two totals over different spans comparable.
@@ -324,25 +306,13 @@ private fun MonthlySpendChart(logs: List<LogEntryEntity>, barColor: Color) {
 }
 
 /**
- * Whole dollars, and thousands as "$1.2k": six bars leave each label about 45dp, and "$1,203.27"
- * wrapped onto two lines there. The exact totals are in the series heading above the chart.
- */
-private fun compactMoney(value: Float): String = when {
-    value >= 1000f -> "$" + String.format(Locale.US, "%.1fk", value / 1000f).replace(".0k", "k")
-    else -> "$" + value.roundToInt()
-}
-
-/**
  * Shares of the whole rather than dollar amounts — the totals are already stated above, and the
  * question this answers is "where is the money going". The bars are scaled to the total for the
  * same reason: scaled to the largest category instead, every slice would look overstated.
  */
 @Composable
 private fun CategoryBreakdown(logs: List<LogEntryEntity>) {
-    val byCategory = logs.groupBy { it.category }
-        .mapValues { (_, entries) -> entries.sumOf { it.cost ?: 0.0 } }
-        .toList()
-        .sortedByDescending { it.second }
+    val byCategory = categoryTotals(logs)
     val grandTotal = byCategory.sumOf { it.second }
     if (grandTotal <= 0) return
 
@@ -480,37 +450,3 @@ private fun LineChart(values: List<Float>, leadingLabel: String, trailingLabel: 
     }
 }
 
-/**
- * Three to five round tick values (steps of 1, 2, 2.5 or 5 times a power of ten) that bracket
- * [min]..[max]. A flat series still gets a real span around its value rather than a zero-height
- * axis, so the line sits in the middle at its true reading.
- */
-private fun niceTicks(min: Float, max: Float): List<Float> {
-    val span = (max - min).takeIf { it > 0f } ?: maxOf(abs(max) * 0.1f, 1f)
-    val raw = span / 3f
-    val magnitude = 10f.pow(floor(log10(raw)))
-    val step = when (raw / magnitude) {
-        in 0f..1f -> 1f
-        in 1f..2f -> 2f
-        in 2f..2.5f -> 2.5f
-        in 2.5f..5f -> 5f
-        else -> 10f
-    } * magnitude
-    val center = (min + max) / 2f
-    val lo = if (max > min) floor(min / step) * step else floor((center - span / 2f) / step) * step
-    val hi = if (max > min) ceil(max / step) * step else ceil((center + span / 2f) / step) * step
-    return generateSequence(lo) { it + step }.takeWhile { it <= hi + step / 2f }.toList()
-}
-
-/** "18", "17.5", or "205k" for odometer-sized values — only as many decimals as the step needs. */
-private fun formatTick(value: Float, step: Float): String {
-    if (abs(value) >= 10_000f && step >= 1_000f) {
-        val decimals = if (step % 1_000f == 0f) 0 else 1
-        return "%,.${decimals}fk".format(value / 1_000f)
-    }
-    val decimals = when {
-        step >= 1f -> if (step % 1f == 0f) 0 else 1
-        else -> (-floor(log10(step))).toInt().coerceAtMost(3)
-    }
-    return "%,.${decimals}f".format(value)
-}

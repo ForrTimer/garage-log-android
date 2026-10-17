@@ -36,6 +36,17 @@
                 tools:node="remove" />
         </provider>
 
+        <!-- Hands a vehicle report PDF to whatever app the share sheet picks (email, Drive, Files). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.reports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/report_paths" />
+        </provider>
+
         <!-- Portrait on phones by Ethan's choice (session 12). Android 16+ ignores the lock on
              large screens (tablets, unfolded foldables), where the app rotates with the device. -->
         <activity

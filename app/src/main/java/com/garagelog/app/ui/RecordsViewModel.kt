@@ -15,6 +15,7 @@ import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.di.ServiceLocator
 import com.garagelog.app.util.todayIso
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
@@ -118,6 +119,20 @@ class RecordsViewModel(private val locator: ServiceLocator) : ViewModel() {
             if (vehicle.sortOrder != index) locator.vehicleRepository.upsert(vehicle.copy(sortOrder = index, updatedAt = now))
         }
         requestSync()
+    }
+
+    /**
+     * Builds [vehicleId]'s report PDF and hands its share link to [onReady] (the screen opens the
+     * share sheet). A few hundred milliseconds of work, so no progress UI; a failure is a toast.
+     */
+    fun exportReport(vehicleId: String, onReady: (Uri) -> Unit) = viewModelScope.launch {
+        try {
+            onReady(locator.reportExporter.export(vehicleId))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            locator.userMessages.post("Couldn't make the report: ${e.message}")
+        }
     }
 
     // ---- Maintenance schedules ----

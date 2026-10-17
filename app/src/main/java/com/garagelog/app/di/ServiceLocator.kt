@@ -30,6 +30,8 @@ import com.garagelog.app.data.db.MIGRATION_7_8
 import com.garagelog.app.data.db.MIGRATION_8_9
 import com.garagelog.app.data.db.MIGRATION_9_10
 import com.garagelog.app.data.photo.PhotoStore
+import com.garagelog.app.data.report.ReportExporter
+import com.garagelog.app.data.report.VehicleReportBuilder
 import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.NotificationPrefsRepository
@@ -110,6 +112,17 @@ class ServiceLocator(context: Context) {
         vehicleRepository = vehicleRepository,
         issueRepository = issueRepository,
         runHolder = aiRunHolder,
+    )
+
+    val reportExporter = ReportExporter(
+        context = appContext,
+        builder = VehicleReportBuilder(
+            vehicleRepository = vehicleRepository,
+            logRepository = logRepository,
+            issueRepository = issueRepository,
+            scheduleRepository = scheduleRepository,
+            diagnosisDao = database.aiDiagnosisDao(),
+        ),
     )
 
     val authManager = AuthManager(appContext)

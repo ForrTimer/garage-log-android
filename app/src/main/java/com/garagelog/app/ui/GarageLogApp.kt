@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -68,11 +69,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.LogCategory
+import com.garagelog.app.data.entity.VehicleEntity
 import com.garagelog.app.ui.ai.AiChatScreen
 import com.garagelog.app.ui.ai.AiDiagnosisScreen
 import com.garagelog.app.ui.ai.BobViewModel
 import com.garagelog.app.ui.components.GarageDrawer
 import com.garagelog.app.ui.components.VehiclePickerRow
+import com.garagelog.app.ui.components.shareReport
 import com.garagelog.app.ui.dashboard.DashboardScreen
 import com.garagelog.app.ui.dashboard.VehicleReorderScreen
 import com.garagelog.app.ui.issues.IssuesScreen
@@ -138,6 +141,8 @@ fun GarageLogApp(shell: GarageLogViewModel) {
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
     var reorderMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    // Builds the vehicle's PDF, then opens the share sheet with it.
+    val exportReport: (VehicleEntity) -> Unit = { v -> records.exportReport(v.id) { uri -> shareReport(context, uri, v.name) } }
 
     // Navigating away (tapping another bottom-nav tab) bails out of reorder mode rather than
     // leaving it stuck active on a tab that has nothing to do with vehicle order — any drag not
@@ -507,6 +512,7 @@ fun GarageLogApp(shell: GarageLogViewModel) {
                             },
                             onSetVehiclePhoto = records::setVehiclePhoto,
                             onAskClaude = if (access.canChatWithBob) { { shell.openChat(it.id) } } else null,
+                            onExportReport = exportReport,
                         )
                         AppTab.Log -> LogScreen(
                             uiState = uiState,
@@ -522,7 +528,7 @@ fun GarageLogApp(shell: GarageLogViewModel) {
                             onDelete = { records.deleteIssue(it.id) },
                             canDelete = { access.canDeleteEntry(it.createdBy) },
                         )
-                        AppTab.Trends -> TrendsScreen(uiState = uiState)
+                        AppTab.Trends -> TrendsScreen(uiState = uiState, onExportReport = exportReport)
                     }
                 }
             }
