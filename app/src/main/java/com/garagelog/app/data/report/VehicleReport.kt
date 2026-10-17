@@ -63,7 +63,7 @@ data class ReportIssue(
     val opened: String,
     val resolved: String,
     val description: String,
-    /** Bob's diagnosis as he wrote it (Markdown), if one was run. */
+    /** The gist of Bob's diagnosis (Markdown, one paragraph), if one was run. See [diagnosisSummary]. */
     val diagnosis: String?,
 )
 
@@ -93,7 +93,7 @@ fun assembleReport(
         opened = formatDate(issue.dateOpened),
         resolved = issue.dateResolved.takeIf { it.isNotBlank() }?.let { formatDate(it) } ?: "",
         description = issue.description,
-        diagnosis = diagnoses[issue.id]?.takeIf { it.isNotBlank() },
+        diagnosis = diagnoses[issue.id]?.let(::diagnosisSummary),
     )
     val (resolved, open) = issues.partition { it.status == IssueStatus.Resolved.label }
 
@@ -167,4 +167,21 @@ class VehicleReportBuilder(
             today = today,
         )
     }
+}
+
+/**
+ * The part of a diagnosis a buyer needs: Bob's TL;DR line, or for older diagnoses written before
+ * he gave one, his "Most likely cause" paragraph. The rest is written to the owner, not to a
+ * reader of the report, and runs to pages (it also mentions things like what the owner paid).
+ */
+internal fun diagnosisSummary(markdown: String): String? {
+    val lines = markdown.lines().map { it.trim() }
+    val tldr = Regex("""^\**TL;DR:?\**:?\s*""", RegexOption.IGNORE_CASE)
+    lines.firstOrNull { tldr.containsMatchIn(it) }?.let { line ->
+        return line.replaceFirst(tldr, "").trim().ifBlank { null }
+    }
+    val heading = lines.indexOfFirst { it.startsWith("#") && it.contains("most likely cause", ignoreCase = true) }
+    val body = if (heading >= 0) lines.drop(heading + 1) else lines.dropWhile { it.isBlank() || it.startsWith("#") }
+    return body.dropWhile { it.isBlank() }.takeWhile { it.isNotBlank() && !it.startsWith("#") }
+        .joinToString(" ").ifBlank { null }
 }

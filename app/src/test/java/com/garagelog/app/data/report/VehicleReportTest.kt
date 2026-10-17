@@ -57,4 +57,16 @@ class VehicleReportTest {
         assertEquals("\$500.00", summary["service & repairs logged"])
         assertEquals("\$60.00", summary["fuel logged"])
     }
+
+    @Test
+    fun diagnosisSummaryPrefersTldr() {
+        val md = "**TL;DR:** Likely the DRL relay. Check fuse 12 first.\n\n## Most likely cause\nLong reasoning here."
+        assertEquals("Likely the DRL relay. Check fuse 12 first.", diagnosisSummary(md))
+    }
+
+    @Test
+    fun diagnosisSummaryFallsBackToMostLikelyCause() {
+        val md = "## Most likely cause\n\nWorn PCV valve,\nfeeding oil to the intake.\n\n## Other possibilities\n- Rings"
+        assertEquals("Worn PCV valve, feeding oil to the intake.", diagnosisSummary(md))
+    }
 }
