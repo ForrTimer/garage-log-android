@@ -3,6 +3,7 @@ package com.garagelog.app.data.cloud
 import androidx.room.withTransaction
 import com.garagelog.app.data.db.AppDatabase
 import com.garagelog.app.data.photo.PhotoStore
+import com.garagelog.app.data.seed.SampleData
 
 /**
  * Bulk removals of this phone's garage records, for the two times a device's data stops being its
@@ -20,6 +21,29 @@ class LocalGarageData(private val database: AppDatabase, private val photoStore:
                 .forEach { db.execSQL("DELETE FROM $it") }
         }
         photoStore.deleteAll()
+    }
+
+    /**
+     * "Remove sample data": the sample vehicles, their records (including any the owner added to
+     * them), their photos and Bob's history about them. Also runs when this phone sets up or joins
+     * a shared garage, since sample data is never part of one.
+     */
+    suspend fun removeSamples() {
+        val sample = "'${SampleData.PREFIX}%'"
+        val photoFiles = mutableListOf<String>()
+        database.withTransaction {
+            val db = database.openHelper.writableDatabase
+            val owners = "SELECT id FROM log_entries WHERE vehicleId LIKE $sample UNION SELECT id FROM issues WHERE vehicleId LIKE $sample"
+            db.query("SELECT filePath FROM photos WHERE ownerId IN ($owners)").use { cursor ->
+                while (cursor.moveToNext()) photoFiles += cursor.getString(0)
+            }
+            db.execSQL("DELETE FROM photos WHERE ownerId IN ($owners)")
+            listOf("log_entries", "issues", "maintenance_schedules", "ai_diagnoses", "ai_chat_messages").forEach {
+                db.execSQL("DELETE FROM $it WHERE vehicleId LIKE $sample")
+            }
+            db.execSQL("DELETE FROM vehicles WHERE id LIKE $sample")
+        }
+        photoFiles.forEach { photoStore.delete(it) }
     }
 
     /** Drops vehicles not in [keep] and the records hanging off them. */

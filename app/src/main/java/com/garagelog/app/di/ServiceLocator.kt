@@ -29,6 +29,7 @@ import com.garagelog.app.data.db.MIGRATION_6_7
 import com.garagelog.app.data.db.MIGRATION_7_8
 import com.garagelog.app.data.db.MIGRATION_8_9
 import com.garagelog.app.data.db.MIGRATION_9_10
+import com.garagelog.app.data.onboarding.OnboardingStore
 import com.garagelog.app.data.photo.PhotoStore
 import com.garagelog.app.data.report.ReportExporter
 import com.garagelog.app.data.report.VehicleReportBuilder
@@ -44,7 +45,6 @@ import com.garagelog.app.data.repository.RoomScheduleRepository
 import com.garagelog.app.data.repository.RoomVehicleRepository
 import com.garagelog.app.data.repository.ScheduleRepository
 import com.garagelog.app.data.repository.VehicleRepository
-import com.garagelog.app.data.seed.SeedData
 import com.garagelog.app.data.sync.DriveApiClient
 import com.garagelog.app.data.sync.SyncRepository
 import com.garagelog.app.data.sync.SyncStatusHolder
@@ -185,13 +185,20 @@ class ServiceLocator(context: Context) {
         runCatching { GarageLogWidget().updateAll(appContext) }
     }
 
-    suspend fun seedIfEmpty() {
-        // In a shared garage an empty phone is waiting for its first sync, and demo vehicles would
-        // be pushed into everyone's garage.
-        if (vehicleRepository.count() > 0 || garageCloud.membership.value.garageId != null) return
-        SeedData.vehicles().forEach { vehicleRepository.upsert(it) }
-        SeedData.logEntries().forEach { logRepository.upsert(it) }
-        SeedData.issues().forEach { issueRepository.upsert(it) }
-        SeedData.maintenanceSchedules().forEach { scheduleRepository.upsert(it) }
+    val onboarding = OnboardingStore(appContext)
+
+    /**
+     * Runs on every launch but acts once: a fresh install (no vehicles, not in a shared garage)
+     * gets the sample vehicles and the startup guide; an install that already had data is updated
+     * quietly, with the guide marked as seen. In a shared garage an empty phone is waiting for its
+     * first sync, so it gets neither samples nor a guide that talks about them.
+     */
+    suspend fun firstLaunchSetup() {
+        if (onboarding.isInitialized) return
+        val fresh = vehicleRepository.count() == 0 && garageCloud.membership.value.garageId == null
+        if (fresh) backupManager.addSamples()
+        onboarding.initialize(freshInstall = fresh)
     }
+
+    suspend fun removeSampleData() = localGarageData.removeSamples()
 }

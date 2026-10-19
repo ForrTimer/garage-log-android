@@ -14,7 +14,11 @@ interface PhotoDao {
     @Query("SELECT * FROM photos WHERE deleted = 0 ORDER BY addedDate DESC")
     suspend fun getAll(): List<PhotoEntity>
 
-    @Query("SELECT * FROM photos")
+    // Photos on a sample vehicle's logs and issues stay on the phone, like the records (see SampleData).
+    @Query(
+        "SELECT * FROM photos WHERE ownerId NOT IN " +
+            "(SELECT id FROM log_entries WHERE vehicleId LIKE 'sample-%' UNION SELECT id FROM issues WHERE vehicleId LIKE 'sample-%')",
+    )
     suspend fun getAllForSync(): List<PhotoEntity>
 
     @Query("SELECT * FROM photos WHERE deleted = 0 AND ownerType = :ownerType AND ownerId = :ownerId ORDER BY addedDate DESC")

@@ -18,7 +18,8 @@ interface MaintenanceScheduleDao {
     @Query("SELECT * FROM maintenance_schedules WHERE deleted = 0 ORDER BY taskName ASC")
     suspend fun getAll(): List<MaintenanceScheduleEntity>
 
-    @Query("SELECT * FROM maintenance_schedules")
+    // Sample data, and anything added to a sample vehicle, stays on the phone (see SampleData).
+    @Query("SELECT * FROM maintenance_schedules WHERE id NOT LIKE 'sample-%' AND vehicleId NOT LIKE 'sample-%'")
     suspend fun getAllForSync(): List<MaintenanceScheduleEntity>
 
     @Query("SELECT COUNT(*) FROM maintenance_schedules WHERE deleted = 0")

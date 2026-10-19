@@ -6,6 +6,7 @@ import com.garagelog.app.data.repository.IssueRepository
 import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.ScheduleRepository
 import com.garagelog.app.data.repository.VehicleRepository
+import com.garagelog.app.data.seed.SampleData
 import com.garagelog.app.data.sync.SyncIssue
 import com.garagelog.app.data.sync.SyncLog
 import com.garagelog.app.data.sync.SyncSchedule
@@ -174,7 +175,7 @@ class GarageCloud(
         }
         if (existing == null) {
             findInvite(email)?.let { invite ->
-                return GarageSetupOutcome.Invited(invite, vehicleRepository.getAll().size)
+                return GarageSetupOutcome.Invited(invite, vehicleRepository.getAll().count { !SampleData.isSample(it.id) })
             }
         }
         val created = existing == null
@@ -183,6 +184,8 @@ class GarageCloud(
         val member = db.document("garages/$garageId/members/$uid").get().await()
         val role = member.getString("role") ?: error("This account isn't a member of its garage.")
         val garage = db.document("garages/$garageId").get().await()
+        // Sample vehicles are never part of a garage (see SampleData): a real one starts here.
+        localData.removeSamples()
         remember(
             GarageMembership(
                 garageId = garageId,
@@ -243,7 +246,7 @@ class GarageCloud(
         ).await()
         db.document("invites/${invite.email}").delete().await()
 
-        if (clearLocal) localData.clearAll()
+        if (clearLocal) localData.clearAll() else localData.removeSamples()
         // Nothing to seed: sync takes it from here, in both directions.
         prefs.edit { putBoolean(uploadedKey(invite.garageId), true) }
         val garage = db.document("garages/${invite.garageId}").get().await()

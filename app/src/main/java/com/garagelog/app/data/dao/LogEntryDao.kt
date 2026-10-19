@@ -18,7 +18,8 @@ interface LogEntryDao {
     @Query("SELECT * FROM log_entries WHERE deleted = 0 ORDER BY date DESC")
     suspend fun getAll(): List<LogEntryEntity>
 
-    @Query("SELECT * FROM log_entries")
+    // Sample data, and anything added to a sample vehicle, stays on the phone (see SampleData).
+    @Query("SELECT * FROM log_entries WHERE id NOT LIKE 'sample-%' AND vehicleId NOT LIKE 'sample-%'")
     suspend fun getAllForSync(): List<LogEntryEntity>
 
     @Query("SELECT COUNT(*) FROM log_entries WHERE deleted = 0")

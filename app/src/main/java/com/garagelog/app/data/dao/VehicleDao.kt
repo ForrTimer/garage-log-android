@@ -18,7 +18,8 @@ interface VehicleDao {
     @Query("SELECT * FROM vehicles WHERE deleted = 0 ORDER BY sortOrder ASC")
     suspend fun getAll(): List<VehicleEntity>
 
-    @Query("SELECT * FROM vehicles")
+    // Sample vehicles (SampleData) never leave the phone: not to Drive, the shared garage or a backup.
+    @Query("SELECT * FROM vehicles WHERE id NOT LIKE 'sample-%'")
     suspend fun getAllForSync(): List<VehicleEntity>
 
     @Query("SELECT COUNT(*) FROM vehicles WHERE deleted = 0")

@@ -70,6 +70,8 @@ import com.garagelog.app.data.ai.ASSISTANT_NAME
 import com.garagelog.app.data.entity.AiChatMessageEntity
 import com.garagelog.app.data.entity.LogCategory
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.data.onboarding.Tip
+import com.garagelog.app.data.seed.SampleData
 import com.garagelog.app.ui.ai.AiChatScreen
 import com.garagelog.app.ui.ai.AiDiagnosisScreen
 import com.garagelog.app.ui.ai.BobViewModel
@@ -80,6 +82,8 @@ import com.garagelog.app.ui.dashboard.DashboardScreen
 import com.garagelog.app.ui.dashboard.VehicleReorderScreen
 import com.garagelog.app.ui.issues.IssuesScreen
 import com.garagelog.app.ui.log.LogScreen
+import com.garagelog.app.ui.onboarding.FirstTimeTip
+import com.garagelog.app.ui.onboarding.IntroCards
 import com.garagelog.app.ui.schedule.ScheduleScreen
 import com.garagelog.app.ui.settings.ManageVehiclesScreen
 import com.garagelog.app.ui.settings.MembersScreen
@@ -138,6 +142,7 @@ fun GarageLogApp(shell: GarageLogViewModel) {
     val chatMessages by bob.chatMessages.collectAsStateWithLifecycle()
     val hasApiKey by bob.hasApiKey.collectAsStateWithLifecycle()
     val access by shell.access.collectAsStateWithLifecycle()
+    val onboarding by shell.onboarding.collectAsStateWithLifecycle()
     var activeSheet by remember { mutableStateOf<Sheet>(Sheet.None) }
     var reorderMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -412,13 +417,36 @@ fun GarageLogApp(shell: GarageLogViewModel) {
         },
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues)) {
+            // Each screen's one-time tip sits here, above whatever that screen draws (after the intro).
+            val tip = when {
+                reorderMode -> null
+                subScreen is SubScreen.Schedule -> Tip.Maintenance
+                subScreen is SubScreen.ManageVehicles -> Tip.Vehicles
+                subScreen is SubScreen.Chat -> Tip.AskBob
+                subScreen is SubScreen.Diagnosis -> Tip.Diagnosis
+                subScreen != null -> null
+                else -> when (uiState.currentTab) {
+                    AppTab.Dashboard -> Tip.Home
+                    AppTab.Log -> Tip.Log
+                    AppTab.Issues -> Tip.Issues
+                    AppTab.Trends -> Tip.Trends
+                }
+            }?.takeIf { onboarding.ready && !onboarding.showIntro && it !in onboarding.seenTips }
+            tip?.let { FirstTimeTip(it, onDismiss = { shell.dismissTip(it) }) }
             when {
                 reorderMode -> VehicleReorderScreen(
                     vehicles = uiState.vehicles,
                     onReorderVehicles = records::reorderVehicles,
                     onDone = { reorderMode = false },
                 )
-                subScreen is SubScreen.Settings -> SettingsScreen(uiState = uiState, onOpenMembers = { shell.openMembers() })
+                subScreen is SubScreen.Settings -> SettingsScreen(
+                    uiState = uiState,
+                    onOpenMembers = { shell.openMembers() },
+                    onShowIntro = shell::showIntroAgain,
+                    onResetTips = shell::resetTips,
+                    onAddSampleData = { records.addSampleData() },
+                    onRemoveSampleData = { records.removeSampleData() },
+                )
                 subScreen is SubScreen.Members -> MembersScreen(vehicles = uiState.vehicles)
                 subScreen is SubScreen.ManageVehicles -> ManageVehiclesScreen(
                     vehicles = uiState.vehicles,
@@ -513,6 +541,7 @@ fun GarageLogApp(shell: GarageLogViewModel) {
                             onSetVehiclePhoto = records::setVehiclePhoto,
                             onAskClaude = if (access.canChatWithBob) { { shell.openChat(it.id) } } else null,
                             onExportReport = exportReport,
+                            onRemoveSampleData = if (uiState.vehicles.any { SampleData.isSample(it.id) }) { { records.removeSampleData() } } else null,
                         )
                         AppTab.Log -> LogScreen(
                             uiState = uiState,
@@ -537,4 +566,6 @@ fun GarageLogApp(shell: GarageLogViewModel) {
     }
 
     AppSheets(sheet = activeSheet, uiState = uiState, access = access, records = records, onShow = { activeSheet = it })
+
+    if (onboarding.showIntro) IntroCards(onDone = shell::dismissIntro)
 }

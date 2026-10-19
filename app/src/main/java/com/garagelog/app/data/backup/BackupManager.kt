@@ -10,7 +10,7 @@ import com.garagelog.app.data.repository.LogRepository
 import com.garagelog.app.data.repository.PhotoRepository
 import com.garagelog.app.data.repository.ScheduleRepository
 import com.garagelog.app.data.repository.VehicleRepository
-import com.garagelog.app.data.seed.SeedData
+import com.garagelog.app.data.seed.SampleData
 import java.io.InputStream
 import java.io.OutputStream
 import kotlinx.serialization.json.Json
@@ -31,11 +31,12 @@ class BackupManager(
     }
 
     suspend fun exportToStream(output: OutputStream) {
+        // Sample data stays out of backups, like it stays out of sync (see SampleData).
         val data = BackupData(
-            vehicles = vehicleRepository.getAll().map { it.toBackup() },
-            logs = logRepository.getAll().map { it.toBackup() },
-            issues = issueRepository.getAll().map { it.toBackup() },
-            maintenanceSchedules = scheduleRepository.getAll().map { it.toBackup() },
+            vehicles = vehicleRepository.getAll().filterNot { SampleData.isSample(it.id) }.map { it.toBackup() },
+            logs = logRepository.getAll().filterNot { SampleData.isSample(it.vehicleId) }.map { it.toBackup() },
+            issues = issueRepository.getAll().filterNot { SampleData.isSample(it.vehicleId) }.map { it.toBackup() },
+            maintenanceSchedules = scheduleRepository.getAll().filterNot { SampleData.isSample(it.vehicleId) }.map { it.toBackup() },
         )
         val text = json.encodeToString(BackupData.serializer(), data)
         output.use { it.write(text.toByteArray(Charsets.UTF_8)) }
@@ -52,15 +53,21 @@ class BackupManager(
         data.maintenanceSchedules.forEach { scheduleRepository.upsert(it.toEntity()) }
     }
 
-    suspend fun resetToSeed() {
+    /** Settings → "Reset to sample data": everything on this phone goes, and the two sample vehicles come back. */
+    suspend fun resetToSample() {
         wipeAllData()
-        // Stamped "now" (not the entities' default 0L) so a reset genuinely wins on sync,
-        // rather than silently losing to whatever's already sitting in Drive.
-        val now = System.currentTimeMillis()
-        SeedData.vehicles().forEach { vehicleRepository.upsert(it.copy(updatedAt = now)) }
-        SeedData.logEntries().forEach { logRepository.upsert(it.copy(updatedAt = now)) }
-        SeedData.issues().forEach { issueRepository.upsert(it.copy(updatedAt = now)) }
-        SeedData.maintenanceSchedules().forEach { scheduleRepository.upsert(it.copy(updatedAt = now)) }
+        addSamples()
+    }
+
+    /** Loads the sample vehicles (SampleData), dated from today. Their ids are fixed, so loading twice just refreshes them. */
+    suspend fun addSamples() {
+        val sample = SampleData.build()
+        // Added back beside real vehicles, they go at the end of the list rather than the top.
+        val after = vehicleRepository.getAll().filterNot { SampleData.isSample(it.id) }.maxOfOrNull { it.sortOrder + 1 } ?: 0
+        sample.vehicles.forEach { vehicleRepository.upsert(it.copy(sortOrder = it.sortOrder + after)) }
+        sample.logs.forEach { logRepository.upsert(it) }
+        sample.issues.forEach { issueRepository.upsert(it) }
+        sample.schedules.forEach { scheduleRepository.upsert(it) }
     }
 
     private suspend fun wipeAllData() {

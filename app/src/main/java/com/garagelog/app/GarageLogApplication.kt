@@ -40,7 +40,7 @@ class GarageLogApplication : Application(), Configuration.Provider {
         serviceLocator = ServiceLocator(this)
         createNotificationChannel()
         applicationScope.launch {
-            serviceLocator.seedIfEmpty()
+            serviceLocator.firstLaunchSetup()
             // Re-arm rather than trust the alarm survived — cheap, idempotent safety net
             // alongside BootReceiver (e.g. if the app process was killed and the alarm with it).
             val prefs = serviceLocator.notificationPrefsRepository.get()

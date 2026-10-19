@@ -46,6 +46,8 @@ private fun GarageLogRoot(app: GarageLogApplication, onReady: () -> Unit) {
     LaunchedEffect(Unit) {
         delay(900)
         viewModel.isDataLoaded.first { it }
+        // On a fresh install, also wait for the sample vehicles, so Home doesn't flash empty first.
+        viewModel.onboarding.first { it.ready }
         onReady()
     }
     // GarageLogTheme now reads isSystemInDarkTheme() by default — no argument needed.

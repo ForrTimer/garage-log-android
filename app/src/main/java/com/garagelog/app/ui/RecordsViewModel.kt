@@ -50,6 +50,17 @@ class RecordsViewModel(private val locator: ServiceLocator) : ViewModel() {
         requestSync()
     }
 
+    /** The two sample vehicles (SampleData). They never sync, so neither of these asks for one. */
+    fun addSampleData() = viewModelScope.launch {
+        locator.backupManager.addSamples()
+        locator.userMessages.post("Sample vehicles added.")
+    }
+
+    fun removeSampleData() = viewModelScope.launch {
+        locator.removeSampleData()
+        locator.userMessages.post("Sample data removed.")
+    }
+
     /**
      * Copies a freshly-picked photo into app storage right away and hands the resulting stable
      * file path back via [onComplete] — used by VehicleFormSheet so the sheet can preview/carry

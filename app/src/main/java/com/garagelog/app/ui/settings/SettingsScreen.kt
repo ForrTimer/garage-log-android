@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.garagelog.app.data.entity.NotificationPrefsEntity
 import com.garagelog.app.data.entity.ReminderCadence
+import com.garagelog.app.data.seed.SampleData
 import com.garagelog.app.ui.GarageLogUiState
 import com.garagelog.app.ui.components.ConfirmDialog
 import com.garagelog.app.ui.components.GarageCard
@@ -48,10 +49,16 @@ import java.util.Calendar
 fun SettingsScreen(
     uiState: GarageLogUiState,
     onOpenMembers: () -> Unit,
+    onShowIntro: () -> Unit,
+    onResetTips: () -> Unit,
+    onAddSampleData: () -> Unit,
+    onRemoveSampleData: () -> Unit,
     account: AccountViewModel = viewModel(factory = AccountViewModel.Factory),
 ) {
     val context = LocalContext.current
     var showResetConfirm by remember { mutableStateOf(false) }
+    var showRemoveSampleConfirm by remember { mutableStateOf(false) }
+    val hasSamples = uiState.vehicles.any { SampleData.isSample(it.id) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -95,6 +102,35 @@ fun SettingsScreen(
         }
 
         item {
+            GarageCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                Text("Getting started", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "The intro cards from the first launch, and the tip at the top of each screen.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                    OutlinedButton(onClick = onShowIntro, modifier = Modifier.weight(1f)) { Text("Show intro") }
+                    OutlinedButton(onClick = onResetTips, modifier = Modifier.weight(1f)) { Text("Show tips again") }
+                }
+                Text("Sample data", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+                Text(
+                    if (hasSamples) {
+                        "Sample truck and Sample car are made-up examples. They stay on this phone: never synced, shared or backed up."
+                    } else {
+                        "Two made-up vehicles with a year and a half of records, to try things on. They stay on this phone: never synced, shared or backed up."
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(
+                    onClick = { if (hasSamples) showRemoveSampleConfirm = true else onAddSampleData() },
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                ) { Text(if (hasSamples) "Remove sample data" else "Add sample vehicles") }
+            }
+        }
+
+        item {
             MileageReminderCard(uiState.notificationPrefs, account, modifier = Modifier.padding(bottom = 12.dp))
         }
 
@@ -123,25 +159,34 @@ fun SettingsScreen(
             GarageCard {
                 Text("Reset", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Wipes all data on this device and reloads the original starting seed.",
+                    "Wipes all data on this device and starts over with the two sample vehicles.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedButton(
                     onClick = { showResetConfirm = true },
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                ) { Text("Reset to seed data", color = garageColors.alarmText) }
+                ) { Text("Reset to sample data", color = garageColors.alarmText) }
             }
         }
     }
 
     if (showResetConfirm) {
         ConfirmDialog(
-            title = "Reset to seed data?",
-            message = "This will erase all current data on this device and restore the original seed data.",
+            title = "Reset to sample data?",
+            message = "This will erase all current data on this device and load the two sample vehicles. Export a backup first if you want to keep it.",
             confirmLabel = "Reset",
-            onConfirm = { account.resetToSeed() },
+            onConfirm = { account.resetToSample() },
             onDismiss = { showResetConfirm = false },
+        )
+    }
+    if (showRemoveSampleConfirm) {
+        ConfirmDialog(
+            title = "Remove sample data?",
+            message = "Deletes the two sample vehicles and everything logged on them. Your own vehicles aren't touched.",
+            confirmLabel = "Remove",
+            onConfirm = onRemoveSampleData,
+            onDismiss = { showRemoveSampleConfirm = false },
         )
     }
 }

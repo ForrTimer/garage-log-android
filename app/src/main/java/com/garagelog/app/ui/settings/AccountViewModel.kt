@@ -70,10 +70,10 @@ class AccountViewModel(private val locator: ServiceLocator) : ViewModel() {
         if (result.isSuccess) locator.requestSync()
     }
 
-    fun resetToSeed() = viewModelScope.launch {
-        locator.backupManager.resetToSeed()
+    fun resetToSample() = viewModelScope.launch {
+        locator.backupManager.resetToSample()
         locator.aiRepository.deleteAll()
-        messages.post("Reset to seed data.")
+        messages.post("Reset to sample data.")
         locator.requestSync()
     }
 

@@ -9,6 +9,8 @@ import com.garagelog.app.data.entity.LogEntryEntity
 import com.garagelog.app.data.entity.MaintenanceScheduleEntity
 import com.garagelog.app.data.entity.NotificationPrefsEntity
 import com.garagelog.app.data.entity.VehicleEntity
+import com.garagelog.app.data.onboarding.OnboardingState
+import com.garagelog.app.data.onboarding.Tip
 import com.garagelog.app.data.sync.SyncStatus
 import com.garagelog.app.di.ServiceLocator
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +97,13 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     val isDataLoaded: StateFlow<Boolean> = _isDataLoaded
 
     val syncStatus: StateFlow<SyncStatus> = locator.syncStatusHolder.status
+
+    /** The startup guide: intro cards and per-screen tips (see OnboardingStore). */
+    val onboarding: StateFlow<OnboardingState> = locator.onboarding.state
+    fun dismissIntro() = locator.onboarding.markIntroSeen()
+    fun showIntroAgain() = locator.onboarding.showIntroAgain()
+    fun dismissTip(tip: Tip) = locator.onboarding.markTipSeen(tip)
+    fun resetTips() = locator.onboarding.resetTips()
 
     val access: StateFlow<Access> = locator.garageCloud.membership.map { Access(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Access(locator.garageCloud.membership.value))

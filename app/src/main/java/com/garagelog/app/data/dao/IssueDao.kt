@@ -18,7 +18,8 @@ interface IssueDao {
     @Query("SELECT * FROM issues WHERE deleted = 0 ORDER BY dateOpened DESC")
     suspend fun getAll(): List<IssueEntity>
 
-    @Query("SELECT * FROM issues")
+    // Sample data, and anything added to a sample vehicle, stays on the phone (see SampleData).
+    @Query("SELECT * FROM issues WHERE id NOT LIKE 'sample-%' AND vehicleId NOT LIKE 'sample-%'")
     suspend fun getAllForSync(): List<IssueEntity>
 
     @Query("SELECT COUNT(*) FROM issues WHERE deleted = 0")

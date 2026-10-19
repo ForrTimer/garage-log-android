@@ -70,6 +70,7 @@ import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
 import com.garagelog.app.ui.components.StatGrid
 import com.garagelog.app.ui.components.VehicleAvatar
+import com.garagelog.app.ui.onboarding.SampleDataBanner
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.DueStatus
@@ -103,12 +104,17 @@ fun DashboardScreen(
     onAskClaude: ((VehicleEntity) -> Unit)?,
     onSetVehiclePhoto: (VehicleEntity, Uri) -> Unit,
     onExportReport: (VehicleEntity) -> Unit = {},
+    // Set while the sample vehicles are loaded: shows the banner that explains and removes them.
+    onRemoveSampleData: (() -> Unit)? = null,
 ) {
     val vehicles = uiState.activeVehicleId?.let { id -> uiState.vehicles.filter { it.id == id } } ?: uiState.vehicles
 
     PullToRefreshBox(isRefreshing = syncStatus.isSyncing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(modifier = Modifier.weight(1f), contentPadding = GarageDimens.listContentPadding) {
+            onRemoveSampleData?.let { remove ->
+                item(key = "sample-banner") { SampleDataBanner(onRemove = remove, modifier = Modifier.padding(bottom = 12.dp)) }
+            }
             if (vehicles.isEmpty()) {
                 item {
                     EmptyState("No vehicles yet.", icon = Icons.Filled.DirectionsCar)
