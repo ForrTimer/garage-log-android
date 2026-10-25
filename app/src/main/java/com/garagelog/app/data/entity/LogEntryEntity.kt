@@ -32,6 +32,12 @@ data class LogEntryEntity(
     // Firebase uid of whoever first saved this in a shared garage; "" = before shared garages, or
     // never in one. Gates a Standard member editing someone else's entry (firestore.rules).
     val createdBy: String = "",
+    // Who that was, as a short stamp ("E.Forr", see util.userStamp). Saved on every new entry even
+    // outside a shared garage, so it's already there if this phone joins one; shown only in one.
+    val createdByName: String = "",
+    // Started but not finished (parts bought, job not done yet). Its cost counts right away; a
+    // linked maintenance item isn't reset until it's finished (RecordsViewModel.saveLog).
+    val inProgress: Boolean = false,
     val updatedAt: Long = 0L,
     val deleted: Boolean = false,
 )

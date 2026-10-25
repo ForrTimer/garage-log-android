@@ -46,6 +46,30 @@ class LocalGarageData(private val database: AppDatabase, private val photoStore:
         photoFiles.forEach { photoStore.delete(it) }
     }
 
+    /**
+     * Gives this person's unstamped logs and issues their stamp (createdByName), so entries made
+     * before stamps existed show who added them too. Their own entries are the ones with their uid;
+     * the garage owner also gets the ones with none, which are from before the garage (only the
+     * owner's records were uploaded into it). Bumps updatedAt so the next push carries them.
+     */
+    suspend fun stampOwnEntries(uid: String, stamp: String, isOwner: Boolean) {
+        if (uid.isEmpty() || stamp.isEmpty()) return
+        val now = System.currentTimeMillis()
+        database.withTransaction {
+            val db = database.openHelper.writableDatabase
+            listOf("log_entries", "issues").forEach { table ->
+                db.execSQL(
+                    "UPDATE $table SET createdByName = ?, updatedAt = ?, " +
+                        "createdBy = CASE WHEN createdBy = '' THEN ? ELSE createdBy END " +
+                        "WHERE createdByName = '' AND deleted = 0 " +
+                        "AND id NOT LIKE '${SampleData.PREFIX}%' AND vehicleId NOT LIKE '${SampleData.PREFIX}%' " +
+                        "AND (createdBy = ? OR (? AND createdBy = ''))",
+                    arrayOf<Any?>(stamp, now, uid, uid, if (isOwner) 1 else 0),
+                )
+            }
+        }
+    }
+
     /** Drops vehicles not in [keep] and the records hanging off them. */
     suspend fun keepOnlyVehicles(keep: List<String>) {
         database.withTransaction {

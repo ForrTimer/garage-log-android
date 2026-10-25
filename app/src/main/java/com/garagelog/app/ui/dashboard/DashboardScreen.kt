@@ -338,6 +338,23 @@ private fun VehicleDashboardCard(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 10.dp),
         )
+        // Jobs saved as in progress (parts bought, not done yet), so they aren't forgotten; tapping
+        // opens this vehicle's log, where they sit at the top.
+        val unfinished = card.logs.filter { it.inProgress }
+        if (unfinished.isNotEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 6.dp).clickable { onOpenVehicleTab(v.id, AppTab.Log) },
+            ) {
+                PillBadge(text = "In progress", tone = PillTone.Progress)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (unfinished.size == 1) unfinished.first().task else "${unfinished.size} unfinished jobs",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = garageColors.textMuted,
+                )
+            }
+        }
 
         var showDetails by remember(v.id) { mutableStateOf(false) }
         ActionLink(

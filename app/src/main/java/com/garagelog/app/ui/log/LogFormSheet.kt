@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,13 +31,17 @@ import com.garagelog.app.ui.RecordsViewModel
 import com.garagelog.app.ui.components.ActionLink
 import com.garagelog.app.ui.components.DateField
 import com.garagelog.app.ui.components.FormSheetScaffold
+import com.garagelog.app.ui.components.GarageCard
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.MileageField
 import com.garagelog.app.ui.components.PhotoGridSection
 import com.garagelog.app.ui.components.ReadOnlyDropdownField
 import com.garagelog.app.ui.components.SegmentedControl
+import com.garagelog.app.ui.components.UserStamp
 import com.garagelog.app.ui.components.VehicleDropdown
+import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.ui.theme.garageSwitchColors
+import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.todayIso
 import java.util.UUID
 
@@ -53,6 +58,7 @@ private data class LogFormState(
     val gallons: String,
     val fullTank: Boolean,
     val missedFillUp: Boolean,
+    val inProgress: Boolean,
 )
 
 /** Categories light enough that a photo grid/parts list would just be clutter, not a real need. */
@@ -79,6 +85,8 @@ fun LogFormSheet(
     // Seeds a brand-new entry's fields (e.g. from "mark maintenance done") without treating it as
     // an existing, editable/deletable entry the way a non-null `entry` would.
     prefill: LogEntryEntity? = null,
+    // Who added it ("E.Forr"), shown at the top; null in a solo garage or for a new entry.
+    stamp: String? = null,
 ) {
     // Generated once, up front, rather than at Save time — photos need a real id to attach to
     // (see PhotoGridSection below), and a brand-new entry has no id until it's first saved. Using
@@ -103,6 +111,7 @@ fun LogFormSheet(
                 // Most fill-ups fill the tank: a new one starts on, an existing one keeps what it saved.
                 fullTank = entry?.fullTank ?: true,
                 missedFillUp = source?.missedFillUp ?: false,
+                inProgress = source?.inProgress ?: false,
             ),
         )
     }
@@ -152,10 +161,33 @@ fun LogFormSheet(
                     gallons = if (form.category == LogCategory.Fuel.name) form.gallons.trim().toDoubleOrNull() else null,
                     fullTank = form.category == LogCategory.Fuel.name && form.fullTank,
                     missedFillUp = form.category == LogCategory.Fuel.name && form.missedFillUp,
+                    // Fill-ups and odometer readings happen in one go; only a job can be left unfinished.
+                    inProgress = !isQuickCategory(form.category) && form.inProgress,
                 ),
             )
         },
     ) {
+        stamp?.takeIf { it.isNotBlank() }?.let { UserStamp("Added by $it", modifier = Modifier.padding(bottom = 6.dp)) }
+
+        // Finishing a job that was saved as in progress: the date and mileage become the day it was
+        // done (today and the vehicle's current miles to start, both editable), and saving it resets
+        // a linked maintenance item.
+        val finish = {
+            val miles = vehicles.find { it.id == form.vehicleId }?.miles
+            form = form.copy(inProgress = false, date = todayIso(), mileage = miles?.toString() ?: form.mileage)
+        }
+        if (entry?.inProgress == true && form.inProgress) {
+            GarageCard(accentColor = garageColors.warn, modifier = Modifier.padding(bottom = 10.dp)) {
+                Text("In progress since ${formatDate(entry.date)}", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Done with it? Finish sets the date and mileage to today's; check them, then Save.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = finish, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Finish job") }
+            }
+        }
+
         VehicleDropdown("Vehicle", vehicles, form.vehicleId) {
             // A schedule link only makes sense for the vehicle it was picked under.
             form = form.copy(vehicleId = it, fulfillsScheduleId = null)
@@ -194,6 +226,12 @@ fun LogFormSheet(
             }
             LogCategory.Mileage.name -> Unit
             else -> {
+                FuelSwitch(
+                    label = "In progress",
+                    note = "Started, not finished (parts bought, say). The cost counts now; a linked maintenance item resets when you finish it.",
+                    checked = form.inProgress,
+                    onCheckedChange = { on -> if (!on && entry?.inProgress == true) finish() else form = form.copy(inProgress = on) },
+                )
                 if (form.category == LogCategory.Routine.name) {
                     val options: List<MaintenanceScheduleEntity?> = listOf(null) + vehicleSchedules
                     ReadOnlyDropdownField(

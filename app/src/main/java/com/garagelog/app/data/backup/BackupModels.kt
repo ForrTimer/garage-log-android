@@ -74,6 +74,9 @@ data class BackupLog(
     val gallons: String? = null,
     val fullTank: Boolean = false,
     val missedFillUp: Boolean = false,
+    val createdBy: String = "",
+    val createdByName: String = "",
+    val inProgress: Boolean = false,
 )
 
 @Serializable
@@ -86,6 +89,8 @@ data class BackupIssue(
     val dateOpened: String = "",
     val dateResolved: String = "",
     val description: String = "",
+    val createdBy: String = "",
+    val createdByName: String = "",
 )
 
 @Serializable

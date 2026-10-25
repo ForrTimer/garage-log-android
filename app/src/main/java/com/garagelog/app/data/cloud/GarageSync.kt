@@ -97,9 +97,8 @@ class GarageSync(
             error("You're no longer a member of the shared garage.")
         }
         val vehicleIds = member.stringList("vehicleIds")
-        val permissions = StandardPermissions.from(
-            db.document("garages/$garageId").get(Source.SERVER).await().get("standardPermissions") as? Map<*, *>,
-        )
+        val garage = db.document("garages/$garageId").get(Source.SERVER).await()
+        val permissions = StandardPermissions.from(garage.get("standardPermissions") as? Map<*, *>)
         cloud.updateAccess(role, vehicleIds, permissions)
         val scope = if (role == GarageCloud.ROLE_ADMIN) Scope.All else Scope.Vehicles(vehicleIds)
         // A vehicle an admin took away leaves this phone, records and all.
@@ -114,6 +113,8 @@ class GarageSync(
             issues = pull(garageId, GarageCloud.ISSUES, scope, SyncIssue.serializer()),
         )
         apply(pulled)
+        // Entries from before "added by" stamps get this person's now, and go up with this push.
+        localData.stampOwnEntries(uid, cloud.currentStamp, isOwner = garage.getString("createdBy") == uid)
 
         // What a Standard member may write on vehicles and schedules; null = whole records.
         val vehicleMask = if (scope is Scope.Vehicles && !permissions.editVehicles) VEHICLE_MASK else null

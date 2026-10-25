@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -132,6 +133,17 @@ fun PillBadge(text: String, tone: PillTone, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 2.dp),
         )
+    }
+}
+
+/** Who added a log or issue ("E.Forr"), as a small tag on its row and in its form. Blank shows nothing. */
+@Composable
+fun UserStamp(name: String, modifier: Modifier = Modifier) {
+    if (name.isBlank()) return
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
+        Icon(Icons.Filled.Person, contentDescription = "Added by", tint = garageColors.textMuted, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(3.dp))
+        Text(name, style = MaterialTheme.typography.labelMedium, color = garageColors.textMuted)
     }
 }
 

@@ -89,6 +89,7 @@ internal fun AppSheets(
             onDelete = { records.deleteLog(it); close() },
             lockedReason = sheet.entry?.let { access.entryLockReason(it.createdBy) },
             canDelete = sheet.entry?.let { access.canDeleteEntry(it.createdBy) } ?: true,
+            stamp = sheet.entry?.createdByName?.takeIf { access.showsStamps },
         )
         is Sheet.IssueForm -> IssueFormSheet(
             issue = sheet.issue,
@@ -99,6 +100,7 @@ internal fun AppSheets(
             onDelete = { records.deleteIssue(it); close() },
             lockedReason = sheet.issue?.let { access.entryLockReason(it.createdBy) },
             canDelete = sheet.issue?.let { access.canDeleteEntry(it.createdBy) } ?: true,
+            stamp = sheet.issue?.createdByName?.takeIf { access.showsStamps },
             onResolvedWithLog = { resolved ->
                 records.saveIssue(resolved)
                 onShow(

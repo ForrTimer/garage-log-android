@@ -163,7 +163,11 @@ class GarageLogViewModel(private val locator: ServiceLocator) : ViewModel() {
     fun openMembers() { subScreen.value = SubScreen.Members }
     fun openDiagnosis(issueId: String) { subScreen.value = SubScreen.Diagnosis(issueId) }
     fun openChat(vehicleId: String, issueId: String? = null) { subScreen.value = SubScreen.Chat(vehicleId, issueId) }
-    fun closeSubScreen() { subScreen.value = null }
+    /** Back out of the open sub-screen. A diagnosis follow-up backs out to that diagnosis, not Home. */
+    fun closeSubScreen() {
+        val open = subScreen.value
+        subScreen.value = if (open is SubScreen.Chat && open.issueId != null) SubScreen.Diagnosis(open.issueId) else null
+    }
 
     /** Filters to [vehicleId] and switches to [tab] — e.g. tapping a dashboard stat. */
     fun openVehicleTab(vehicleId: String, tab: AppTab) {

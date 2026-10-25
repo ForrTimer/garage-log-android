@@ -12,6 +12,7 @@ import com.garagelog.app.data.sync.SyncLog
 import com.garagelog.app.data.sync.SyncSchedule
 import com.garagelog.app.data.sync.SyncVehicle
 import com.garagelog.app.data.sync.toSync
+import com.garagelog.app.util.userStamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.AggregateSource
 import com.google.firebase.firestore.DocumentSnapshot
@@ -153,6 +154,9 @@ class GarageCloud(
 
     /** The signed-in Firebase account, or "" — stamped as createdBy on new logs and issues. */
     val currentUid: String get() = auth.currentUser?.uid.orEmpty()
+
+    /** The signed-in account's short stamp ("E.Forr"), saved as createdByName on new logs and issues. */
+    val currentStamp: String get() = userStamp(auth.currentUser?.displayName)
 
     /**
      * Finds this account's garage, or an invitation to someone else's (returned for the person to

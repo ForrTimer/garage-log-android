@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
@@ -90,6 +91,20 @@ fun ScheduleScreen(
     var justCompletedId by remember { mutableStateOf<String?>(null) }
     var copyFromVehicle by remember { mutableStateOf<VehicleEntity?>(null) }
     var howTo by remember { mutableStateOf<Pair<VehicleEntity, MaintenanceScheduleEntity>?>(null) }
+    val listState = rememberLazyListState()
+
+    // Arriving from Home with an item to show: scroll the list to its vehicle's card first. The
+    // row's own bringIntoView (below) can only move it once that card is composed, and a lazy list
+    // doesn't compose a card that starts off screen, so an item on the second or third vehicle
+    // never came into view.
+    val focusVehicleIndex = focusId?.let { id ->
+        val vehicleId = uiState.schedules.find { it.id == id }?.vehicleId
+        val position = vehicles.indexOfFirst { it.id == vehicleId }
+        if (position < 0) null else 1 + vehicles.take(position).sumOf { v -> if (uiState.schedules.any { it.vehicleId == v.id }) 2 else 1 }
+    }
+    LaunchedEffect(focusId, focusVehicleIndex) {
+        focusVehicleIndex?.let { listState.scrollToItem(it) }
+    }
 
     LaunchedEffect(justCompletedId) {
         if (justCompletedId != null) {
@@ -106,9 +121,10 @@ fun ScheduleScreen(
             onAddNew?.let { add -> IconButton(onClick = add) { Icon(Icons.Filled.Add, contentDescription = "Add schedule") } }
         }
 
-        LazyColumn(contentPadding = GarageDimens.subScreenContentPadding) {
-            if (vehicles.none { v -> uiState.schedules.any { it.vehicleId == v.id } }) {
-                item {
+        LazyColumn(state = listState, contentPadding = GarageDimens.subScreenContentPadding) {
+            // Always one item here (even if empty), so focusVehicleIndex can count from it.
+            item {
+                if (vehicles.none { v -> uiState.schedules.any { it.vehicleId == v.id } }) {
                     EmptyState(
                         if (onAddNew != null) {
                             "No maintenance intervals tracked yet. Tap + to add one, or have $ASSISTANT_NAME suggest a schedule below."
@@ -258,8 +274,10 @@ private fun ScheduleRow(
         if (focused) {
             delay(150) // let the list lay out first
             bringIntoView.bringIntoView()
+            // Held, then faded slowly: a quick pulse was easy to miss while the list was still moving.
             focusGlow.snapTo(1f)
-            focusGlow.animateTo(0f, animationSpec = tween(1600, easing = LinearOutSlowInEasing))
+            delay(1200)
+            focusGlow.animateTo(0f, animationSpec = tween(2400, easing = LinearOutSlowInEasing))
         }
     }
 

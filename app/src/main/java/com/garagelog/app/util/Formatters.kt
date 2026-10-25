@@ -96,3 +96,17 @@ private val dayOfWeekNames = listOf("", "Sunday", "Monday", "Tuesday", "Wednesda
 
 /** [dayOfWeek] uses Calendar constants (SUNDAY=1..SATURDAY=7). */
 fun dayOfWeekName(dayOfWeek: Int): String = dayOfWeekNames.getOrElse(dayOfWeek) { "Monday" }
+
+/**
+ * The short "who added this" stamp on logs and issues: first initial, a period, and the first four
+ * letters of the last name ("Ethan Forrester" → "E.Forr"), Ethan's format. One name alone is used
+ * whole; a blank name (not signed in) gives "", which shows nothing.
+ */
+fun userStamp(displayName: String?): String {
+    val names = displayName.orEmpty().trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    return when (names.size) {
+        0 -> ""
+        1 -> names[0]
+        else -> "${names.first().first().uppercaseChar()}.${names.last().take(4)}"
+    }
+}

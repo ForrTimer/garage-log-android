@@ -18,6 +18,8 @@ data class Access(val membership: GarageMembership = GarageMembership(null, null
     /** Standard members get diagnosis only: chat would run up the garage owner's Bob bill. */
     val canChatWithBob: Boolean get() = !standard
     val canManageMembers: Boolean get() = membership.isAdmin
+    /** "Added by" stamps on logs and issues show only in a shared garage (they're saved regardless). */
+    val showsStamps: Boolean get() = membership.garageId != null
 
     fun canEditEntry(createdBy: String): Boolean =
         !standard || allowed.editOthersEntries || (createdBy.isNotEmpty() && createdBy == membership.uid)

@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,6 +29,7 @@ import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
 import com.garagelog.app.ui.components.SearchField
 import com.garagelog.app.ui.components.SwipeToDeleteRow
+import com.garagelog.app.ui.components.UserStamp
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.util.formatDate
 import com.garagelog.app.util.formatMiles
@@ -49,6 +51,8 @@ fun LogScreen(
     onItemClick: (LogEntryEntity) -> Unit,
     onDelete: (LogEntryEntity) -> Unit,
     canDelete: (LogEntryEntity) -> Boolean = { true },
+    // "Added by" stamps on rows: only in a shared garage (Access.showsStamps).
+    showStamps: Boolean = false,
 ) {
     var categoryFilter by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
@@ -67,7 +71,8 @@ fun LogScreen(
                 entry.parts.contains(query, ignoreCase = true) ||
                 entry.notes.contains(query, ignoreCase = true)
         }
-        .sortedByDescending { it.date }
+        // Unfinished jobs first, so the one waiting to be finished is easy to find.
+        .sortedWith(compareByDescending<LogEntryEntity> { it.inProgress }.thenByDescending { it.date })
 
     LazyColumn(contentPadding = GarageDimens.listContentPaddingWithFab) {
         item {
@@ -91,7 +96,7 @@ fun LogScreen(
                     )
                 } else {
                     logs.forEachIndexed { index, entry ->
-                        LogRow(entry, uiState, onClick = { onItemClick(entry) }, onDelete = { onDelete(entry) }, deletable = canDelete(entry))
+                        LogRow(entry, uiState, onClick = { onItemClick(entry) }, onDelete = { onDelete(entry) }, deletable = canDelete(entry), showStamp = showStamps)
                         if (index != logs.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
@@ -101,7 +106,7 @@ fun LogScreen(
 }
 
 @Composable
-private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: () -> Unit, onDelete: () -> Unit, deletable: Boolean) {
+private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: () -> Unit, onDelete: () -> Unit, deletable: Boolean, showStamp: Boolean) {
     SwipeToDeleteRow(deleteTitle = "Delete this log entry?", onDelete = onDelete, enabled = deletable) {
         Row(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 11.dp),
@@ -109,6 +114,9 @@ private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: ()
             androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
                     Text(entry.task, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    if (entry.inProgress) {
+                        PillBadge(text = "In progress", tone = PillTone.Progress, modifier = Modifier.padding(end = 6.dp))
+                    }
                     PillBadge(text = entry.category, tone = categoryTone(entry.category))
                 }
                 val subtitleParts = buildList {
@@ -117,7 +125,15 @@ private fun LogRow(entry: LogEntryEntity, uiState: GarageLogUiState, onClick: ()
                     add(formatMiles(entry.mileage))
                     if (entry.cost != null) add(formatMoney(entry.cost))
                 }
-                Text(subtitleParts.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        subtitleParts.joinToString(" · "),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (showStamp) UserStamp(entry.createdByName, modifier = Modifier.padding(start = 8.dp))
+                }
             }
         }
     }

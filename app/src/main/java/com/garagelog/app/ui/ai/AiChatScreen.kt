@@ -62,10 +62,15 @@ fun AiChatScreen(
     var confirmingClear by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    // Keep the newest turn in view as it streams and as new turns land.
+    // Keep the newest turn in view as it streams and as new turns land, unless the reader has
+    // scrolled up to read (see rememberFollowLatest).
+    val followLatest by rememberFollowLatest(listState, listState.interactionSource)
     LaunchedEffect(messages.size, stream.partialText, stream.running) {
+        if (!followLatest) return@LaunchedEffect
+        // To the end of the newest row (the list clamps the oversized offset), not its top: following
+        // the top meant scrolling back down to the bottom snapped to the start of a long answer.
         val lastIndex = messages.size // +1 for the streaming/error row when present
-        if (lastIndex >= 0) listState.animateScrollToItem(maxOf(0, lastIndex))
+        listState.scrollToItem(lastIndex, scrollOffset = 100_000)
     }
 
     if (confirmingClear) {

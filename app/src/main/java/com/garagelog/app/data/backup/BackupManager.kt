@@ -109,6 +109,7 @@ private fun LogEntryEntity.toBackup() = BackupLog(
     id = id, vehicleId = vehicleId, date = date, mileage = mileage?.toString(), category = category,
     task = task, cost = cost?.toString(), parts = parts, notes = notes,
     gallons = gallons?.toString(), fullTank = fullTank, missedFillUp = missedFillUp,
+    createdBy = createdBy, createdByName = createdByName, inProgress = inProgress,
 )
 
 private fun BackupLog.toEntity() = LogEntryEntity(
@@ -116,17 +117,20 @@ private fun BackupLog.toEntity() = LogEntryEntity(
     category = category, task = task.ifBlank { "Untitled entry" },
     cost = cost?.trim()?.toDoubleOrNull(), parts = parts, notes = notes,
     gallons = gallons?.trim()?.toDoubleOrNull(), fullTank = fullTank, missedFillUp = missedFillUp,
+    createdBy = createdBy, createdByName = createdByName, inProgress = inProgress,
     updatedAt = System.currentTimeMillis(),
 )
 
 private fun IssueEntity.toBackup() = BackupIssue(
     id = id, vehicleId = vehicleId, title = title, status = status, priority = priority,
     dateOpened = dateOpened, dateResolved = dateResolved, description = description,
+    createdBy = createdBy, createdByName = createdByName,
 )
 
 private fun BackupIssue.toEntity() = IssueEntity(
     id = id, vehicleId = vehicleId, title = title.ifBlank { "Untitled issue" }, status = status,
     priority = priority, dateOpened = dateOpened, dateResolved = dateResolved, description = description,
+    createdBy = createdBy, createdByName = createdByName,
     updatedAt = System.currentTimeMillis(),
 )
 

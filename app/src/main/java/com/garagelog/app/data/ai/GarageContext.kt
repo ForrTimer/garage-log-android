@@ -115,6 +115,7 @@ object GarageContext {
         append(entry.date)
         entry.mileage?.let { append(" @ $it mi") }
         append(" — [${entry.category}] ${entry.task.ifBlank { "(no task)" }}")
+        if (entry.inProgress) append(" — IN PROGRESS (started, not finished yet)")
         entry.parts.blankToNull()?.let { append(" — parts: $it") }
         entry.cost?.let { append(" — \$${"%.2f".format(it)}") }
         entry.notes.blankToNull()?.let { append(" — notes: $it") }

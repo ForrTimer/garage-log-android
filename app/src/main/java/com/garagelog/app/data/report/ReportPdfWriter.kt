@@ -177,6 +177,7 @@ class ReportPdfWriter {
 
         private fun workText(entry: LogEntryEntity): CharSequence {
             val sb = SpannableStringBuilder(entry.task)
+            if (entry.inProgress) sb.append(" (in progress)")
             if (entry.category == LogCategory.Fuel.name) {
                 val extras = listOfNotNull(
                     entry.gallons?.let { "%.2f gal".format(it) },

@@ -521,7 +521,8 @@ fun GarageLogApp(shell: GarageLogViewModel) {
                     focusId = subScreen.focusId,
                     canAskBob = access.canChatWithBob,
                 )
-                else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                // Top, not the pager's default centre: a short list (two issues) floated mid-screen.
+                else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.Top) { page ->
                     when (mainTabs[page]) {
                         AppTab.Dashboard -> DashboardScreen(
                             uiState = uiState,
@@ -548,6 +549,7 @@ fun GarageLogApp(shell: GarageLogViewModel) {
                             onItemClick = { activeSheet = Sheet.LogForm(it) },
                             onDelete = { records.deleteLog(it.id) },
                             canDelete = { access.canDeleteEntry(it.createdBy) },
+                            showStamps = access.showsStamps,
                         )
                         AppTab.Issues -> IssuesScreen(
                             uiState = uiState,
@@ -556,6 +558,7 @@ fun GarageLogApp(shell: GarageLogViewModel) {
                             onDiagnose = { shell.openDiagnosis(it.id) },
                             onDelete = { records.deleteIssue(it.id) },
                             canDelete = { access.canDeleteEntry(it.createdBy) },
+                            showStamps = access.showsStamps,
                         )
                         AppTab.Trends -> TrendsScreen(uiState = uiState, onExportReport = exportReport)
                     }

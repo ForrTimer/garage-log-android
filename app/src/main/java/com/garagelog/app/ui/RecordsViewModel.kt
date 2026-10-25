@@ -115,6 +115,7 @@ class RecordsViewModel(private val locator: ServiceLocator) : ViewModel() {
                 parts = "",
                 notes = "",
                 createdBy = locator.garageCloud.currentUid,
+                createdByName = locator.garageCloud.currentStamp,
                 updatedAt = System.currentTimeMillis(),
             ),
         )
@@ -214,8 +215,14 @@ class RecordsViewModel(private val locator: ServiceLocator) : ViewModel() {
 
     fun saveLog(entry: LogEntryEntity) = viewModelScope.launch {
         // The forms rebuild the entity, so who created it comes from the stored row, not the form.
-        val createdBy = locator.logRepository.getById(entry.id)?.createdBy ?: locator.garageCloud.currentUid
-        locator.logRepository.upsert(entry.copy(createdBy = createdBy, updatedAt = System.currentTimeMillis()))
+        val stored = locator.logRepository.getById(entry.id)
+        locator.logRepository.upsert(
+            entry.copy(
+                createdBy = stored?.createdBy ?: locator.garageCloud.currentUid,
+                createdByName = stored?.createdByName ?: locator.garageCloud.currentStamp,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
         val mileage = entry.mileage
         if (mileage != null) {
             locator.vehicleRepository.bumpMileageIfHigher(entry.vehicleId, mileage, entry.date)
@@ -235,8 +242,11 @@ class RecordsViewModel(private val locator: ServiceLocator) : ViewModel() {
         // on the entry that currently defines the schedule's due date (a typo fix, say) won't take
         // effect this way — use the "Last done" fields on the schedule directly (Maintenance →
         // edit) for that rarer case.
+        //
+        // An in-progress entry (parts bought, job not done) leaves the schedule alone; saving it as
+        // finished, with its completion date, is what resets it.
         val scheduleId = entry.fulfillsScheduleId
-        if (entry.category == LogCategory.Routine.name && scheduleId != null) {
+        if (entry.category == LogCategory.Routine.name && scheduleId != null && !entry.inProgress) {
             locator.scheduleRepository.getById(scheduleId)?.takeUnless { it.deleted }?.let { schedule ->
                 val currentLastDone = schedule.lastDoneDate
                 if (currentLastDone == null || entry.date >= currentLastDone) {
@@ -261,8 +271,14 @@ class RecordsViewModel(private val locator: ServiceLocator) : ViewModel() {
     }
 
     fun saveIssue(issue: IssueEntity) = viewModelScope.launch {
-        val createdBy = locator.issueRepository.getById(issue.id)?.createdBy ?: locator.garageCloud.currentUid
-        locator.issueRepository.upsert(issue.copy(createdBy = createdBy, updatedAt = System.currentTimeMillis()))
+        val stored = locator.issueRepository.getById(issue.id)
+        locator.issueRepository.upsert(
+            issue.copy(
+                createdBy = stored?.createdBy ?: locator.garageCloud.currentUid,
+                createdByName = stored?.createdByName ?: locator.garageCloud.currentStamp,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
         requestSync()
     }
 

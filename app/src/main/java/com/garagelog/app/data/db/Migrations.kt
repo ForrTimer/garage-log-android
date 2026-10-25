@@ -185,3 +185,12 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
         db.execSQL("ALTER TABLE log_entries ADD COLUMN missedFillUp INTEGER NOT NULL DEFAULT 0")
     }
 }
+
+/** Logs can be "in progress", and logs and issues carry a short stamp of who added them. Additive. */
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE log_entries ADD COLUMN createdByName TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE log_entries ADD COLUMN inProgress INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE issues ADD COLUMN createdByName TEXT NOT NULL DEFAULT ''")
+    }
+}

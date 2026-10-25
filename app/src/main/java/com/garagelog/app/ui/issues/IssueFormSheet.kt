@@ -24,6 +24,7 @@ import com.garagelog.app.ui.components.FormSheetScaffold
 import com.garagelog.app.ui.components.LabeledTextField
 import com.garagelog.app.ui.components.PhotoGridSection
 import com.garagelog.app.ui.components.SegmentedControl
+import com.garagelog.app.ui.components.UserStamp
 import com.garagelog.app.ui.components.VehicleDropdown
 import com.garagelog.app.ui.theme.garageColors
 import com.garagelog.app.util.todayIso
@@ -55,6 +56,8 @@ fun IssueFormSheet(
     // saves the issue AND opens a pre-filled log entry for it, mirroring how marking a
     // maintenance schedule done opens a pre-filled log entry for that.
     onResolvedWithLog: (IssueEntity) -> Unit,
+    // Who added it ("E.Forr"), shown at the top; null in a solo garage or for a new issue.
+    stamp: String? = null,
 ) {
     // Minted up front (not at Save) so photos can attach to a brand-new issue before its first
     // save — same approach as LogFormSheet.
@@ -109,6 +112,7 @@ fun IssueFormSheet(
             }
         },
     ) {
+        stamp?.takeIf { it.isNotBlank() }?.let { UserStamp("Added by $it", modifier = Modifier.padding(bottom = 6.dp)) }
         VehicleDropdown("Vehicle", vehicles, form.vehicleId) { form = form.copy(vehicleId = it) }
         LabeledTextField("Title", form.title, { form = form.copy(title = it) })
 

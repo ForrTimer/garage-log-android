@@ -61,10 +61,11 @@ fun AiDiagnosisScreen(
     val error = stream.error
     val scrollState = rememberScrollState()
 
-    // Follow the answer as it streams, but only while it's streaming — once it's done the reader
-    // owns the scroll position.
+    // Follow the answer as it streams, but only while it's streaming and the reader hasn't scrolled
+    // up to read (see rememberFollowLatest). Once it's done the reader owns the scroll position.
+    val followLatest by rememberFollowLatest(scrollState, scrollState.interactionSource)
     LaunchedEffect(stream.partialText) {
-        if (stream.running && stream.partialText.isNotEmpty()) scrollState.animateScrollTo(scrollState.maxValue)
+        if (followLatest && stream.running && stream.partialText.isNotEmpty()) scrollState.animateScrollTo(scrollState.maxValue)
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {

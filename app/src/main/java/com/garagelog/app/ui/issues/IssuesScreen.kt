@@ -36,6 +36,7 @@ import com.garagelog.app.ui.components.PillBadge
 import com.garagelog.app.ui.components.PillTone
 import com.garagelog.app.ui.components.SearchField
 import com.garagelog.app.ui.components.SwipeToDeleteRow
+import com.garagelog.app.ui.components.UserStamp
 import com.garagelog.app.ui.theme.GarageDimens
 import com.garagelog.app.util.formatDate
 
@@ -62,6 +63,8 @@ fun IssuesScreen(
     onDiagnose: (IssueEntity) -> Unit,
     onDelete: (IssueEntity) -> Unit,
     canDelete: (IssueEntity) -> Boolean = { true },
+    // "Added by" stamps on rows: only in a shared garage (Access.showsStamps).
+    showStamps: Boolean = false,
 ) {
     var statusFilter by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
@@ -104,6 +107,7 @@ fun IssuesScreen(
                             onDiagnose = { onDiagnose(issue) },
                             onDelete = { onDelete(issue) },
                             deletable = canDelete(issue),
+                            showStamp = showStamps,
                         )
                         if (index != issues.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
@@ -122,6 +126,7 @@ private fun IssueRow(
     onDiagnose: () -> Unit,
     onDelete: () -> Unit,
     deletable: Boolean,
+    showStamp: Boolean,
 ) {
     SwipeToDeleteRow(deleteTitle = "Delete this issue?", onDelete = onDelete, enabled = deletable) {
         Row(
@@ -142,7 +147,15 @@ private fun IssueRow(
                     if (uiState.activeVehicleId == null) add(uiState.vehicleName(issue.vehicleId))
                     add("opened ${formatDate(issue.dateOpened)}")
                 }
-                Text(subtitleParts.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        subtitleParts.joinToString(" · "),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (showStamp) UserStamp(issue.createdByName, modifier = Modifier.padding(start = 8.dp))
+                }
             }
             IconButton(onClick = onDiagnose) {
                 Icon(
